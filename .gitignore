@@ -12,6 +12,10 @@ dist
 dist-ssr
 *.local
 
+# Generated migration data - contains real (private) business/customer
+# data from the source Excel; never commit it to this public repo.
+migration/output/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
