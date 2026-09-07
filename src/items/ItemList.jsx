@@ -31,6 +31,21 @@ export default function ItemList() {
   const [editingItem, setEditingItem] = useState(undefined); // undefined = closed, null = new, object = edit
   const [deleteTarget, setDeleteTarget] = useState(null);
 
+  const [statsExpanded, setStatsExpanded] = useState(() => {
+    try {
+      return localStorage.getItem('gallery_stats_expanded') === '1';
+    } catch {
+      return false;
+    }
+  });
+  function toggleStats() {
+    setStatsExpanded((prev) => {
+      const next = !prev;
+      try { localStorage.setItem('gallery_stats_expanded', next ? '1' : '0'); } catch { /* ignore */ }
+      return next;
+    });
+  }
+
   const filtered = useMemo(() => {
     return items
       .filter((it) => matchesSearch(it, search))
@@ -54,13 +69,37 @@ export default function ItemList() {
 
   return (
     <div>
-      <div className="stats">
-        {stats.map(([label, count]) => (
-          <div className="stat" key={label}>
-            <b>{count}</b>
-            <span>{label}</span>
+      <div className="stats-bar">
+        <button
+          type="button"
+          className={`stats-toggle${statsExpanded ? ' expanded' : ''}`}
+          onClick={toggleStats}
+          aria-expanded={statsExpanded}
+        >
+          <span className="chevron">▾</span>
+          {stats[0][0]}: {stats[0][1]}
+        </button>
+
+        {statsExpanded ? (
+          <div className="stats">
+            {stats.map(([label, count]) => (
+              <div className="stat" key={label}>
+                <b>{count}</b>
+                <span>{label}</span>
+              </div>
+            ))}
           </div>
-        ))}
+        ) : (
+          stats.length > 1 && (
+            <div className="stats-compact">
+              {stats.slice(1).map(([label, count], i) => (
+                <span key={label}>
+                  {i > 0 && <span className="sep">·</span>} <b>{count}</b> {label}
+                </span>
+              ))}
+            </div>
+          )
+        )}
       </div>
 
       <div className="toolbar">

@@ -88,7 +88,22 @@ select:hover, .btn:hover { border-color: var(--accent); }
 .toggle-pill.active { border-color: var(--accent); background: var(--wall-2); font-weight: 600; }
 .filters-row { display: flex; flex-wrap: wrap; gap: 8px; }
 
-.stats { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 18px; }
+.stats-bar { margin-bottom: 14px; }
+.stats-toggle {
+  display: flex; align-items: center; gap: 6px; background: none; border: none;
+  cursor: pointer; padding: 4px 2px; color: var(--ink-dim); font-size: .78rem; font-weight: 600;
+}
+.stats-toggle .chevron { font-size: .7rem; transition: transform .15s; }
+.stats-toggle.expanded .chevron { transform: rotate(180deg); }
+
+.stats-compact {
+  display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: .84rem; color: var(--ink);
+  padding: 6px 2px 2px;
+}
+.stats-compact b { font-family: 'Frank Ruhl Libre', serif; }
+.stats-compact .sep { color: var(--line); }
+
+.stats { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 8px; }
 .stat { background: var(--wall); border: 1px solid var(--line); border-radius: 12px; padding: 10px 16px; min-width: 110px; flex: 1 1 110px; }
 .stat b { display: block; font-size: 1.25rem; font-family: 'Frank Ruhl Libre', serif; }
 .stat span { font-size: .76rem; color: var(--ink-dim); }
