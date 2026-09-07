@@ -1,40 +1,65 @@
 import { useI18n } from './i18n/I18nContext.jsx'
 import LanguageSwitcher from './i18n/LanguageSwitcher.jsx'
+import { IdentityProvider, useIdentity } from './identity/IdentityContext.jsx'
+import IdentityPicker from './identity/IdentityPicker.jsx'
+import { ItemsProvider } from './items/ItemsContext.jsx'
+import ItemList from './items/ItemList.jsx'
+import { useSyncStatus } from './sync/useSyncStatus.js'
+import './items/items.css'
 
-function App() {
+function Header() {
   const { t } = useI18n()
+  const { user, clearUser } = useIdentity()
+  const { isOnline, syncing, pendingCount, syncProblem, refresh } = useSyncStatus()
 
   return (
-    <div
-      style={{
-        minHeight: '100vh',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 10,
-        padding: 24,
-        textAlign: 'center',
-      }}
-    >
-      <div style={{ position: 'absolute', top: 16, insetInlineEnd: 16 }}>
+    <header className="top">
+      <div className="brand">
+        <h1 className="serif">{t('app.title')}</h1>
+      </div>
+      <div className="status-cluster">
+        <span className="chip">
+          <span className={`dot ${isOnline ? 'on' : 'off'}`} />
+          {isOnline ? t('sync.online') : t('sync.offline')}
+        </span>
+        {pendingCount > 0 && (
+          <span className="chip" style={syncProblem ? { borderColor: 'var(--sold)', color: 'var(--sold)' } : undefined}>
+            ⏳ {pendingCount} {t('sync.pending')}
+          </span>
+        )}
+        <button className={`icon-btn${syncing ? ' spin' : ''}`} onClick={refresh} title={t('actions.refresh')}>⟳</button>
         <LanguageSwitcher />
+        {user && (
+          <span className="chip user" onClick={clearUser}>👤 {user}</span>
+        )}
       </div>
+    </header>
+  )
+}
 
-      <h1 className="serif" style={{ fontSize: '1.9rem', margin: 0 }}>
-        {t('app.title')}
-      </h1>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, width: 220 }}>
-        <hr className="rule" style={{ flex: 1 }} />
-        <span className="caption">{t('app.subtitle')}</span>
-        <hr className="rule" style={{ flex: 1 }} />
-      </div>
-
-      <p style={{ color: 'var(--ink-dim)', fontSize: '0.85rem', margin: '18px 0 0' }}>
-        השלד של האפליקציה מוכן - המסכים האמיתיים בבנייה.
-      </p>
+function AppShell() {
+  return (
+    <div className="page-wrap">
+      <Header />
+      <ItemList />
     </div>
   )
+}
+
+function App() {
+  return (
+    <IdentityProvider>
+      <ItemsProvider>
+        <IdentityGate />
+      </ItemsProvider>
+    </IdentityProvider>
+  )
+}
+
+function IdentityGate() {
+  const { user } = useIdentity()
+  if (!user) return <IdentityPicker />
+  return <AppShell />
 }
 
 export default App

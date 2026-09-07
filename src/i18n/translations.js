@@ -64,6 +64,7 @@ export const translations = {
 
     'toast.itemDeleted': 'הפריט נמחק',
     'toast.valueAdded': 'נוסף לרשימה',
+    'list.empty': 'לא נמצאו פריטים - נסה לשנות את החיפוש או הסינון, או להוסיף פריט חדש',
   },
 
   en: {
@@ -121,6 +122,7 @@ export const translations = {
 
     'toast.itemDeleted': 'Item deleted',
     'toast.valueAdded': 'Added to the list',
+    'list.empty': 'No items found - try changing the search or filters, or add a new item',
   },
 
   nl: {
@@ -178,6 +180,7 @@ export const translations = {
 
     'toast.itemDeleted': 'Item verwijderd',
     'toast.valueAdded': 'Toegevoegd aan de lijst',
+    'list.empty': 'Geen items gevonden - probeer de zoekopdracht of filters te wijzigen, of voeg een nieuw item toe',
   },
 };
 
