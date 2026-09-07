@@ -164,10 +164,21 @@ select:hover, .btn:hover { border-color: var(--accent); }
 .toast { background: var(--ink); color: var(--wall); padding: 10px 16px; border-radius: 10px; font-size: .86rem; box-shadow: 0 8px 24px rgba(0,0,0,.3); }
 
 @media (max-width: 640px) {
-  .toolbar { flex-wrap: nowrap; }
+  /* .toolbar keeps its default flex-wrap:wrap here (not nowrap) so the
+     search box - flex-basis 100% - takes its own full row, pushing
+     toolbar-controls onto the next line; toolbar-controls is the only
+     part that scrolls horizontally, as a single nowrap row. */
   .search-box { flex: 1 1 100%; }
-  .toolbar-controls { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 2px; }
+  .toolbar-controls {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 4px;
+    width: 100%;
+  }
   .toolbar-controls > * { flex: 0 0 auto; }
+  .btn, .toggle-pill, select { min-height: 42px; }
   .row2 { grid-template-columns: 1fr; }
   .overlay#item-overlay { padding: 0; align-items: stretch; }
+  #item-overlay .modal { max-width: none; width: 100%; min-height: 100%; border-radius: 0; margin-bottom: 0; }
 }
