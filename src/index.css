@@ -1,52 +1,52 @@
 :root {
-  --stone: #FBF7ED;
-  --wall: #FFFDF9;
-  --wall-2: #F6EFDE;
-  --ink: #382E20;
-  --ink-dim: #8C7F68;
-  --line: #EBE1CB;
-  --bronze: #B4903F;
-  --bronze-ink: #8C6A2C;
-  --sold: #C1654C;
-  --sold-bg: #FBEBE4;
-  --available: #6B8A6E;
-  --available-bg: #EDF4EB;
-  --shadow: 0 1px 2px rgba(120, 95, 40, .05), 0 6px 18px -12px rgba(120, 95, 40, .15);
+  --stone: #FAFAF9;
+  --wall: #FFFFFF;
+  --wall-2: #F2F1EE;
+  --ink: #1C1B18;
+  --ink-dim: #6E6C64;
+  --line: #E3E1DB;
+  --accent: #1C1B18;
+  --accent-ink: #000000;
+  --sold: #96685C;
+  --sold-bg: #F1E8E5;
+  --available: #6E7A63;
+  --available-bg: #EDF0E9;
+  --shadow: 0 1px 2px rgba(20, 20, 18, .05), 0 6px 18px -12px rgba(20, 20, 18, .15);
   --radius: 14px;
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --stone: #2B2416;
-    --wall: #37301F;
-    --wall-2: #403824;
-    --ink: #F7F0E1;
-    --ink-dim: #CBBEA3;
-    --line: #4E4530;
-    --bronze: #E0BC7C;
-    --bronze-ink: #F0D8A4;
-    --sold: #E68F71;
-    --sold-bg: #4C3222;
-    --available: #A3C6A6;
-    --available-bg: #31402E;
-    --shadow: 0 1px 2px rgba(0, 0, 0, .25), 0 8px 20px -14px rgba(0, 0, 0, .4);
+    --stone: #141412;
+    --wall: #1E1E1B;
+    --wall-2: #262622;
+    --ink: #F3F1EA;
+    --ink-dim: #A6A399;
+    --line: #38362F;
+    --accent: #F3F1EA;
+    --accent-ink: #FFFFFF;
+    --sold: #C08D7E;
+    --sold-bg: #3A2A24;
+    --available: #9BAB8F;
+    --available-bg: #2B3327;
+    --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 8px 20px -14px rgba(0, 0, 0, .55);
   }
 }
 
 :root[data-theme="dark"] {
-  --stone: #2B2416;
-  --wall: #37301F;
-  --wall-2: #403824;
-  --ink: #F7F0E1;
-  --ink-dim: #CBBEA3;
-  --line: #4E4530;
-  --bronze: #E0BC7C;
-  --bronze-ink: #F0D8A4;
-  --sold: #E68F71;
-  --sold-bg: #4C3222;
-  --available: #A3C6A6;
-  --available-bg: #31402E;
-  --shadow: 0 1px 2px rgba(0, 0, 0, .25), 0 8px 20px -14px rgba(0, 0, 0, .4);
+  --stone: #141412;
+  --wall: #1E1E1B;
+  --wall-2: #262622;
+  --ink: #F3F1EA;
+  --ink-dim: #A6A399;
+  --line: #38362F;
+  --accent: #F3F1EA;
+  --accent-ink: #FFFFFF;
+  --sold: #C08D7E;
+  --sold-bg: #3A2A24;
+  --available: #9BAB8F;
+  --available-bg: #2B3327;
+  --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 8px 20px -14px rgba(0, 0, 0, .55);
 }
 
 * {
@@ -68,6 +68,19 @@ body {
 
 h1, h2, h3, .serif {
   font-family: "Frank Ruhl Libre", "Times New Roman", serif;
+}
+
+.caption {
+  font-size: .72rem;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+}
+
+.rule {
+  border: none;
+  border-top: 1px solid var(--line);
 }
 
 #root {

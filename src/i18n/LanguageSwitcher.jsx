@@ -19,7 +19,7 @@ export default function LanguageSwitcher() {
             lineHeight: 1,
             padding: '6px 8px',
             borderRadius: 999,
-            border: `1px solid ${language === code ? 'var(--bronze)' : 'var(--line)'}`,
+            border: `1px solid ${language === code ? 'var(--accent)' : 'var(--line)'}`,
             background: language === code ? 'var(--wall-2)' : 'var(--wall)',
             cursor: 'pointer',
           }}

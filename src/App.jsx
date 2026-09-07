@@ -12,7 +12,7 @@ function App() {
         flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'center',
-        gap: 8,
+        gap: 10,
         padding: 24,
         textAlign: 'center',
       }}
@@ -20,11 +20,17 @@ function App() {
       <div style={{ position: 'absolute', top: 16, insetInlineEnd: 16 }}>
         <LanguageSwitcher />
       </div>
-      <h1 className="serif" style={{ fontSize: '1.8rem', margin: 0 }}>
+
+      <h1 className="serif" style={{ fontSize: '1.9rem', margin: 0 }}>
         {t('app.title')}
       </h1>
-      <p style={{ color: 'var(--ink-dim)', margin: 0 }}>{t('app.subtitle')}</p>
-      <p style={{ color: 'var(--ink-dim)', fontSize: '0.85rem', margin: 0 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, width: 220 }}>
+        <hr className="rule" style={{ flex: 1 }} />
+        <span className="caption">{t('app.subtitle')}</span>
+        <hr className="rule" style={{ flex: 1 }} />
+      </div>
+
+      <p style={{ color: 'var(--ink-dim)', fontSize: '0.85rem', margin: '18px 0 0' }}>
         השלד של האפליקציה מוכן - המסכים האמיתיים בבנייה.
       </p>
     </div>
