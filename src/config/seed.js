@@ -9,4 +9,4 @@ export const CONFIG_SEED = {
 // Working assumption for the team roster (see SPEC.md "זהות משתמש") -
 // no login, a closed list picked once per device. Update this list if the
 // real staff names differ.
-export const TEAM_NAMES = ['שרה', 'תמר', 'שפרה', 'פגי', 'דב עמיתי'];
+export const TEAM_NAMES = ['שרה', 'תמר', 'שפרה', 'פגי', 'דב', 'עמיתי'];
