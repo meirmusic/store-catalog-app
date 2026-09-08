@@ -220,16 +220,26 @@ function fixImageUrls() {
   var imageUrlCol = ITEM_COLUMNS.indexOf('image_url') + 1;
   var range = sheet.getRange(2, imageUrlCol, lastRow - 1, 1);
   var values = range.getValues();
-  var changed = 0;
+  var fixed = 0;
+  var cleared = 0;
   for (var i = 0; i < values.length; i++) {
     var url = values[i][0];
     if (typeof url !== 'string') continue;
     var match = /drive\.google\.com\/uc\?export=view&id=([^&]+)/.exec(url);
     if (match) {
-      values[i][0] = driveThumbnailUrl(match[1]);
-      changed++;
+      // Only write the one cell that actually changed - never re-write
+      // the whole range, since that would also re-send any oversized
+      // leftover value below and hit the same 50,000-character limit.
+      sheet.getRange(2 + i, imageUrlCol).setValue(driveThumbnailUrl(match[1]));
+      fixed++;
+    } else if (url.length > 2000) {
+      // Stray raw image data that should never have landed in this cell
+      // (a leftover from before the upload-wiring fix) - clear it instead
+      // of leaving it in place, since Sheets rejects writing anything
+      // over 50,000 characters, even re-writing what's already there.
+      sheet.getRange(2 + i, imageUrlCol).setValue('');
+      cleared++;
     }
   }
-  if (changed) range.setValues(values);
-  return 'fixed ' + changed + ' of ' + values.length + ' rows';
+  return 'fixed ' + fixed + ', cleared ' + cleared + ' bad cell(s), out of ' + values.length + ' rows';
 }
