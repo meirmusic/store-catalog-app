@@ -119,7 +119,8 @@ function handleGetAll() {
 }
 
 function findRowIndexByRowId(sheet, rowId) {
-  var ids = sheet.getRange(2, 1, Math.max(sheet.getLastRow() - 1, 0), 1).getValues();
+  if (sheet.getLastRow() < 2) return -1; // only the header row exists so far
+  var ids = sheet.getRange(2, 1, sheet.getLastRow() - 1, 1).getValues();
   for (var i = 0; i < ids.length; i++) {
     if (ids[i][0] === rowId) return i + 2; // 1-indexed, +1 for header row
   }

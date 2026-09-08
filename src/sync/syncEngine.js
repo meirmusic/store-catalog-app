@@ -32,6 +32,7 @@ export async function pushPending() {
       await db.pendingChanges.delete(change.id);
       pushed++;
     } catch (err) {
+      console.error('[sync] push failed for change', change, err);
       await db.pendingChanges.update(change.id, {
         attempts: (change.attempts || 0) + 1,
         lastError: String(err && err.message ? err.message : err),
