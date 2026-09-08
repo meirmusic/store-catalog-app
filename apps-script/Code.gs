@@ -243,3 +243,73 @@ function fixImageUrls() {
   }
   return 'fixed ' + fixed + ', cleared ' + cleared + ' bad cell(s), out of ' + values.length + ' rows';
 }
+
+
+// One-off correction (see the gallery owner's note): 105 items were given
+// a substitute image from the marketing catalog PDF, and 105 items were
+// given a made-up serial number, during the first migration pass. Every
+// piece is a one-of-a-kind original, so a catalog photo of "this design"
+// is not a photo of the specific physical item - and staff want to assign
+// serial numbers themselves, not have them invented. This clears both
+// back to blank for exactly the affected row_ids (computed by re-checking
+// the original Excel), leaving every other row untouched. Run once from
+// the Apps Script editor's function dropdown.
+var ROW_IDS_TO_CLEAR_IMAGE = [
+  'DJGXUC', 'MJ6P9D', '8XQ7X7', 'AZ28S9', '9UK6CX', 'Y2GK8Q', 'X8PRWH', 'FK76P6', 'Z6F9M2',
+  'R8WARN', 'TWKLM7', 'ZZWCZ7', 'KXS26Y', 'UXUWCY', 'XHUS23', '96MH85', 'VY6EXW', 'KUBZ4B',
+  'QGSMNE', 'Y6WQHV', 'XDPD52', 'LAEBCK', 'BHKZZE', 'AQC3S3', 'GNRMH3', 'SNND42', '6QWW4J',
+  '738AT7', 'C5R579', 'F9NT3A', 'VTJDRB', '5ALE2U', 'FE4UDN', 'VHA4Q2', 'GXWA54', '7HNZ3T',
+  'F2PHHK', 'MKCBTP', 'ST6J92', 'GQCFF7', 'CSDMSQ', 'FHV6VJ', '4N3BQ8', 'DYK25P', '87274U',
+  'ZL9P2F', '8MXPYM', 'ZFFVFH', 'MM9WG7', 'P3N6HD', 'JKHPZW', 'N7X6W7', '764HW6', 'FGPXBV',
+  'H6C3SC', 'CFC9SQ', 'VUKVM4', 'FEQ68X', '4H8QV3', 'ZVN5EA', 'QLRDQW', 'VT5V5Q', 'KBAX49',
+  'M65DMD', 'PEAF9R', 'WR6W3Y', '3WR4LW', '5C85QP', 'V3JLBS', 'YDBGE2', '9QMPAK', 'NQWKB8',
+  'PYMBJU', 'W3VVWT', '6ZKZ87', 'PYNDQG', 'SC5FTT', 'YT325X', 'E9JYB6', 'N7NMJE', 'S62QEU',
+  'FAB5QV', 'PULZY2', 'X9QVY6', 'ZRFTXR', 'EHKLVD', 'EYUDX8', 'RNPEMY', 'J2QTGS', '6SKLW2',
+  '8XXEAY', 'XS5FGJ', 'HB2QYH', 'SPPHG2', 'J795Z7', 'KTNP68', 'EZN22B', '3YDWGD', 'H6JAQ4',
+  'UCGL4P', 'NRGRB3', '8UADCJ', 'QXB426', 'CDRFM8', 'AKVKN9',
+];
+
+var ROW_IDS_TO_CLEAR_SERIAL = [
+  'DJGXUC', 'MJ6P9D', '8XQ7X7', 'AZ28S9', 'X8PRWH', 'FK76P6', 'R8WARN', 'TWKLM7', 'ZZWCZ7',
+  'PW2FZV', 'KXS26Y', 'UXUWCY', 'XHUS23', '96MH85', 'KUBZ4B', 'Y6WQHV', 'XDPD52', 'BHKZZE',
+  'AQC3S3', 'GNRMH3', 'SNND42', 'C5R579', 'F9NT3A', '5ALE2U', 'FE4UDN', 'VHA4Q2', 'GXWA54',
+  '7HNZ3T', 'MKCBTP', 'GQCFF7', 'CSDMSQ', 'FHV6VJ', '4N3BQ8', 'DYK25P', '87274U', 'ZL9P2F',
+  'EFKSCK', '8MXPYM', 'ZFFVFH', 'P3N6HD', 'JKHPZW', 'N7X6W7', 'FGPXBV', 'H6C3SC', 'CFC9SQ',
+  'VUKVM4', '4H8QV3', 'ZVN5EA', 'VT5V5Q', 'KBAX49', 'M65DMD', 'PEAF9R', 'WR6W3Y', '3WR4LW',
+  'YDBGE2', '9QMPAK', 'NQWKB8', 'PYMBJU', '6ZKZ87', 'PYNDQG', 'SC5FTT', 'YT325X', 'E9JYB6',
+  'N7NMJE', 'PULZY2', 'ZRFTXR', 'EHKLVD', '6SKLW2', '8XXEAY', 'SPPHG2', 'J795Z7', 'KTNP68',
+  'EZN22B', 'UCGL4P', 'NRGRB3', '8UADCJ', 'QXB426', 'CDRFM8', 'AKVKN9', '8DVT9R', 'BFGSMA',
+  'GAFGMG', '8ZR595', 'R8U2AE', 'YZHTTH', '5FWTKQ', 'P7X94L', 'AV4ZUA', '4HCPRK', 'YE25RA',
+  '6MJHDC', 'EV3UVR', 'ZYLD6Y', 'BMHVGX', '2LZMSV', 'UJ8XNJ', 'C93Q5B', '9L9875', '6CPN4H',
+  'WYMKLB', '4RTJKW', '7CQXQ8', 'LNEQ5A', 'JDKLJT', '99H7UL',
+];
+
+function fixMigratedFields() {
+  var sheet = getItemsSheet();
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return 'no data rows';
+  var idCol = 1;
+  var serialCol = ITEM_COLUMNS.indexOf('serial_number') + 1;
+  var imageUrlCol = ITEM_COLUMNS.indexOf('image_url') + 1;
+  var ids = sheet.getRange(2, idCol, lastRow - 1, 1).getValues();
+  var imageSet = {};
+  ROW_IDS_TO_CLEAR_IMAGE.forEach(function (id) { imageSet[id] = true; });
+  var serialSet = {};
+  ROW_IDS_TO_CLEAR_SERIAL.forEach(function (id) { serialSet[id] = true; });
+
+  var clearedImages = 0;
+  var clearedSerials = 0;
+  for (var i = 0; i < ids.length; i++) {
+    var rowId = ids[i][0];
+    var sheetRow = 2 + i;
+    if (imageSet[rowId]) {
+      sheet.getRange(sheetRow, imageUrlCol).setValue('');
+      clearedImages++;
+    }
+    if (serialSet[rowId]) {
+      sheet.getRange(sheetRow, serialCol).setValue('');
+      clearedSerials++;
+    }
+  }
+  return 'cleared ' + clearedImages + ' image(s), ' + clearedSerials + ' serial number(s)';
+}

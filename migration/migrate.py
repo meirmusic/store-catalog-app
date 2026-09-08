@@ -1,10 +1,15 @@
 #!/usr/bin/env python3
 """
 One-off migration prep: turns the real store Excel into the JSON payload
-the real app expects (see SPEC.md "תוכנית מיגרציה" and מבנה הנתונים),
-and matches items to product photos from the gallery's own marketing
-catalog PDF (assets/catalog/yossi-bitton-catalog-2025.pdf) wherever the
-Excel itself has no embedded photo for that row.
+the real app expects (see SPEC.md "תוכנית מיגרציה" and מבנה הנתונים).
+
+Every piece is a one-of-a-kind original, so only a photo actually
+embedded in the Excel for that exact row counts as that item's photo -
+never a substitute from elsewhere (see the gallery owner's correction:
+a catalog photo of "this design" is not a photo of the specific physical
+piece in inventory). Rows without an embedded photo are left with no
+image at all. Serial numbers are taken as-is from the Excel and never
+invented when blank - staff fill those in by hand later.
 
 This script only PREPARES the data - it does not talk to Google Sheets
 or Drive (task #1/#2/#3 aren't live yet). Once the Apps Script backend
@@ -14,30 +19,21 @@ and migration/output/images/ and calls upsert/uploadImage for each row.
 Usage:
     python migration/migrate.py --excel /path/to/store_excel.xlsx
 
-Requires: openpyxl, pillow, pymupdf (pip install openpyxl pillow pymupdf)
+Requires: openpyxl, pillow (pip install openpyxl pillow)
 """
 
 import argparse
-import hashlib
 import io
 import json
 import os
 import random
-import re
 import string
-import sys
 import zipfile
+import re
 
 import openpyxl
 from PIL import Image
 
-try:
-    import fitz  # pymupdf
-except ImportError:
-    fitz = None
-
-REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-CATALOG_PDF = os.path.join(REPO_ROOT, 'assets', 'catalog', 'yossi-bitton-catalog-2025.pdf')
 OUTPUT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'output')
 
 CHARS = string.ascii_uppercase.replace('O', '').replace('I', '') + '23456789'
@@ -115,55 +111,6 @@ def resize_jpeg(raw_bytes, max_width=900, quality=80, rotate=0):
     return buf.getvalue()
 
 
-# ---------- Catalog PDF cross-reference ----------
-
-def extract_catalog_images_by_sku():
-    """Returns {sku_str: jpeg_bytes} for every HT-XXXX code found in the
-    catalog PDF, picking the clean product photo (not the room/lifestyle
-    shot) per page. See migration/README.md for how this heuristic works."""
-    if fitz is None:
-        print('pymupdf not installed - skipping catalog PDF cross-reference '
-              '(pip install pymupdf to enable it)', file=sys.stderr)
-        return {}
-    if not os.path.exists(CATALOG_PDF):
-        print(f'Catalog PDF not found at {CATALOG_PDF} - skipping cross-reference', file=sys.stderr)
-        return {}
-
-    doc = fitz.open(CATALOG_PDF)
-
-    hash_count = {}
-    for page in doc:
-        for img in page.get_images(full=True):
-            base = doc.extract_image(img[0])
-            h = hashlib.md5(base['image']).hexdigest()
-            hash_count[h] = hash_count.get(h, 0) + 1
-    repeated = {h for h, c in hash_count.items() if c > 3}  # page-decoration assets
-
-    result = {}
-    for page in doc:
-        text = page.get_text()
-        m = re.search(r'HT\s*-\s*(\d{3,5})', text)
-        if not m:
-            continue
-        code = m.group(1)
-        candidates = []
-        seen_hashes = set()
-        for img in page.get_images(full=True):
-            base = doc.extract_image(img[0])
-            h = hashlib.md5(base['image']).hexdigest()
-            if h in repeated or h in seen_hashes:
-                continue
-            seen_hashes.add(h)
-            candidates.append((base['width'] * base['height'], base['image']))
-        candidates.sort(key=lambda c: -c[0])
-        if len(candidates) < 2:
-            continue
-        # Largest candidate is the lifestyle/room photo; the next one down
-        # is the clean product shot (verified by hand across the range).
-        result[code] = resize_jpeg(candidates[1][1])
-    return result
-
-
 # ---------- Main migration ----------
 
 SOLD_NOTE_ROWS_KEPT_AVAILABLE = True  # see SPEC.md: the 7 "לא זמין בקטלוג" rows
@@ -174,13 +121,12 @@ SOLD_NOTE_ROWS_KEPT_AVAILABLE = True  # see SPEC.md: the 7 "לא זמין בקט
 
 def migrate(excel_path):
     rows, embedded_images = parse_excel_rows(excel_path)
-    catalog_images = extract_catalog_images_by_sku()
 
     os.makedirs(os.path.join(OUTPUT_DIR, 'images'), exist_ok=True)
     existing_ids = set()
     out_items = []
     stats = {'total': 0, 'sold_detected': 0, 'image_from_excel': 0,
-              'image_from_catalog': 0, 'no_image': 0, 'serial_generated': 0}
+              'no_image': 0, 'no_serial': 0}
 
     for i, row in enumerate(rows):
         stats['total'] += 1
@@ -196,29 +142,28 @@ def migrate(excel_path):
         sku = row.get('sku')
         sku = str(int(sku)) if isinstance(sku, float) else (str(sku) if sku else None)
 
+        # Per the gallery owner: never invent a serial number. Leave it
+        # blank when the Excel doesn't have one - staff fill it in by hand.
         serial = row.get('serial_number')
         if isinstance(serial, float):
             serial = str(int(serial))
         elif serial is not None:
             serial = str(serial)
         if not serial:
-            serial = gen_code(existing_ids, length=8)
-            stats['serial_generated'] += 1
+            stats['no_serial'] += 1
 
+        # Per the gallery owner: every piece is a one-of-a-kind original,
+        # so a catalog photo of "this design" is not a photo of the actual
+        # physical item in inventory - only a real embedded Excel photo of
+        # this exact row counts. Leave it blank otherwise, never substitute.
         image_rel_path = None
         if i in embedded_images:
-            # Real photo of this exact physical piece - highest priority.
             # rotate=-90 matches the fixed orientation found during the demo build.
             jpeg = resize_jpeg(embedded_images[i], rotate=-90)
             image_rel_path = f'images/{row_id}.jpg'
             with open(os.path.join(OUTPUT_DIR, image_rel_path), 'wb') as f:
                 f.write(jpeg)
             stats['image_from_excel'] += 1
-        elif sku and sku in catalog_images:
-            image_rel_path = f'images/{row_id}.jpg'
-            with open(os.path.join(OUTPUT_DIR, image_rel_path), 'wb') as f:
-                f.write(catalog_images[sku])
-            stats['image_from_catalog'] += 1
         else:
             stats['no_image'] += 1
 
