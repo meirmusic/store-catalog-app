@@ -45,8 +45,8 @@ export function ItemsProvider({ children }) {
     return out;
   }, [configRows]);
 
-  async function enqueue(row_id, op) {
-    await db.pendingChanges.add({ row_id, op, createdAt: Date.now(), attempts: 0 });
+  async function enqueue(row_id, op, payload) {
+    await db.pendingChanges.add({ row_id, op, payload: payload ?? null, createdAt: Date.now(), attempts: 0 });
   }
 
   async function saveItem(fields, existingRowId) {
@@ -65,6 +65,15 @@ export function ItemsProvider({ children }) {
     return row_id;
   }
 
+  // A freshly-captured photo is a data: URL living only on this device -
+  // it's queued as its own change so the sync engine can upload it to
+  // Drive (see api/client.js uploadImage) and get back a real, small,
+  // shareable URL instead of shipping the raw image bytes through the
+  // Sheet's image_url column.
+  async function queueImageUpload(row_id, dataUrl) {
+    await enqueue(row_id, 'uploadImage', { image: dataUrl });
+  }
+
   async function softDeleteItem(rowId) {
     const existing = await db.items.get(rowId);
     if (!existing) return;
@@ -79,7 +88,7 @@ export function ItemsProvider({ children }) {
 
   async function addConfigValueAndQueue(listName, rawValue) {
     const value = await dbAddConfigValue(listName, rawValue);
-    if (value) await enqueue(null, 'addConfigOption');
+    if (value) await enqueue(null, 'addConfigOption', { list_name: listName, value });
     return value;
   }
 
@@ -91,6 +100,7 @@ export function ItemsProvider({ children }) {
       saveItem,
       softDeleteItem,
       addConfigValue: addConfigValueAndQueue,
+      queueImageUpload,
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [items, config, pendingCount, user],

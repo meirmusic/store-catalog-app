@@ -48,7 +48,7 @@ function ConfigSelect({ list, value, onChange, config, addConfigValue, label }) 
 
 export default function ItemForm({ item, onClose, onRequestDelete, onSaved }) {
   const { t } = useI18n();
-  const { config, saveItem, addConfigValue } = useItems();
+  const { config, saveItem, addConfigValue, queueImageUpload } = useItems();
   const isNew = !item;
 
   const [name, setName] = useState(item?.name || '');
@@ -76,7 +76,13 @@ export default function ItemForm({ item, onClose, onRequestDelete, onSaved }) {
       setError(t('errors.nameRequired'));
       return;
     }
-    await saveItem(
+    // A freshly-picked photo is a data: URL - too big to write straight
+    // into the Sheet's image_url column (and not what that column is
+    // for). Keep the row's previous image_url untouched and upload the
+    // new photo separately; the sync engine swaps in the real Drive URL
+    // once the upload succeeds.
+    const isNewPhoto = imageUrl && imageUrl.startsWith('data:');
+    const row_id = await saveItem(
       {
         name: name.trim(),
         size: size.trim() || null,
@@ -88,10 +94,11 @@ export default function ItemForm({ item, onClose, onRequestDelete, onSaved }) {
         serial_number: serial.trim() || null,
         notes: notes.trim() || null,
         availability_status: availability,
-        image_url: imageUrl,
+        image_url: isNewPhoto ? (item?.image_url || null) : imageUrl,
       },
       item?.row_id,
     );
+    if (isNewPhoto) await queueImageUpload(row_id, imageUrl);
     onSaved();
   }
 

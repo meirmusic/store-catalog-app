@@ -1,5 +1,5 @@
 import { db } from '../db/db.js';
-import { getAll, upsertItem, softDeleteItem, addConfigOption } from '../api/client.js';
+import { getAll, upsertItem, softDeleteItem, addConfigOption, uploadImage } from '../api/client.js';
 import { APPS_SCRIPT_URL } from '../api/config.js';
 
 // See SPEC.md "מדיניות כשלים": a change that keeps failing stays queued
@@ -8,23 +8,27 @@ import { APPS_SCRIPT_URL } from '../api/config.js';
 export const FAILURE_THRESHOLD = 5;
 
 async function pushOne(change) {
-  const item = change.row_id ? await db.items.get(change.row_id) : null;
-  if (change.op === 'upsert' && item) {
-    await upsertItem(item);
+  if (change.op === 'upsert') {
+    const item = await db.items.get(change.row_id);
+    if (item) await upsertItem(item);
   } else if (change.op === 'softDelete') {
     await softDeleteItem(change.row_id);
   } else if (change.op === 'addConfigOption') {
-    // Config changes aren't individually tracked per-value here; the
-    // simplest correct behavior is to just re-push nothing (the value
-    // already lives locally) - real config sync happens implicitly the
-    // next time an item referencing it is pushed. Left explicit so this
-    // is easy to wire to a real addConfigOption call once needed.
-    return;
+    await addConfigOption(change.payload.list_name, change.payload.value);
+  } else if (change.op === 'uploadImage') {
+    const result = await uploadImage(change.row_id, change.payload.image);
+    if (result && result.image_url) {
+      const item = await db.items.get(change.row_id);
+      if (item) await db.items.put({ ...item, image_url: result.image_url });
+    }
   }
 }
 
 export async function pushPending() {
-  const pending = await db.pendingChanges.orderBy('createdAt').toArray();
+  // No explicit orderBy: Dexie iterates by primary key (insertion order)
+  // by default, which keeps an item's 'upsert' change ahead of its
+  // 'uploadImage' change even when both are queued in the same tick.
+  const pending = await db.pendingChanges.toArray();
   let pushed = 0;
   for (const change of pending) {
     try {
