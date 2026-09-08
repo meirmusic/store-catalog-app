@@ -25,6 +25,9 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build
+        env:
+          VITE_APPS_SCRIPT_URL: ${{ secrets.VITE_APPS_SCRIPT_URL }}
+          VITE_SHARED_SECRET: ${{ secrets.VITE_SHARED_SECRET }}
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
