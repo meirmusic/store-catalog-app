@@ -15,6 +15,7 @@ dist-ssr
 # Generated migration data - contains real (private) business/customer
 # data from the source Excel; never commit it to this public repo.
 migration/output/
+migration/__pycache__/
 
 # Editor directories and files
 .vscode/*
