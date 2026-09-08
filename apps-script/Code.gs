@@ -190,7 +190,7 @@ function handleUploadImage(payload) {
   var folder = getOrCreateImageFolder();
   var file = folder.createFile(blob);
   file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-  var imageUrl = 'https://drive.google.com/uc?export=view&id=' + file.getId();
+  var imageUrl = driveThumbnailUrl(file.getId());
 
   var sheet = getItemsSheet();
   var rowIndex = findRowIndexByRowId(sheet, payload.row_id);
@@ -199,4 +199,37 @@ function handleUploadImage(payload) {
     sheet.getRange(rowIndex, imageUrlCol).setValue(imageUrl);
   }
   return { image_url: imageUrl };
+}
+
+// 'uc?export=view' is Drive's classic hotlink format, but it's unreliable
+// for embedding as an <img src> - Drive often serves an HTML interstitial
+// instead of the raw bytes. This 'thumbnail' endpoint is the format Drive
+// itself relies on for previews and renders consistently.
+function driveThumbnailUrl(fileId) {
+  return 'https://drive.google.com/thumbnail?id=' + fileId + '&sz=w1000';
+}
+
+// One-off cleanup: run this once from the Apps Script editor (select it in
+// the function dropdown next to the Run button, then click Run) to rewrite
+// every existing image_url from the old uc?export=view format to the
+// reliable thumbnail format, without re-uploading any images.
+function fixImageUrls() {
+  var sheet = getItemsSheet();
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return 'no data rows';
+  var imageUrlCol = ITEM_COLUMNS.indexOf('image_url') + 1;
+  var range = sheet.getRange(2, imageUrlCol, lastRow - 1, 1);
+  var values = range.getValues();
+  var changed = 0;
+  for (var i = 0; i < values.length; i++) {
+    var url = values[i][0];
+    if (typeof url !== 'string') continue;
+    var match = /drive\.google\.com\/uc\?export=view&id=([^&]+)/.exec(url);
+    if (match) {
+      values[i][0] = driveThumbnailUrl(match[1]);
+      changed++;
+    }
+  }
+  if (changed) range.setValues(values);
+  return 'fixed ' + changed + ' of ' + values.length + ' rows';
 }
