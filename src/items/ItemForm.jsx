@@ -3,8 +3,6 @@ import { useI18n } from '../i18n/I18nContext.jsx';
 import { useItems } from './ItemsContext.jsx';
 import ImageField from './ImageField.jsx';
 
-const CONFIG_LISTS = ['type', 'location', 'physical_status'];
-
 function ConfigSelect({ list, value, onChange, config, addConfigValue, label }) {
   const [adding, setAdding] = useState(false);
   const [draft, setDraft] = useState('');
