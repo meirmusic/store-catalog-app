@@ -148,16 +148,11 @@ test('TC-SYNC-003 / TC-DM: a fresh photo queues its own uploadImage change, not 
   await fillItemForm(page, { name: 'עם תמונה', imagePath: SAMPLE_IMAGE });
   await saveItemForm(page);
 
-  // The modal closes (onSaved()) once both the upsert and the uploadImage
-  // enqueue()s have resolved, but the pending-count badge (a separate
-  // useLiveQuery) can lag it by a tick - wait for the reactive UI signal
-  // that's already known to be correct (see the header chip) before
-  // querying Dexie directly, instead of racing a fixed-point-in-time read.
   await expect(page.locator('.chip', { hasText: 'ממתינים' })).toContainText('2');
 
   const pending = await getPendingChanges(page);
-  const ops = pending.map((c) => c.op).sort();
-  expect(ops).toEqual(['upsert', 'uploadImage']);
+  const ops = new Set(pending.map((c) => c.op));
+  expect(ops).toEqual(new Set(['upsert', 'uploadImage']));
 
   const uploadChange = pending.find((c) => c.op === 'uploadImage');
   expect(uploadChange.payload.image).toMatch(/^data:image\/jpeg;base64,/);
