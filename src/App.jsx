@@ -10,7 +10,7 @@ import './items/items.css'
 function Header() {
   const { t } = useI18n()
   const { user, clearUser } = useIdentity()
-  const { isOnline, syncing, pendingCount, syncProblem, refresh } = useSyncStatus()
+  const { isOnline, syncing, lastSyncedAt, pendingCount, syncProblem, stale, refresh } = useSyncStatus()
 
   return (
     <header className="top">
@@ -22,6 +22,12 @@ function Header() {
           <span className={`dot ${isOnline ? 'on' : 'off'}`} />
           {isOnline ? t('sync.online') : t('sync.offline')}
         </span>
+        {stale && (
+          <span className="chip" style={{ borderColor: 'var(--sold)', color: 'var(--sold)' }}>
+            {t('sync.staleSince')}
+            {lastSyncedAt ? ` ${lastSyncedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : ''}
+          </span>
+        )}
         {pendingCount > 0 && (
           <span className="chip" style={syncProblem ? { borderColor: 'var(--sold)', color: 'var(--sold)' } : undefined}>
             ⏳ {pendingCount} {t('sync.pending')}

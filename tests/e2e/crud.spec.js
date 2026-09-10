@@ -45,17 +45,11 @@ test('TC-CRUD-003: adding with an empty name is rejected', async ({ page }) => {
   await page.click('#item-overlay button:has-text("שמירה")');
   await expect(page.locator('#item-overlay')).toBeVisible();
 
-  // New finding (not previously in TEST_PLAN.md's RTM): the name <input>
-  // carries a native HTML `required` attribute, so the browser's own
-  // constraint validation blocks the submit event before it ever reaches
-  // ItemForm's onSubmit handler - the custom errors.nameRequired message
-  // and its <p> element are unreachable dead code; the browser's native
-  // validation tooltip is what the user actually sees. The "don't save"
-  // requirement is still satisfied, just via a different mechanism than
-  // the code appears to intend. Added to task #15.
-  const nameInput = page.locator('#item-overlay input[type=text]').first();
-  const isInvalid = await nameInput.evaluate((el) => !el.validity.valid);
-  expect(isInvalid).toBe(true);
+  // Fixed per task #15: the name <input> no longer carries a native
+  // `required` attribute, so ItemForm's own onSubmit handler runs and
+  // shows its translated errors.nameRequired message (in the user's
+  // chosen app language, not the browser's native validation tooltip).
+  await expect(page.locator('#item-overlay')).toContainText('יש להזין שם ליצירה');
 
   const items = await getItems(page);
   expect(items).toHaveLength(0);

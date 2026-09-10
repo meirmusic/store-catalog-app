@@ -78,12 +78,10 @@ test('TC-SYNC-004: 5 consecutive failures on the same change trip the visible sy
   expect(style).toContain('border-color');
 });
 
-// Known gap per TEST_PLAN.md (SYNC-05): when a pull fails, SPEC.md calls
-// for a "not updated since HH:MM" indicator - useSyncStatus.js computes
-// lastSyncedAt but the Header never renders it. Documents the intended
-// behavior; expected to fail until built (see task #15).
+// Fixed per task #15 (was SYNC-05): when a pull fails, syncNow() reports
+// it instead of throwing, useSyncStatus.js tracks a `stale` flag, and the
+// Header renders a "not updated since" chip per SPEC.md section 4.
 test('TC-SYNC-005: a failed pull should show a stale-data timestamp', async ({ page }) => {
-  test.fail(true, 'Known gap SYNC-05 (TEST_PLAN.md) - lastSyncedAt is computed but never displayed');
   await page.route(MOCK_URL, async (route) => {
     const body = await readAction(route);
     if (body.action === 'getAll') {
@@ -101,13 +99,10 @@ test('TC-SYNC-005: a failed pull should show a stale-data timestamp', async ({ p
   await expect(page.locator('text=לא עודכן מאז')).toBeVisible();
 });
 
-// New finding surfaced by this contract test (not previously in
-// TEST_PLAN.md's RTM): pushOne()'s 'upsert' branch calls upsertItem(item)
-// but discards the response entirely - the server's authoritative
-// last_modified_at (and any other server-side change) never gets written
-// back locally. Added to task #15's batch alongside the other findings.
+// Fixed per task #15: pushOne()'s 'upsert' branch now merges the server's
+// response (last_modified_at and any other server-side change) back into
+// the local record instead of discarding it.
 test('TC-SYNC-006: after a successful upsert, the local record adopts the server-returned timestamp', async ({ page }) => {
-  test.fail(true, 'New finding: pushOne() discards the upsert response - local record keeps its own guessed timestamp instead of the server-authoritative one');
   const serverTimestamp = '2099-01-01T00:00:00.000Z';
   await page.route(MOCK_URL, async (route) => {
     const body = await readAction(route);

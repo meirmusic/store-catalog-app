@@ -59,6 +59,7 @@ export const translations = {
     'sync.savedSynced': 'נשמר וסונכרן',
     'sync.refreshed': 'עודכן',
     'sync.offlineToast': 'אין חיבור - מוצגים הנתונים המקומיים',
+    'sync.staleSince': 'לא עודכן מאז',
 
     'stats.total': 'סה"כ פריטים',
 
@@ -117,6 +118,7 @@ export const translations = {
     'sync.savedSynced': 'Saved and synced',
     'sync.refreshed': 'Updated',
     'sync.offlineToast': 'No connection - showing local data',
+    'sync.staleSince': 'Not updated since',
 
     'stats.total': 'Total items',
 
@@ -175,6 +177,7 @@ export const translations = {
     'sync.savedSynced': 'Opgeslagen en gesynchroniseerd',
     'sync.refreshed': 'Bijgewerkt',
     'sync.offlineToast': 'Geen verbinding - lokale gegevens worden getoond',
+    'sync.staleSince': 'Niet bijgewerkt sinds',
 
     'stats.total': 'Totaal aantal items',
 

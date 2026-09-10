@@ -10,7 +10,13 @@ export const FAILURE_THRESHOLD = 5;
 async function pushOne(change) {
   if (change.op === 'upsert') {
     const item = await db.items.get(change.row_id);
-    if (item) await upsertItem(item);
+    if (item) {
+      // The server is authoritative for last_modified_at/last_modified_by
+      // (see SPEC.md section 6, conflict resolution) - adopt whatever it
+      // echoes back instead of keeping the client's own guessed values.
+      const result = await upsertItem(item);
+      if (result) await db.items.put({ ...item, ...result });
+    }
   } else if (change.op === 'softDelete') {
     await softDeleteItem(change.row_id);
   } else if (change.op === 'addConfigOption') {
@@ -68,7 +74,16 @@ export async function syncNow() {
     return { ok: false, reason: 'not-configured' };
   }
   await pushPending();
-  await pullLatest();
+  try {
+    await pullLatest();
+  } catch (err) {
+    // SPEC.md section 4: a failed pull keeps showing the last data that
+    // did load successfully, with a "not updated since HH:MM" indicator -
+    // never a blocking error screen. Local changes already pushed above
+    // are not affected either way.
+    console.error('[sync] pull failed', err);
+    return { ok: false, reason: 'pull-failed' };
+  }
   return { ok: true };
 }
 

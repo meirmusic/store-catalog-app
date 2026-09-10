@@ -11,7 +11,9 @@ function matchesSearch(item, q) {
   return (
     (item.name && item.name.toLowerCase().includes(needle)) ||
     (item.sku && String(item.sku).toLowerCase().includes(needle)) ||
-    (item.serial_number && String(item.serial_number).toLowerCase().includes(needle))
+    // SPEC.md section 1: serial-number search is exact-match only (unlike
+    // name/sku, which are partial/textual) - see TEST_PLAN.md SRCH-02.
+    (item.serial_number && String(item.serial_number).toLowerCase() === needle)
   );
 }
 

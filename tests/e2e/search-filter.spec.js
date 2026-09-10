@@ -22,14 +22,15 @@ test('TC-SRCH-001: sku search is partial/textual and can return multiple items',
   await expect(page.locator('.card')).toHaveCount(3); // 3022, 3021, 3020 all contain "302"
 });
 
-// Known gap per TEST_PLAN.md (SRCH-02): serial-number search is spec'd as
-// EXACT match only, but the current implementation does a partial/substring
-// match same as name/sku. This test documents the intended, correct
-// behavior and is expected to fail until that's fixed (see task #15).
+// Fixed per task #15 (was SRCH-02): serial-number search is spec'd as EXACT
+// match only, unlike the partial/textual name/sku match.
 test('TC-SRCH-002: serial number search should be exact-match only', async ({ page }) => {
-  test.fail(true, 'Known gap SRCH-02 (TEST_PLAN.md) - matchesSearch() uses .includes() for serial_number too');
   await page.fill('input[placeholder*="מק"]', '112'); // substring of A2's "112345", not an exact match
   await expect(page.locator('.card')).toHaveCount(0); // exact-match spec says this should NOT match
+
+  await page.fill('input[placeholder*="מק"]', '112345'); // the full, exact serial number
+  await expect(page.locator('.card')).toHaveCount(1);
+  await expect(page.locator('.card')).toContainText('שביל תפילה');
 });
 
 test('TC-SRCH-003: "missing price" filter shows only items without a price', async ({ page }) => {

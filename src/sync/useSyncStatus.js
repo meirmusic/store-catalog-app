@@ -10,6 +10,7 @@ export function useSyncStatus() {
   const [syncing, setSyncing] = useState(false);
   const [lastSyncedAt, setLastSyncedAt] = useState(null);
   const [syncProblem, setSyncProblem] = useState(false);
+  const [stale, setStale] = useState(false);
 
   const pendingCount = useLiveQuery(() => db.pendingChanges.count(), [], 0);
 
@@ -18,7 +19,12 @@ export function useSyncStatus() {
     setSyncing(true);
     try {
       const result = await syncNow();
-      if (result.ok) setLastSyncedAt(new Date());
+      if (result.ok) {
+        setLastSyncedAt(new Date());
+        setStale(false);
+      } else if (result.reason === 'pull-failed') {
+        setStale(true);
+      }
     } finally {
       setSyncing(false);
       setSyncProblem(await hasSyncProblem());
@@ -48,6 +54,7 @@ export function useSyncStatus() {
     lastSyncedAt,
     pendingCount: pendingCount || 0,
     syncProblem,
+    stale,
     refresh: runSync,
   };
 }
