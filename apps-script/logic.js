@@ -68,4 +68,19 @@ function planImageUrlFixes(cellValues) {
   return fixes;
 }
 
-export { findRowIndex, driveThumbnailUrl, configValueExists, rowToItem, planImageUrlFixes };
+// Mirrors the row-exists guard at the top of Code.gs's handleUploadImage.
+// Regression (REG-012): the guard used to run AFTER uploading to Drive and
+// only skipped the Sheet write when the row wasn't found yet - it still
+// returned { image_url } as if nothing were wrong. Since the client queues
+// an item's 'upsert' (row creation) and 'uploadImage' as two independent
+// changes, and one failing doesn't block the other, this let a photo
+// upload "succeed" for a row that was never actually created - a real
+// Drive file with nothing in the Sheet pointing to it, and a client that
+// believed the photo was saved. Now the row must exist before anything is
+// uploaded at all.
+function planUploadImageResult(rowIndex) {
+  if (rowIndex === -1) return { error: 'row not found - upsert has not been saved yet' };
+  return { ok: true };
+}
+
+export { findRowIndex, driveThumbnailUrl, configValueExists, rowToItem, planImageUrlFixes, planUploadImageResult };

@@ -188,6 +188,20 @@ function getOrCreateImageFolder() {
 function handleUploadImage(payload) {
   var match = /^data:(image\/\w+);base64,(.*)$/.exec(payload.image);
   if (!match) return { error: 'invalid image data' };
+
+  // Check the row exists BEFORE uploading anything to Drive: the client
+  // queues an item's 'upsert' (row creation) and 'uploadImage' as two
+  // independent changes (see syncEngine.js pushOne), and one failing does
+  // not block the other from being attempted. If 'upsert' hasn't landed
+  // yet (still retrying) and we uploaded the file anyway, silently
+  // returning success here (as this used to) would leave a real Drive
+  // file with no Sheet row pointing to it - the photo the client just
+  // "successfully" set locally, but that will vanish on the next pull
+  // once the client is corrected. See TEST_PLAN.md REG-012.
+  var sheet = getItemsSheet();
+  var rowIndex = findRowIndexByRowId(sheet, payload.row_id);
+  if (rowIndex === -1) return { error: 'row not found - upsert has not been saved yet' };
+
   var contentType = match[1];
   var base64 = match[2];
   var bytes = Utilities.base64Decode(base64);
@@ -198,12 +212,8 @@ function handleUploadImage(payload) {
   file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
   var imageUrl = driveThumbnailUrl(file.getId());
 
-  var sheet = getItemsSheet();
-  var rowIndex = findRowIndexByRowId(sheet, payload.row_id);
-  if (rowIndex !== -1) {
-    var imageUrlCol = ITEM_COLUMNS.indexOf('image_url') + 1;
-    sheet.getRange(rowIndex, imageUrlCol).setValue(imageUrl);
-  }
+  var imageUrlCol = ITEM_COLUMNS.indexOf('image_url') + 1;
+  sheet.getRange(rowIndex, imageUrlCol).setValue(imageUrl);
   return { image_url: imageUrl };
 }
 

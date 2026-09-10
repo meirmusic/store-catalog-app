@@ -6,6 +6,7 @@ import {
   configValueExists,
   rowToItem,
   planImageUrlFixes,
+  planUploadImageResult,
 } from '../../apps-script/logic.js';
 
 test.describe('TC-BE: Apps Script pure logic', () => {
@@ -60,5 +61,13 @@ test.describe('TC-BE: Apps Script pure logic', () => {
   test('TC-BE-007b: an already-correct thumbnail URL is left untouched', () => {
     const fixes = planImageUrlFixes(['https://drive.google.com/thumbnail?id=ABC&sz=w1000']);
     expect(fixes).toEqual([]);
+  });
+
+  test('TC-BE-008 (REG-012 regression): uploadImage refuses a row that does not exist yet', () => {
+    expect(planUploadImageResult(-1)).toEqual({ error: 'row not found - upsert has not been saved yet' });
+  });
+
+  test('TC-BE-008b: uploadImage proceeds once the row exists', () => {
+    expect(planUploadImageResult(5)).toEqual({ ok: true });
   });
 });
