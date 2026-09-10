@@ -1,6 +1,6 @@
 // TC-SRCH-* from TEST_PLAN.md.
 import { test, expect } from '@playwright/test';
-import { pickIdentity, clearAllData, seedItems } from '../helpers/app.js';
+import { pickIdentity, clearAllData, seedItems, reloadApp } from '../helpers/app.js';
 
 const SEED = [
   { row_id: 'A1', name: 'אור בין החומות', sku: '3022', serial_number: '111', location: 'גלריה', type: 'מקורי', physical_status: 'מתוח', availability_status: 'available', price: 4200 },
@@ -13,7 +13,7 @@ test.beforeEach(async ({ page }) => {
   await pickIdentity(page);
   await clearAllData(page);
   await seedItems(page, SEED);
-  await page.reload();
+  await reloadApp(page);
   await page.waitForSelector('text=קטלוג הגלריה');
 });
 

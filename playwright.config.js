@@ -6,6 +6,10 @@ import { defineConfig, devices } from '@playwright/test';
 // environment has no route to either. Integration-level tests mock the
 // Apps Script boundary with page.route() instead of reaching it for real.
 const CHROMIUM_PATH = '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
+// Running as root in this container - Chromium refuses to launch without
+// --no-sandbox regardless of device profile (desktop happened to tolerate
+// its absence; every mobile-device profile did not).
+const LAUNCH_OPTIONS = { executablePath: CHROMIUM_PATH, args: ['--no-sandbox'] };
 
 export default defineConfig({
   testDir: './tests',
@@ -24,17 +28,17 @@ export default defineConfig({
       name: 'desktop',
       testMatch: /.*\.spec\.js/,
       testIgnore: /.*\.mobile\.spec\.js/,
-      use: { ...devices['Desktop Chrome'], launchOptions: { executablePath: CHROMIUM_PATH } },
+      use: { ...devices['Desktop Chrome'], launchOptions: LAUNCH_OPTIONS },
     },
     {
       name: 'mobile-iphone',
       testMatch: /.*\.mobile\.spec\.js/,
-      use: { ...devices['iPhone 13'], launchOptions: { executablePath: CHROMIUM_PATH } },
+      use: { ...devices['iPhone 13'], launchOptions: LAUNCH_OPTIONS },
     },
     {
       name: 'mobile-android',
       testMatch: /.*\.mobile\.spec\.js/,
-      use: { ...devices['Pixel 7'], launchOptions: { executablePath: CHROMIUM_PATH } },
+      use: { ...devices['Pixel 7'], launchOptions: LAUNCH_OPTIONS },
     },
   ],
   webServer: {

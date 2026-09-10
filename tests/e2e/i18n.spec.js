@@ -1,6 +1,6 @@
 // TC-I18N-* from TEST_PLAN.md.
 import { test, expect } from '@playwright/test';
-import { pickIdentity, clearAllData, seedItems, switchLanguage } from '../helpers/app.js';
+import { pickIdentity, clearAllData, seedItems, switchLanguage, reloadApp } from '../helpers/app.js';
 
 test.beforeEach(async ({ page }) => {
   await pickIdentity(page);
@@ -8,7 +8,7 @@ test.beforeEach(async ({ page }) => {
   await seedItems(page, [
     { row_id: 'L1', name: 'פריט לבדיקת שפה', location: 'גלריה', availability_status: 'available', price: 3500 },
   ]);
-  await page.reload();
+  await reloadApp(page);
   await page.waitForSelector('text=קטלוג הגלריה');
 });
 
@@ -44,7 +44,7 @@ test('TC-I18N-006: price is always shown in ₪, in every language', async ({ pa
 
 test('TC-I18N-007: language choice persists across a reload', async ({ page }) => {
   await switchLanguage(page, 'English');
-  await page.reload();
+  await reloadApp(page);
   await expect(page.locator('h1')).toHaveText('Gallery Catalog');
 });
 

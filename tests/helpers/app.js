@@ -4,8 +4,18 @@
 
 const DEFAULT_USER = 'שרה';
 
+// index.html links Google Fonts, which this sandboxed test environment has
+// no route to - the default 'load' event waits on that (failing) stylesheet
+// fetch, adding ~12s to every navigation. 'domcontentloaded' is enough for
+// the app to be interactive and skips that wait entirely.
+const NAV_OPTS = { waitUntil: 'domcontentloaded' };
+
+export async function reloadApp(page) {
+  await page.reload(NAV_OPTS);
+}
+
 export async function pickIdentity(page, name = DEFAULT_USER) {
-  await page.goto('/');
+  await page.goto('/', NAV_OPTS);
   await page.waitForSelector('text=מי אתה?', { timeout: 10_000 }).catch(() => {});
   const pick = page.locator(`button:has-text("${name}")`);
   if (await pick.count()) await pick.click();

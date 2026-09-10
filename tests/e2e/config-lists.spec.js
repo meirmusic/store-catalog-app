@@ -1,11 +1,11 @@
 // TC-CFG-* from TEST_PLAN.md.
 import { test, expect } from '@playwright/test';
-import { pickIdentity, clearAllData, getPendingChanges, openNewItemForm, saveItemForm } from '../helpers/app.js';
+import { pickIdentity, clearAllData, getPendingChanges, openNewItemForm, saveItemForm, reloadApp } from '../helpers/app.js';
 
 test.beforeEach(async ({ page }) => {
   await pickIdentity(page);
   await clearAllData(page);
-  await page.reload();
+  await reloadApp(page);
   await page.waitForSelector('text=קטלוג הגלריה');
 });
 

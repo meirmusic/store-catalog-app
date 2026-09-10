@@ -4,7 +4,7 @@
 // TEST_PLAN.md section 1 for why this is 🟢 (frontend behavior) rather
 // than proof the real Code.gs matches (that stays 🟡, per the plan).
 import { test, expect } from '@playwright/test';
-import { pickIdentity, clearAllData, openNewItemForm, fillItemForm, saveItemForm, getItems } from '../helpers/app.js';
+import { pickIdentity, clearAllData, openNewItemForm, fillItemForm, saveItemForm, getItems, reloadApp } from '../helpers/app.js';
 
 const MOCK_URL = 'https://mock-apps-script.test/exec';
 
@@ -30,8 +30,14 @@ test('TC-SYNC-002: push happens before pull (upsert reaches the mock before getA
     }
   });
 
-  await page.reload();
+  await reloadApp(page);
   await page.waitForSelector('text=קטלוג הגלריה');
+  // The app also runs an automatic sync on mount (useSyncStatus's own
+  // useEffect) - that first cycle has nothing pending yet, so it's a
+  // lone 'getAll' with no upsert. Clear it so the assertion below only
+  // reflects the cycle triggered by the manual refresh after adding the item.
+  callOrder.length = 0;
+
   await openNewItemForm(page);
   await fillItemForm(page, { name: 'סדר קריאות' });
   await saveItemForm(page);
@@ -55,7 +61,7 @@ test('TC-SYNC-004: 5 consecutive failures on the same change trip the visible sy
     }
   });
 
-  await page.reload();
+  await reloadApp(page);
   await page.waitForSelector('text=קטלוג הגלריה');
   await openNewItemForm(page);
   await fillItemForm(page, { name: 'תמיד נכשל' });
@@ -87,7 +93,7 @@ test('TC-SYNC-005: a failed pull should show a stale-data timestamp', async ({ p
     }
   });
 
-  await page.reload();
+  await reloadApp(page);
   await page.waitForSelector('text=קטלוג הגלריה');
   await page.click('.icon-btn[title]');
   await page.waitForTimeout(500);
@@ -114,7 +120,7 @@ test('TC-SYNC-006: after a successful upsert, the local record adopts the server
     }
   });
 
-  await page.reload();
+  await reloadApp(page);
   await page.waitForSelector('text=קטלוג הגלריה');
   await openNewItemForm(page);
   await fillItemForm(page, { name: 'בדיקת חותמת זמן' });

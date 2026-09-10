@@ -2,13 +2,13 @@
 // mobile-iphone and mobile-android Playwright projects (see
 // playwright.config.js) - same assertions, two real device viewports.
 import { test, expect } from '@playwright/test';
-import { pickIdentity, clearAllData, seedItems } from '../helpers/app.js';
+import { pickIdentity, clearAllData, seedItems, reloadApp } from '../helpers/app.js';
 
 test.beforeEach(async ({ page }) => {
   await pickIdentity(page);
   await clearAllData(page);
   await seedItems(page, [{ row_id: 'M1', name: 'פריט למובייל' }]);
-  await page.reload();
+  await reloadApp(page);
   await page.waitForSelector('text=קטלוג הגלריה');
 });
 

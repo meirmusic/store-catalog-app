@@ -11,6 +11,7 @@ import {
   fillItemForm,
   saveItemForm,
   cancelItemForm,
+  reloadApp,
 } from '../helpers/app.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -19,7 +20,7 @@ const SAMPLE_IMAGE = path.join(__dirname, '..', 'fixtures', 'sample-image.jpg');
 test.beforeEach(async ({ page }) => {
   await pickIdentity(page);
   await clearAllData(page);
-  await page.reload();
+  await reloadApp(page);
   await page.waitForSelector('text=קטלוג הגלריה');
 });
 

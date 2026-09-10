@@ -7,12 +7,13 @@ import {
   fillItemForm,
   saveItemForm,
   getPendingChanges,
+  reloadApp,
 } from '../helpers/app.js';
 
 test.beforeEach(async ({ page }) => {
   await pickIdentity(page);
   await clearAllData(page);
-  await page.reload();
+  await reloadApp(page);
   await page.waitForSelector('text=קטלוג הגלריה');
 });
 
