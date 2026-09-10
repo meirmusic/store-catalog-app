@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useI18n } from './i18n/I18nContext.jsx'
 import LanguageSwitcher from './i18n/LanguageSwitcher.jsx'
 import { IdentityProvider, useIdentity } from './identity/IdentityContext.jsx'
@@ -5,12 +6,14 @@ import IdentityPicker from './identity/IdentityPicker.jsx'
 import { ItemsProvider } from './items/ItemsContext.jsx'
 import ItemList from './items/ItemList.jsx'
 import { useSyncStatus } from './sync/useSyncStatus.js'
+import ConfigManager from './config/ConfigManager.jsx'
 import './items/items.css'
 
 function Header() {
   const { t } = useI18n()
   const { user, clearUser } = useIdentity()
   const { isOnline, syncing, lastSyncedAt, pendingCount, syncProblem, stale, refresh } = useSyncStatus()
+  const [managingLists, setManagingLists] = useState(false)
 
   return (
     <header className="top">
@@ -34,11 +37,13 @@ function Header() {
           </span>
         )}
         <button className={`icon-btn${syncing ? ' spin' : ''}`} onClick={refresh} title={t('actions.refresh')}>⟳</button>
+        <button className="icon-btn" onClick={() => setManagingLists(true)} title={t('config.manageLists')}>⚙</button>
         <LanguageSwitcher />
         {user && (
           <span className="chip user" onClick={clearUser}>👤 {user}</span>
         )}
       </div>
+      {managingLists && <ConfigManager onClose={() => setManagingLists(false)} />}
     </header>
   )
 }

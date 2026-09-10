@@ -54,3 +54,28 @@ test('TC-CFG-003: default seed values match SPEC.md on first load', async ({ pag
     }
   }
 });
+
+// CFG-04 (was a deferred stage-2 item, now built per task #15): a
+// dedicated screen showing every existing value per list, that can also
+// add new ones - separate from the inline "+" inside an item form.
+test('TC-CFG-004: the dedicated list-management screen shows and adds values, visible from item forms too', async ({ page }) => {
+  await page.click('.icon-btn[title="ניהול רשימות"]');
+  await expect(page.locator('#config-overlay')).toBeVisible();
+
+  // existing seed values show up as read-only badges, not just in a select
+  await expect(page.locator('#config-overlay .badge', { hasText: 'גלריה' })).toBeVisible();
+
+  const locationSection = page.locator('#config-overlay .field:has-text("מיקום")');
+  await locationSection.locator('.inline-add input').fill('מחסן מהמסך הייעודי');
+  await locationSection.locator('.inline-add button').click();
+  await expect(locationSection.locator('.badge', { hasText: 'מחסן מהמסך הייעודי' })).toBeVisible();
+
+  await page.click('#config-overlay button:has-text("סגירה")');
+  await expect(page.locator('#config-overlay')).toHaveCount(0);
+
+  // the value added from the dedicated screen is immediately usable from
+  // the regular item-form "+" flow too - same underlying config list.
+  await openNewItemForm(page);
+  const formLocationGroup = page.locator('#item-overlay .field:has-text("מיקום")').first();
+  await expect(formLocationGroup.locator('select option', { hasText: 'מחסן מהמסך הייעודי' })).toHaveCount(1);
+});

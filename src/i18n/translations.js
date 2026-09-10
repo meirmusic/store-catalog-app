@@ -37,6 +37,7 @@ export const translations = {
     'actions.removeImage': 'הסר תמונה',
     'actions.generateSerial': 'צור קוד',
     'actions.refresh': 'רענון ידני',
+    'actions.close': 'סגירה',
 
     'fields.name': 'שם היצירה',
     'fields.size': 'גודל',
@@ -66,6 +67,11 @@ export const translations = {
     'toast.itemDeleted': 'הפריט נמחק',
     'toast.valueAdded': 'נוסף לרשימה',
     'list.empty': 'לא נמצאו פריטים - נסה לשנות את החיפוש או הסינון, או להוסיף פריט חדש',
+
+    'config.manageLists': 'ניהול רשימות',
+    'config.manageListsHint': 'הוספת ערכים חדשים לרשימות סוג/מיקום/סטטוס. אי אפשר למחוק ערך קיים מכאן.',
+    'config.addPlaceholder': 'ערך חדש…',
+    'config.empty': 'אין עדיין ערכים ברשימה זו',
   },
 
   en: {
@@ -96,6 +102,7 @@ export const translations = {
     'actions.removeImage': 'Remove image',
     'actions.generateSerial': 'Generate code',
     'actions.refresh': 'Refresh',
+    'actions.close': 'Close',
 
     'fields.name': 'Artwork name',
     'fields.size': 'Size',
@@ -125,6 +132,11 @@ export const translations = {
     'toast.itemDeleted': 'Item deleted',
     'toast.valueAdded': 'Added to the list',
     'list.empty': 'No items found - try changing the search or filters, or add a new item',
+
+    'config.manageLists': 'Manage lists',
+    'config.manageListsHint': "Add new values to the type/location/status lists. Existing values can't be deleted from here.",
+    'config.addPlaceholder': 'New value…',
+    'config.empty': 'No values in this list yet',
   },
 
   nl: {
@@ -155,6 +167,7 @@ export const translations = {
     'actions.removeImage': 'Afbeelding verwijderen',
     'actions.generateSerial': 'Genereer code',
     'actions.refresh': 'Vernieuwen',
+    'actions.close': 'Sluiten',
 
     'fields.name': 'Naam van het kunstwerk',
     'fields.size': 'Afmeting',
@@ -184,6 +197,11 @@ export const translations = {
     'toast.itemDeleted': 'Item verwijderd',
     'toast.valueAdded': 'Toegevoegd aan de lijst',
     'list.empty': 'Geen items gevonden - probeer de zoekopdracht of filters te wijzigen, of voeg een nieuw item toe',
+
+    'config.manageLists': 'Lijsten beheren',
+    'config.manageListsHint': 'Nieuwe waarden toevoegen aan de lijsten type/locatie/status. Bestaande waarden kunnen hier niet worden verwijderd.',
+    'config.addPlaceholder': 'Nieuwe waarde…',
+    'config.empty': 'Nog geen waarden in deze lijst',
   },
 };
 
