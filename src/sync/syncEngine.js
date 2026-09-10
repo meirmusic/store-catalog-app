@@ -14,8 +14,21 @@ async function pushOne(change) {
       // The server is authoritative for last_modified_at/last_modified_by
       // (see SPEC.md section 6, conflict resolution) - adopt whatever it
       // echoes back instead of keeping the client's own guessed values.
+      // Deliberately narrow: do NOT adopt the rest of the echoed row
+      // (image_url in particular) - a brand-new item's upsert always
+      // carries image_url: null (the real photo goes out separately as
+      // its own 'uploadImage' change - see ItemForm's isNewPhoto split),
+      // so blanket-adopting the echo here can stomp a real Drive URL
+      // that 'uploadImage' already wrote locally, if this upsert's
+      // response lands after it (overlapping sync cycles - REG-011).
       const result = await upsertItem(item);
-      if (result) await db.items.put({ ...item, ...result });
+      if (result) {
+        await db.items.put({
+          ...item,
+          last_modified_at: result.last_modified_at,
+          last_modified_by: result.last_modified_by,
+        });
+      }
     }
   } else if (change.op === 'softDelete') {
     await softDeleteItem(change.row_id);

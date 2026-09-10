@@ -4,7 +4,7 @@
 // TEST_PLAN.md section 1 for why this is 🟢 (frontend behavior) rather
 // than proof the real Code.gs matches (that stays 🟡, per the plan).
 import { test, expect } from '@playwright/test';
-import { pickIdentity, clearAllData, openNewItemForm, fillItemForm, saveItemForm, getItems, reloadApp } from '../helpers/app.js';
+import { pickIdentity, clearAllData, seedItems, openNewItemForm, fillItemForm, saveItemForm, getItems, reloadApp } from '../helpers/app.js';
 
 const MOCK_URL = 'https://mock-apps-script.test/exec';
 
@@ -126,4 +126,47 @@ test('TC-SYNC-006: after a successful upsert, the local record adopts the server
 
   const items = await getItems(page);
   expect(items[0].last_modified_at).toBe(serverTimestamp);
+});
+
+// REG-011: found via a real user report - a brand-new item's upsert always
+// carries image_url: null (the real photo goes out separately as its own
+// 'uploadImage' change), so the server always echoes back image_url: ''
+// for it. When TC-SYNC-006's fix (adopting the upsert response) first
+// shipped, it blanket-adopted the ENTIRE echoed row - meaning that '' could
+// stomp a real Drive URL 'uploadImage' had already written locally, if the
+// upsert response for one sync cycle happened to land after another cycle's
+// uploadImage (two overlapping refreshes on a slow connection is a
+// realistic way to trigger that). Fixed by only adopting last_modified_at/
+// last_modified_by from the upsert response, never image_url - this test
+// proves that contract directly: whatever image_url an upsert response
+// carries, it must never overwrite the local record's.
+test('TC-SYNC-007 (REG-011 regression): an upsert response never overwrites the local image_url', async ({ page }) => {
+  const REAL_URL = 'https://drive.google.com/thumbnail?id=REAL&sz=w1000';
+  await seedItems(page, [{ row_id: 'IMGROW', name: 'עם תמונה אמיתית', image_url: REAL_URL, price: 100 }]);
+
+  await page.route(MOCK_URL, async (route) => {
+    const body = await readAction(route);
+    if (body.action === 'getAll') {
+      await route.fulfill({ json: { items: [], config: {} } });
+    } else if (body.action === 'upsert') {
+      // A deliberately wrong echo, standing in for the '' the real
+      // Apps Script sends back for any field whose payload was null.
+      await route.fulfill({ json: { ...body.payload, image_url: 'WRONG' } });
+    } else {
+      await route.fulfill({ json: { ok: true } });
+    }
+  });
+
+  await reloadApp(page);
+  await page.waitForSelector('text=קטלוג הגלריה');
+  await page.click('.card');
+  await page.waitForSelector('#item-overlay');
+  await fillItemForm(page, { price: 250 }); // any edit that queues a plain 'upsert'
+  await saveItemForm(page);
+
+  await page.click('.icon-btn[title]');
+  await page.waitForTimeout(500);
+
+  const items = await getItems(page);
+  expect(items[0].image_url).toBe(REAL_URL);
 });
