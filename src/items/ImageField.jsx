@@ -65,7 +65,12 @@ export default function ImageField({ value, onChange }) {
         <label style={{ display: 'block', fontSize: '.8rem', color: 'var(--ink-dim)', marginBottom: 5 }}>
           {t('fields.image')}
         </label>
-        <input type="file" accept="image/*" capture="environment" onChange={handleFile} />
+        {/* No `capture` attribute: on iOS, a file input with `capture` set
+            silently fails to open anything once the app is installed to
+            the home screen (a known WebKit standalone-mode bug). Without
+            it, tapping opens the normal action sheet (camera or library),
+            which is what staff want anyway. */}
+        <input type="file" accept="image/*" onChange={handleFile} />
         {value && (
           <button
             type="button"
