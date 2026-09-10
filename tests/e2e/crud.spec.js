@@ -44,7 +44,18 @@ test('TC-CRUD-003: adding with an empty name is rejected', async ({ page }) => {
   // open, so waiting for it to detach would just burn the test timeout.
   await page.click('#item-overlay button:has-text("שמירה")');
   await expect(page.locator('#item-overlay')).toBeVisible();
-  await expect(page.locator('text=יש להזין שם ליצירה')).toBeVisible();
+
+  // New finding (not previously in TEST_PLAN.md's RTM): the name <input>
+  // carries a native HTML `required` attribute, so the browser's own
+  // constraint validation blocks the submit event before it ever reaches
+  // ItemForm's onSubmit handler - the custom errors.nameRequired message
+  // and its <p> element are unreachable dead code; the browser's native
+  // validation tooltip is what the user actually sees. The "don't save"
+  // requirement is still satisfied, just via a different mechanism than
+  // the code appears to intend. Added to task #15.
+  const nameInput = page.locator('#item-overlay input[type=text]').first();
+  const isInvalid = await nameInput.evaluate((el) => !el.validity.valid);
+  expect(isInvalid).toBe(true);
 
   const items = await getItems(page);
   expect(items).toHaveLength(0);
@@ -136,6 +147,13 @@ test('TC-SYNC-003 / TC-DM: a fresh photo queues its own uploadImage change, not 
   await openNewItemForm(page);
   await fillItemForm(page, { name: 'עם תמונה', imagePath: SAMPLE_IMAGE });
   await saveItemForm(page);
+
+  // The modal closes (onSaved()) once both the upsert and the uploadImage
+  // enqueue()s have resolved, but the pending-count badge (a separate
+  // useLiveQuery) can lag it by a tick - wait for the reactive UI signal
+  // that's already known to be correct (see the header chip) before
+  // querying Dexie directly, instead of racing a fixed-point-in-time read.
+  await expect(page.locator('.chip', { hasText: 'ממתינים' })).toContainText('2');
 
   const pending = await getPendingChanges(page);
   const ops = pending.map((c) => c.op).sort();

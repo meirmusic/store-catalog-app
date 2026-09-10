@@ -5,6 +5,19 @@ import { defineConfig, devices } from '@playwright/test';
 // against the live GitHub Pages URL or the real Apps Script backend - this
 // environment has no route to either. Integration-level tests mock the
 // Apps Script boundary with page.route() instead of reaching it for real.
+//
+// Set directly on process.env (not via webServer.env below) so it's
+// guaranteed to reach the spawned `npm run dev` regardless of Vite's own
+// .env-file loading precedence, and so the suite works the same whether or
+// not a developer's machine happens to have a real .env.local. The actual
+// value never matters - every test that depends on it matches the URL
+// generically (see tests/helpers/app.js's APPS_SCRIPT_URL_PATTERN) and
+// mocks every request with page.route(), so nothing ever really reaches it.
+if (!process.env.VITE_APPS_SCRIPT_URL) {
+  process.env.VITE_APPS_SCRIPT_URL = 'https://mock-apps-script.test/exec';
+  process.env.VITE_SHARED_SECRET = 'test-secret';
+}
+
 const CHROMIUM_PATH = '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
 // Running as root in this container - Chromium refuses to launch without
 // --no-sandbox regardless of device profile (desktop happened to tolerate
@@ -33,7 +46,14 @@ export default defineConfig({
     {
       name: 'mobile-iphone',
       testMatch: /.*\.mobile\.spec\.js/,
-      use: { ...devices['iPhone 13'], launchOptions: LAUNCH_OPTIONS },
+      // devices['iPhone 13'] defaults to WebKit (real iOS Safari's engine),
+      // but only Chromium is installed in this environment - forcing
+      // browserName here just gives it the right viewport/UA/touch flags
+      // under Chromium instead. This means these tests validate CSS
+      // layout/breakpoints only, never real WebKit rendering quirks (like
+      // the iOS file-input capture bug found manually earlier) - those
+      // stay in TEST_PLAN.md's permanently-manual list (🔴).
+      use: { ...devices['iPhone 13'], browserName: 'chromium', launchOptions: LAUNCH_OPTIONS },
     },
     {
       name: 'mobile-android',
@@ -46,14 +66,5 @@ export default defineConfig({
     url: 'http://localhost:5173',
     reuseExistingServer: !process.env.CI,
     timeout: 30_000,
-    // Fixed, obviously-fake endpoint for Integration/Contract tests (see
-    // tests/integration/) - real process env here overrides any local
-    // .env.local, so the suite is reproducible even without one. Every
-    // request to it is intercepted with page.route(); nothing ever
-    // actually reaches this URL.
-    env: {
-      VITE_APPS_SCRIPT_URL: 'https://mock-apps-script.test/exec',
-      VITE_SHARED_SECRET: 'test-secret',
-    },
   },
 });

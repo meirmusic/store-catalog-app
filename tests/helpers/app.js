@@ -5,9 +5,16 @@
 const DEFAULT_USER = 'שרה';
 
 // index.html links Google Fonts, which this sandboxed test environment has
-// no route to - the default 'load' event waits on that (failing) stylesheet
-// fetch, adding ~12s to every navigation. 'domcontentloaded' is enough for
-// the app to be interactive and skips that wait entirely.
+// no route to. Chromium's parser blocks on that stylesheet request (adding
+// ~12s to every navigation, even with waitUntil: 'domcontentloaded') before
+// the connection attempt gives up - aborting the requests outright avoids
+// the wait entirely. The route persists on the page for its whole
+// lifetime, so registering it once here also covers later reloadApp() calls.
+async function blockGoogleFonts(page) {
+  await page.route('**://fonts.googleapis.com/**', (route) => route.abort());
+  await page.route('**://fonts.gstatic.com/**', (route) => route.abort());
+}
+
 const NAV_OPTS = { waitUntil: 'domcontentloaded' };
 
 export async function reloadApp(page) {
@@ -15,6 +22,7 @@ export async function reloadApp(page) {
 }
 
 export async function pickIdentity(page, name = DEFAULT_USER) {
+  await blockGoogleFonts(page);
   await page.goto('/', NAV_OPTS);
   await page.waitForSelector('text=מי אתה?', { timeout: 10_000 }).catch(() => {});
   const pick = page.locator(`button:has-text("${name}")`);
