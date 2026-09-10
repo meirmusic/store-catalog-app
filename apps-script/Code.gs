@@ -14,6 +14,12 @@
  * deployment VERSION of the *same* deployment (Deploy > Manage
  * deployments > edit > new version) - not a brand new deployment,
  * or the URL will change.
+ *
+ * TESTING: this file can't run outside Google's servers, so its pure logic
+ * (no SpreadsheetApp/DriveApp calls) is mirrored in apps-script/logic.js
+ * and unit-tested there - see TEST_PLAN.md section 3. If you change
+ * findRowIndexByRowId, driveThumbnailUrl, the config dedup check, or
+ * rowToItem here, update the matching function in logic.js too.
  */
 
 // Not real security - just a deterrent against casual/automated access
