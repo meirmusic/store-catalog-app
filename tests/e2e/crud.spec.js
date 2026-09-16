@@ -137,6 +137,62 @@ test('TC-CRUD-008: canceling add/edit without saving writes nothing', async ({ p
   expect(await getPendingChanges(page)).toHaveLength(0);
 });
 
+// UI_STANDARD_GAP_ANALYSIS.md ACT-03/MSG-06: a successful save shows a
+// brief confirmation that disappears on its own - the toast plumbing
+// (.toast CSS, toast.* translation strings) existed since early in the
+// project but nothing actually rendered it until now.
+test('TC-ACT-003: a successful save shows a confirmation toast that auto-dismisses', async ({ page }) => {
+  await openNewItemForm(page);
+  await fillItemForm(page, { name: 'עם הודעת אישור' });
+  await saveItemForm(page);
+
+  await expect(page.locator('.toast')).toContainText('נשמר מקומית');
+  await expect(page.locator('.toast')).toHaveCount(0, { timeout: 5000 });
+});
+
+test('TC-ACT-004: deleting an item shows its own confirmation toast', async ({ page }) => {
+  await openNewItemForm(page);
+  await fillItemForm(page, { name: 'למחיקה עם הודעה' });
+  await saveItemForm(page);
+  // the save toast from above must not linger and be mistaken for the
+  // delete one below.
+  await expect(page.locator('.toast')).toHaveCount(0, { timeout: 5000 });
+
+  await page.click('.card');
+  await page.waitForSelector('#item-overlay');
+  await page.click('button:has-text("מחיקת פריט")');
+  await page.waitForSelector('.confirm-modal');
+  await page.click('.confirm-modal button.danger');
+
+  await expect(page.locator('.toast')).toContainText('הפריט נמחק');
+});
+
+// ACT-04: the button locks the instant it's clicked (ItemForm sets
+// disabled={saving} on both buttons), so a fast double-click/double-tap
+// can't queue the same item twice. A local save normally completes so
+// fast that the disabled state and the eventual unmount land in the same
+// React commit - unobservable from outside, and racing two real
+// Playwright clicks against a form that can vanish mid-flight destabilized
+// the browser session rather than producing a clean assertion. Using the
+// window.__testSlowSave hook (see ItemForm.jsx) to widen the window is
+// the stable way to actually see and test the lock.
+test('TC-ACT-005: the save button locks for the duration of the save, preventing a double-submit', async ({ page }) => {
+  await page.evaluate(() => { window.__testSlowSave = 400; });
+  await openNewItemForm(page);
+  await fillItemForm(page, { name: 'נעילת כפתור שמירה' });
+
+  const saveBtn = page.locator('#item-overlay button:has-text("שמירה")');
+  await saveBtn.click();
+  await expect(saveBtn).toBeDisabled();
+  await saveBtn.click({ force: true }); // a second click while locked must be a no-op
+
+  await page.waitForSelector('#item-overlay', { state: 'detached' });
+  const items = await getItems(page);
+  expect(items).toHaveLength(1);
+  const pending = await getPendingChanges(page);
+  expect(pending.filter((c) => c.op === 'upsert')).toHaveLength(1);
+});
+
 test('TC-SYNC-003 / TC-DM: a fresh photo queues its own uploadImage change, not a raw upsert payload', async ({ page }) => {
   await openNewItemForm(page);
   await fillItemForm(page, { name: 'עם תמונה', imagePath: SAMPLE_IMAGE });

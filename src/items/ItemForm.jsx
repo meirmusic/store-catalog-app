@@ -1,9 +1,12 @@
 import { useState } from 'react';
 import { useI18n } from '../i18n/I18nContext.jsx';
 import { useItems } from './ItemsContext.jsx';
+import { useToast } from '../toast/ToastContext.jsx';
 import ImageField from './ImageField.jsx';
 
 function ConfigSelect({ list, value, onChange, config, addConfigValue, label }) {
+  const { t } = useI18n();
+  const { showToast } = useToast();
   const [adding, setAdding] = useState(false);
   const [draft, setDraft] = useState('');
 
@@ -13,6 +16,7 @@ function ConfigSelect({ list, value, onChange, config, addConfigValue, label }) 
       onChange(added);
       setDraft('');
       setAdding(false);
+      showToast(t('toast.valueAdded'));
     }
   }
 
@@ -47,7 +51,9 @@ function ConfigSelect({ list, value, onChange, config, addConfigValue, label }) 
 export default function ItemForm({ item, onClose, onRequestDelete, onSaved }) {
   const { t } = useI18n();
   const { config, saveItem, addConfigValue, queueImageUpload } = useItems();
+  const { showToast } = useToast();
   const isNew = !item;
+  const [saving, setSaving] = useState(false);
 
   const [name, setName] = useState(item?.name || '');
   const [size, setSize] = useState(item?.size || '');
@@ -74,30 +80,53 @@ export default function ItemForm({ item, onClose, onRequestDelete, onSaved }) {
       setError(t('errors.nameRequired'));
       return;
     }
-    // A freshly-picked photo is a data: URL - too big to write straight
-    // into the Sheet's image_url column (and not what that column is
-    // for). Keep the row's previous image_url untouched and upload the
-    // new photo separately; the sync engine swaps in the real Drive URL
-    // once the upload succeeds.
-    const isNewPhoto = imageUrl && imageUrl.startsWith('data:');
-    const row_id = await saveItem(
-      {
-        name: name.trim(),
-        size: size.trim() || null,
-        sku: sku.trim() || null,
-        type: type || null,
-        location: location || null,
-        physical_status: status || null,
-        price: price === '' ? null : Number(price),
-        serial_number: serial.trim() || null,
-        notes: notes.trim() || null,
-        availability_status: availability,
-        image_url: isNewPhoto ? (item?.image_url || null) : imageUrl,
-      },
-      item?.row_id,
-    );
-    if (isNewPhoto) await queueImageUpload(row_id, imageUrl);
-    onSaved();
+    // ACT-04 (UI_STANDARD_GAP_ANALYSIS.md): lock the button for the
+    // duration of the save so a fast double-click/double-tap can't queue
+    // the item twice.
+    if (saving) return;
+    setSaving(true);
+    try {
+      // Test-only hook (see tests/e2e/crud.spec.js TC-ACT-005): a local
+      // save normally completes fast enough that the disabled state and
+      // the following unmount land in the same React commit, making the
+      // lock unobservable from outside. Nothing in the real app ever sets
+      // window.__testSlowSave - this exists purely to widen that window
+      // on demand so the guard can be tested directly, mirroring
+      // CrashTestHook's window.__testCrash in src/ErrorBoundary.jsx.
+      if (typeof window !== 'undefined' && window.__testSlowSave) {
+        await new Promise((resolve) => setTimeout(resolve, window.__testSlowSave));
+      }
+      // A freshly-picked photo is a data: URL - too big to write straight
+      // into the Sheet's image_url column (and not what that column is
+      // for). Keep the row's previous image_url untouched and upload the
+      // new photo separately; the sync engine swaps in the real Drive URL
+      // once the upload succeeds.
+      const isNewPhoto = imageUrl && imageUrl.startsWith('data:');
+      const row_id = await saveItem(
+        {
+          name: name.trim(),
+          size: size.trim() || null,
+          sku: sku.trim() || null,
+          type: type || null,
+          location: location || null,
+          physical_status: status || null,
+          price: price === '' ? null : Number(price),
+          serial_number: serial.trim() || null,
+          notes: notes.trim() || null,
+          availability_status: availability,
+          image_url: isNewPhoto ? (item?.image_url || null) : imageUrl,
+        },
+        item?.row_id,
+      );
+      if (isNewPhoto) await queueImageUpload(row_id, imageUrl);
+      // ACT-03/MSG-06 (UI_STANDARD_GAP_ANALYSIS.md): local save is what
+      // just actually happened - "נשמר מקומית" is accurate whether or
+      // not the background sync to the server has finished yet.
+      showToast(t('sync.savedLocal'));
+      onSaved();
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -185,8 +214,8 @@ export default function ItemForm({ item, onClose, onRequestDelete, onSaved }) {
 
           <div className="modal-actions">
             <div className="left-actions">
-              <button type="button" className="btn" onClick={onClose}>{t('actions.cancel')}</button>
-              <button type="submit" className="btn primary">{t('actions.save')}</button>
+              <button type="button" className="btn" onClick={onClose} disabled={saving}>{t('actions.cancel')}</button>
+              <button type="submit" className="btn primary" disabled={saving}>{t('actions.save')}</button>
             </div>
             {!isNew && (
               <button type="button" className="danger-link" onClick={() => onRequestDelete(item)}>

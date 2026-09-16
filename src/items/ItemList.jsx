@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useI18n } from '../i18n/I18nContext.jsx';
 import { useItems } from './ItemsContext.jsx';
+import { useToast } from '../toast/ToastContext.jsx';
 import ItemCard from './ItemCard.jsx';
 import ItemForm from './ItemForm.jsx';
 import DeleteConfirm from './DeleteConfirm.jsx';
@@ -20,6 +21,7 @@ function matchesSearch(item, q) {
 export default function ItemList() {
   const { t } = useI18n();
   const { items, config, softDeleteItem } = useItems();
+  const { showToast } = useToast();
 
   const [search, setSearch] = useState('');
   const [availability, setAvailability] = useState('all');
@@ -188,6 +190,7 @@ export default function ItemList() {
             await softDeleteItem(deleteTarget.row_id);
             setDeleteTarget(null);
             setEditingItem(undefined);
+            showToast(t('toast.itemDeleted'));
           }}
         />
       )}

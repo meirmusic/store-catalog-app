@@ -17,6 +17,9 @@ test('TC-CFG-001: adding a new location value appears immediately and is usable'
   await locationGroup.locator('.inline-add button').click();
 
   await expect(locationGroup.locator('select')).toHaveValue('מחסן חדש');
+  // ACT-03/MSG-06: confirmation toast on the inline "+" add too, not just
+  // the dedicated list-management screen.
+  await expect(page.locator('.toast')).toContainText('נוסף לרשימה');
 
   await page.fill('#item-overlay input[type=text] >> nth=0', 'פריט עם מיקום חדש');
   await saveItemForm(page);

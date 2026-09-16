@@ -7,6 +7,7 @@ import { ItemsProvider } from './items/ItemsContext.jsx'
 import ItemList from './items/ItemList.jsx'
 import { useSyncStatus } from './sync/useSyncStatus.js'
 import ConfigManager from './config/ConfigManager.jsx'
+import { ToastProvider } from './toast/ToastContext.jsx'
 import './items/items.css'
 
 function Header() {
@@ -60,9 +61,11 @@ function AppShell() {
 function App() {
   return (
     <IdentityProvider>
-      <ItemsProvider>
-        <IdentityGate />
-      </ItemsProvider>
+      <ToastProvider>
+        <ItemsProvider>
+          <IdentityGate />
+        </ItemsProvider>
+      </ToastProvider>
     </IdentityProvider>
   )
 }

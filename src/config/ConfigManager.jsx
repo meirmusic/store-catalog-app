@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useI18n } from '../i18n/I18nContext.jsx';
 import { useItems } from '../items/ItemsContext.jsx';
+import { useToast } from '../toast/ToastContext.jsx';
 
 // SPEC.md CFG-04 (stage 2): a centralized view of every existing value in
 // each config-driven list, with the ability to add new ones - lists stay
@@ -8,13 +9,17 @@ import { useItems } from '../items/ItemsContext.jsx';
 function ConfigListSection({ list, label }) {
   const { t } = useI18n();
   const { config, addConfigValue } = useItems();
+  const { showToast } = useToast();
   const [draft, setDraft] = useState('');
   const values = config[list] || [];
 
   async function confirmAdd() {
     if (!draft.trim()) return;
     const added = await addConfigValue(list, draft);
-    if (added) setDraft('');
+    if (added) {
+      setDraft('');
+      showToast(t('toast.valueAdded'));
+    }
   }
 
   return (

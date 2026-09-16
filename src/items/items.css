@@ -83,6 +83,7 @@ select, .btn {
 }
 select:hover, .btn:hover { border-color: var(--accent); }
 .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--wall); font-weight: 700; }
+.btn:disabled { opacity: .55; cursor: default; pointer-events: none; }
 .toggle-pill { display: inline-flex; align-items: center; gap: 6px; font-size: .82rem; cursor: pointer; border: 1px solid var(--line); border-radius: 999px; padding: 7px 12px; }
 .toggle-pill input { accent-color: var(--accent); }
 .toggle-pill.active { border-color: var(--accent); background: var(--wall-2); font-weight: 600; }
@@ -176,7 +177,10 @@ select:hover, .btn:hover { border-color: var(--accent); }
 .confirm-modal .confirm-actions button.danger { background: var(--sold); border-color: var(--sold); color: #fff; }
 
 .toast-wrap { position: fixed; bottom: 20px; inset-inline-end: 20px; z-index: 200; display: flex; flex-direction: column; gap: 8px; }
-.toast { background: var(--ink); color: var(--wall); padding: 10px 16px; border-radius: 10px; font-size: .86rem; box-shadow: 0 8px 24px rgba(0,0,0,.3); }
+.toast { display: flex; align-items: center; gap: 10px; background: var(--ink); color: var(--wall); padding: 10px 16px; border-radius: 10px; font-size: .86rem; box-shadow: 0 8px 24px rgba(0,0,0,.3); }
+.toast.error { background: var(--sold); }
+.toast-close { background: none; border: none; color: inherit; font-size: 1.1rem; line-height: 1; cursor: pointer; padding: 0; opacity: .8; }
+.toast-close:hover { opacity: 1; }
 
 @media (max-width: 640px) {
   /* .toolbar keeps its default flex-wrap:wrap here (not nowrap) so the
