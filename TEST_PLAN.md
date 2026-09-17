@@ -157,7 +157,7 @@
 | API-05 | `addConfigOption` - בודק כפילות case-insensitive | ✅ תואם | TC-BE-005 | 🟢 |
 | TECH-01 | גוף בקשה כ-`text/plain`, לא `application/json` (עוקף CORS preflight) | ✅ תואם | TC-BE-006 | 🟢 |
 | TECH-02 | `LockService.getScriptLock()` על כל endpoint שכותב | ✅ תואם (בקוד, נבדק בעין - Apps Script לא ניתן להרצה מקומית) | - | 🔴 |
-| TECH-03 | **עודכן (task #28)**: כל בקשה מאומתת בצד שרת מול Google (tokeninfo) + רשימת אימיילים מורשים ב-Config, לא סוד משותף | ✅ תואם | TC-BE-009/009b/009c/009d | 🟢 |
+| TECH-03 | **עודכן (task #28, v3)**: כל בקשה מאומתת בצד שרת מול אחת משתי דרכים - Google (tokeninfo) + רשימת אימיילים מורשים ב-Config, או אימייל+סיסמה מול hash ב-Script Properties - לא סוד משותף | ✅ תואם | TC-BE-009/009b/009c/009d, TC-BE-010..010f | 🟢 |
 
 ---
 
@@ -188,6 +188,12 @@
 | TC-BE-009b | Critical | בקשה בלי טוקן בכלל | נדחית - `null`, לא מוחזר אימייל |
 | TC-BE-009c | Critical | טוקן עם `aud` של אפליקציית Google אחרת (לא ה-Client ID שלנו) | נדחה - טוקן שהונפק לאפליקציה אחרת לא יכול לשמש כאן |
 | TC-BE-009d | High | טוקן עם `aud` נכון אבל `email_verified=false` | נדחה - אימייל לא מאומת על ידי Google לא נסמך עליו |
+| TC-BE-010 | Critical | **task #28 v3**: מסך אימייל+סיסמה עצמאי - אימייל וסיסמה תואמים (מול hash) | ההתחברות מתקבלת |
+| TC-BE-010b | Medium | השוואת האימייל לא רגישה לרישיות/רווחים | ההתחברות מתקבלת גם כשהאימייל הוקלד עם אותיות גדולות/רווחים |
+| TC-BE-010c | Critical | סיסמה שגויה | נדחה |
+| TC-BE-010d | Critical | אימייל שגוי (גם עם סיסמה נכונה) | נדחה |
+| TC-BE-010e | High | אף אחד עדיין לא הגדיר סיסמה (`promptSetLoginPassword` לא הורץ) | נדחה תמיד (fail closed), לא מתקבלת כל סיסמה |
+| TC-BE-010f | Medium | אין אובייקט `auth` בבקשה בכלל | נדחה |
 
 ### Integration/Contract - מול Apps Script מדומה (TC-SYNC-*, page.route)
 

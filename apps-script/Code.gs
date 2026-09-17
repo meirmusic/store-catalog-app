@@ -7,10 +7,18 @@
  * 3. Change GOOGLE_CLIENT_ID below to the OAuth Client ID from Google Cloud
  *    Console (Credentials > OAuth client ID > Web application) - the same
  *    value the app's VITE_GOOGLE_CLIENT_ID must be set to.
- * 4. Deploy > New deployment > type "Web app" > Execute as "Me",
+ * 4. Change LOGIN_EMAIL below to the office email staff will type into the
+ *    app's own password login form (task #28 v3 - not every phone has the
+ *    shared Google account signed in, so a plain email+password form is a
+ *    second, independent way in, alongside Google Sign-In).
+ * 5. Deploy > New deployment > type "Web app" > Execute as "Me",
  *    Who has access "Anyone" > Deploy. Copy the Web App URL.
- * 5. Put that URL into the app's environment as VITE_APPS_SCRIPT_URL.
- * 6. In the Config sheet tab, add a row for the shared gallery Google
+ * 6. Put that URL into the app's environment as VITE_APPS_SCRIPT_URL.
+ * 7. Set the shared password once: in this editor, pick promptSetLoginPassword
+ *    from the function dropdown (next to Run) and click Run - switch to the
+ *    open Sheet tab, a dialog there asks for the password. It's hashed and
+ *    stored in this script's Properties, never in the Sheet or in this file.
+ * 8. In the Config sheet tab, add a row for the shared gallery Google
  *    account everyone signs in with: list_name "allowed_emails", value
  *    that account's email address. Each staff member then picks their own
  *    name from a second, in-app "who are you" screen for attribution only
@@ -28,20 +36,32 @@
  * (no SpreadsheetApp/DriveApp calls) is mirrored in apps-script/logic.js
  * and unit-tested there - see TEST_PLAN.md section 3. If you change
  * findRowIndexByRowId, driveThumbnailUrl, the config dedup check,
- * rowToItem, or extractVerifiedEmail here, update the matching function in
- * logic.js too.
+ * rowToItem, extractVerifiedEmail, or checkLoginCredentials here, update
+ * the matching function in logic.js too.
  */
 
-// Real end-to-end protection (task #28): every request must carry a
-// current Google ID token (see src/identity - "Sign In With Google") whose
-// email is on the Config sheet's "allowed_emails" list. This is checked
-// here, server-side, on every single request - not just gating the
-// website's own login screen - so a request straight to this URL with no
-// valid token for an allowed email is rejected regardless of what the
-// client does. Must match the OAuth Client ID created in Google Cloud
-// Console; a token issued for any other client is rejected (see
-// extractVerifiedEmail's `aud` check).
+// Real end-to-end protection (task #28), with two independent ways in -
+// every request must satisfy ONE of them, checked here server-side on
+// every single request, not just gating the website's own login screen:
+//
+// (a) a current Google ID token (see src/identity - "Sign In With
+//     Google") whose email is on the Config sheet's "allowed_emails"
+//     list; or
+// (b) the fixed office email plus the shared password, hashed and
+//     compared against Script Properties (see checkLoginCredentials).
+//
+// (b) exists because Google Sign-In alone assumes the shared Google
+// account is already signed into whatever device someone opens the app
+// on - not true for personal phones - so a plain password form is a
+// fallback that works from any device. A request with neither a valid
+// token nor valid password credentials is rejected regardless of what
+// the client does.
 var GOOGLE_CLIENT_ID = '111985169748-27d9hepcn8p7k1g9fjh5rjrbhr91adm4.apps.googleusercontent.com';
+var LOGIN_EMAIL = 'office@yossibittonart.com';
+// Not a secret by itself (it only widens the search space for anyone who
+// already has the password) - just mixed into the hash so the stored
+// value in Script Properties isn't a bare, precomputed-lookup-able hash.
+var PASSWORD_SALT = 'gallery-catalog-v1';
 
 var ITEMS_SHEET_NAME = 'Items';
 var CONFIG_SHEET_NAME = 'Config';
@@ -58,14 +78,7 @@ function doPost(e) {
   lock.waitLock(10000);
   try {
     var body = JSON.parse(e.postData.contents);
-    var tokenInfo = fetchGoogleTokenInfo(body.id_token);
-    var email = extractVerifiedEmail(tokenInfo, GOOGLE_CLIENT_ID);
-    if (!email) {
-      return jsonResponse({ error: 'forbidden' });
-    }
-    var configSheet = getConfigSheet();
-    var configValues = configSheet.getDataRange().getValues();
-    if (!configValueExists(configValues, 'allowed_emails', email)) {
+    if (!resolveAuthenticatedEmail(body)) {
       return jsonResponse({ error: 'forbidden' });
     }
     var result;
@@ -101,6 +114,30 @@ function jsonResponse(obj) {
     .setMimeType(ContentService.MimeType.JSON);
 }
 
+// Tries Google Sign-In first (if the request carries an id_token), then
+// falls back to the office password login (if it carries `auth`) - see the
+// task #28 v3 comment above GOOGLE_CLIENT_ID for why both exist. Returns
+// the authenticated email on success, null otherwise; the caller only
+// cares whether this is truthy.
+function resolveAuthenticatedEmail(body) {
+  if (body.id_token) {
+    var tokenInfo = fetchGoogleTokenInfo(body.id_token);
+    var googleEmail = extractVerifiedEmail(tokenInfo, GOOGLE_CLIENT_ID);
+    if (!googleEmail) return null;
+    var configSheet = getConfigSheet();
+    var configValues = configSheet.getDataRange().getValues();
+    if (!configValueExists(configValues, 'allowed_emails', googleEmail)) return null;
+    return googleEmail;
+  }
+  if (body.auth) {
+    if (checkLoginCredentials(body.auth, LOGIN_EMAIL, getStoredPasswordHash(), hashPassword)) {
+      return LOGIN_EMAIL;
+    }
+    return null;
+  }
+  return null;
+}
+
 // Calls Google's own tokeninfo endpoint to verify the ID token is real and
 // current - this is what makes the check trustworthy; anyone can send an
 // arbitrary string as `id_token`, but only a genuine, unexpired Google
@@ -129,6 +166,58 @@ function extractVerifiedEmail(tokenInfo, expectedAud) {
   if (tokenInfo.aud !== expectedAud) return null;
   if (tokenInfo.email_verified !== 'true' && tokenInfo.email_verified !== true) return null;
   return tokenInfo.email || null;
+}
+
+// Pure decision logic for the office password login - mirrored in logic.js
+// for unit testing, with hashFn injected so the mirror doesn't need
+// Apps Script's Utilities. `configuredHash` is null until
+// promptSetLoginPassword has been run once; until then this path always
+// fails closed rather than accepting any password.
+function checkLoginCredentials(auth, configuredEmail, configuredHash, hashFn) {
+  if (!auth || !auth.email || !auth.password) return false;
+  if (!configuredHash) return false;
+  if (String(auth.email).trim().toLowerCase() !== String(configuredEmail).trim().toLowerCase()) return false;
+  return hashFn(auth.password) === configuredHash;
+}
+
+function getStoredPasswordHash() {
+  return PropertiesService.getScriptProperties().getProperty('LOGIN_PASSWORD_HASH');
+}
+
+function hashPassword(password) {
+  var bytes = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, password + PASSWORD_SALT);
+  return bytesToHex(bytes);
+}
+
+function bytesToHex(bytes) {
+  return bytes
+    .map(function (b) {
+      var v = (b + 256) % 256;
+      return (v < 16 ? '0' : '') + v.toString(16);
+    })
+    .join('');
+}
+
+// One-time (or whenever it needs to change) setup: run this from the Apps
+// Script editor's function dropdown, then switch to the Sheet's own browser
+// tab - a dialog appears there asking for the new shared password. Typing
+// it here, in a Google-native prompt, is deliberate: the password itself
+// never has to appear in this file or get committed anywhere.
+function promptSetLoginPassword() {
+  var ui = SpreadsheetApp.getUi();
+  var result = ui.prompt(
+    'הגדרת סיסמת כניסה משותפת',
+    'הקלד/י את הסיסמה החדשה לכל הצוות:',
+    ui.ButtonSet.OK_CANCEL,
+  );
+  if (result.getSelectedButton() !== ui.Button.OK) return;
+  var password = result.getResponseText();
+  if (!password) {
+    ui.alert('לא הוזנה סיסמה - לא בוצע שינוי.');
+    return;
+  }
+  PropertiesService.getScriptProperties().setProperty('LOGIN_PASSWORD_HASH', hashPassword(password));
+  ui.alert('הסיסמה עודכנה בהצלחה.');
 }
 
 // Shared by the sign-in allowlist check (Config list "allowed_emails") and

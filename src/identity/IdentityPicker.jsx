@@ -5,15 +5,19 @@ import { waitForGoogleIdentityServices } from './googleAuth.js';
 import { GOOGLE_CLIENT_ID } from '../api/config.js';
 
 export default function IdentityPicker() {
-  const { user, signIn } = useIdentity();
+  const { user, signInWithGoogle, signInWithPassword } = useIdentity();
   const { t } = useI18n();
   const buttonRef = useRef(null);
-  const [error, setError] = useState('');
+  const [googleError, setGoogleError] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [passwordError, setPasswordError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     if (user) return;
     if (!GOOGLE_CLIENT_ID) {
-      setError(t('identity.notConfigured'));
+      setGoogleError(t('identity.notConfigured'));
       return;
     }
     let cancelled = false;
@@ -23,7 +27,7 @@ export default function IdentityPicker() {
         googleId.initialize({
           client_id: GOOGLE_CLIENT_ID,
           callback: (response) => {
-            if (!signIn(response.credential)) setError(t('identity.signInFailed'));
+            if (!signInWithGoogle(response.credential)) setGoogleError(t('identity.signInFailed'));
           },
         });
         if (buttonRef.current) {
@@ -35,7 +39,7 @@ export default function IdentityPicker() {
           });
         }
       })
-      .catch(() => setError(t('identity.signInFailed')));
+      .catch(() => setGoogleError(t('identity.signInFailed')));
     return () => {
       cancelled = true;
     };
@@ -43,6 +47,15 @@ export default function IdentityPicker() {
   }, [user]);
 
   if (user) return null;
+
+  async function handlePasswordSubmit(e) {
+    e.preventDefault();
+    setPasswordError('');
+    setSubmitting(true);
+    const ok = await signInWithPassword(email.trim(), password);
+    setSubmitting(false);
+    if (!ok) setPasswordError(t('identity.signInFailed'));
+  }
 
   return (
     <div
@@ -74,9 +87,57 @@ export default function IdentityPicker() {
         <p style={{ color: 'var(--ink-dim)', fontSize: '.88rem', margin: '0 0 18px' }}>
           {t('identity.subtitle')}
         </p>
-        <div ref={buttonRef} style={{ display: 'flex', justifyContent: 'center' }} />
-        {error && (
-          <p style={{ color: 'var(--sold)', fontSize: '.85rem', marginTop: 14 }}>{error}</p>
+
+        {GOOGLE_CLIENT_ID && <div ref={buttonRef} style={{ display: 'flex', justifyContent: 'center' }} />}
+        {googleError && (
+          <p style={{ color: 'var(--sold)', fontSize: '.85rem', marginTop: 14 }}>{googleError}</p>
+        )}
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '18px 0' }}>
+          <span style={{ flex: 1, height: 1, background: 'var(--line)' }} />
+          <span style={{ color: 'var(--ink-dim)', fontSize: '.8rem' }}>{t('identity.or')}</span>
+          <span style={{ flex: 1, height: 1, background: 'var(--line)' }} />
+        </div>
+
+        <form onSubmit={handlePasswordSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <input
+            type="email"
+            required
+            autoComplete="username"
+            placeholder={t('identity.emailPlaceholder')}
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            style={{ padding: '10px 12px', borderRadius: 10, border: '1px solid var(--line)', fontSize: '1rem' }}
+          />
+          <input
+            type="password"
+            required
+            autoComplete="current-password"
+            placeholder={t('identity.passwordPlaceholder')}
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            style={{ padding: '10px 12px', borderRadius: 10, border: '1px solid var(--line)', fontSize: '1rem' }}
+          />
+          <button
+            type="submit"
+            disabled={submitting}
+            style={{
+              padding: '12px 18px',
+              borderRadius: 12,
+              border: 'none',
+              background: 'var(--ink)',
+              color: 'var(--wall)',
+              fontSize: '1rem',
+              fontWeight: 600,
+              cursor: submitting ? 'default' : 'pointer',
+              opacity: submitting ? 0.7 : 1,
+            }}
+          >
+            {t('identity.passwordSubmit')}
+          </button>
+        </form>
+        {passwordError && (
+          <p style={{ color: 'var(--sold)', fontSize: '.85rem', marginTop: 10 }}>{passwordError}</p>
         )}
       </div>
     </div>

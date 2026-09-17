@@ -14,10 +14,14 @@ export const translations = {
     'app.subtitle': 'ניהול מלאי יצירות',
 
     'identity.title': 'התחברות',
-    'identity.subtitle': 'התחבר/י עם חשבון Google של הגלריה כדי לגשת לקטלוג',
+    'identity.subtitle': 'התחבר/י כדי לגשת לקטלוג',
     'identity.notConfigured': 'ההתחברות עדיין לא הוגדרה - פנה/י למנהל המערכת',
     'identity.signInFailed': 'ההתחברות נכשלה, נסה/י שוב',
     'identity.signOutGoogleConfirm': 'להתנתק מחשבון הגלריה? כל הצוות ייאלץ להתחבר מחדש כדי להשתמש באפליקציה.',
+    'identity.or': 'או',
+    'identity.emailPlaceholder': 'אימייל המשרד',
+    'identity.passwordPlaceholder': 'סיסמה',
+    'identity.passwordSubmit': 'כניסה',
 
     'teamMember.title': 'מי אתה?',
     'teamMember.subtitle': 'בחר/י שם כדי שנדע למי לשייך שינויים',
@@ -88,10 +92,14 @@ export const translations = {
     'app.subtitle': 'Artwork inventory management',
 
     'identity.title': 'Sign in',
-    'identity.subtitle': 'Sign in with the gallery\'s Google account to access the catalog',
+    'identity.subtitle': 'Sign in to access the catalog',
     'identity.notConfigured': 'Sign-in isn\'t set up yet - contact the system admin',
     'identity.signInFailed': 'Sign-in failed, please try again',
     'identity.signOutGoogleConfirm': 'Sign out of the gallery account? The whole team will need to sign in again to use the app.',
+    'identity.or': 'or',
+    'identity.emailPlaceholder': 'Office email',
+    'identity.passwordPlaceholder': 'Password',
+    'identity.passwordSubmit': 'Sign in',
 
     'teamMember.title': 'Who are you?',
     'teamMember.subtitle': 'Choose a name so we know who to attribute changes to',
@@ -162,10 +170,14 @@ export const translations = {
     'app.subtitle': 'Voorraadbeheer kunstwerken',
 
     'identity.title': 'Inloggen',
-    'identity.subtitle': 'Log in met het Google-account van de galerie om toegang te krijgen tot de catalogus',
+    'identity.subtitle': 'Log in om toegang te krijgen tot de catalogus',
     'identity.notConfigured': 'Inloggen is nog niet ingesteld - neem contact op met de beheerder',
     'identity.signInFailed': 'Inloggen mislukt, probeer het opnieuw',
     'identity.signOutGoogleConfirm': 'Uitloggen bij het account van de galerie? Het hele team moet opnieuw inloggen om de app te gebruiken.',
+    'identity.or': 'of',
+    'identity.emailPlaceholder': 'E-mail van het kantoor',
+    'identity.passwordPlaceholder': 'Wachtwoord',
+    'identity.passwordSubmit': 'Inloggen',
 
     'teamMember.title': 'Wie ben je?',
     'teamMember.subtitle': 'Kies een naam zodat we weten wie de wijziging heeft gemaakt',

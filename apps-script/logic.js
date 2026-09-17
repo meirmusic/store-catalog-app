@@ -96,6 +96,17 @@ function extractVerifiedEmail(tokenInfo, expectedAud) {
   return tokenInfo.email || null;
 }
 
+// Mirrors Code.gs's checkLoginCredentials (task #28 v3, the office
+// email+password fallback login). hashFn is injected so this mirror never
+// needs Apps Script's Utilities.computeDigest - real hashing behavior
+// isn't what's under test here, only the accept/reject decision.
+function checkLoginCredentials(auth, configuredEmail, configuredHash, hashFn) {
+  if (!auth || !auth.email || !auth.password) return false;
+  if (!configuredHash) return false;
+  if (String(auth.email).trim().toLowerCase() !== String(configuredEmail).trim().toLowerCase()) return false;
+  return hashFn(auth.password) === configuredHash;
+}
+
 export {
   findRowIndex,
   driveThumbnailUrl,
@@ -104,4 +115,5 @@ export {
   planImageUrlFixes,
   planUploadImageResult,
   extractVerifiedEmail,
+  checkLoginCredentials,
 };

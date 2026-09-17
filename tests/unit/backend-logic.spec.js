@@ -8,9 +8,11 @@ import {
   planImageUrlFixes,
   planUploadImageResult,
   extractVerifiedEmail,
+  checkLoginCredentials,
 } from '../../apps-script/logic.js';
 
 const CLIENT_ID = '123-abc.apps.googleusercontent.com';
+const FAKE_HASH = (password) => 'hash:' + password;
 
 test.describe('TC-BE: Apps Script pure logic', () => {
   test('TC-BE-006 (REG-002 regression): empty sheet does not crash findRowIndex', () => {
@@ -93,5 +95,37 @@ test.describe('TC-BE: Apps Script pure logic', () => {
   test('TC-BE-009d: an unverified email is rejected even with the right aud', () => {
     const tokenInfo = { aud: CLIENT_ID, email_verified: 'false', email: 'dov881@gmail.com' };
     expect(extractVerifiedEmail(tokenInfo, CLIENT_ID)).toBeNull();
+  });
+
+  // TC-BE-010* (task #28 v3): the office email+password fallback login -
+  // not every phone has the shared Google account signed in, so this is a
+  // second, independent way in, checked with the same server-side rigor.
+  test('TC-BE-010: matching email and password (by hash) is accepted', () => {
+    const auth = { email: 'office@yossibittonart.com', password: 'correct-horse' };
+    expect(checkLoginCredentials(auth, 'office@yossibittonart.com', FAKE_HASH('correct-horse'), FAKE_HASH)).toBe(true);
+  });
+
+  test('TC-BE-010b: email comparison is case/whitespace-insensitive', () => {
+    const auth = { email: '  OFFICE@yossibittonart.com  ', password: 'correct-horse' };
+    expect(checkLoginCredentials(auth, 'office@yossibittonart.com', FAKE_HASH('correct-horse'), FAKE_HASH)).toBe(true);
+  });
+
+  test('TC-BE-010c: wrong password is rejected', () => {
+    const auth = { email: 'office@yossibittonart.com', password: 'wrong-guess' };
+    expect(checkLoginCredentials(auth, 'office@yossibittonart.com', FAKE_HASH('correct-horse'), FAKE_HASH)).toBe(false);
+  });
+
+  test('TC-BE-010d: wrong email is rejected even with the right password', () => {
+    const auth = { email: 'someone-else@gmail.com', password: 'correct-horse' };
+    expect(checkLoginCredentials(auth, 'office@yossibittonart.com', FAKE_HASH('correct-horse'), FAKE_HASH)).toBe(false);
+  });
+
+  test('TC-BE-010e: no password has been set up yet (configuredHash is null) always fails closed', () => {
+    const auth = { email: 'office@yossibittonart.com', password: 'anything' };
+    expect(checkLoginCredentials(auth, 'office@yossibittonart.com', null, FAKE_HASH)).toBe(false);
+  });
+
+  test('TC-BE-010f: missing auth object entirely is rejected', () => {
+    expect(checkLoginCredentials(null, 'office@yossibittonart.com', FAKE_HASH('x'), FAKE_HASH)).toBe(false);
   });
 });
