@@ -41,7 +41,7 @@
 // client does. Must match the OAuth Client ID created in Google Cloud
 // Console; a token issued for any other client is rejected (see
 // extractVerifiedEmail's `aud` check).
-var GOOGLE_CLIENT_ID = 'CHANGE_ME.apps.googleusercontent.com';
+var GOOGLE_CLIENT_ID = '111985169748-27d9hepcn8p7k1g9fjh5rjrbhr91adm4.apps.googleusercontent.com';
 
 var ITEMS_SHEET_NAME = 'Items';
 var CONFIG_SHEET_NAME = 'Config';
