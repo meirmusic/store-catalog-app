@@ -4,11 +4,20 @@
  * How to install (see SPEC.md tasks #1-#3):
  * 1. Open the Google Sheet, then Extensions > Apps Script.
  * 2. Delete whatever is in the default Code.gs and paste this whole file in.
- * 3. Change SHARED_SECRET below to any random string of your own.
+ * 3. Change GOOGLE_CLIENT_ID below to the OAuth Client ID from Google Cloud
+ *    Console (Credentials > OAuth client ID > Web application) - the same
+ *    value the app's VITE_GOOGLE_CLIENT_ID must be set to.
  * 4. Deploy > New deployment > type "Web app" > Execute as "Me",
  *    Who has access "Anyone" > Deploy. Copy the Web App URL.
- * 5. Put that URL (and the same secret) into the app's environment as
- *    VITE_APPS_SCRIPT_URL and VITE_SHARED_SECRET.
+ * 5. Put that URL into the app's environment as VITE_APPS_SCRIPT_URL.
+ * 6. In the Config sheet tab, add a row for the shared gallery Google
+ *    account everyone signs in with: list_name "allowed_emails", value
+ *    that account's email address. Each staff member then picks their own
+ *    name from a second, in-app "who are you" screen for attribution only
+ *    (last_modified_by) - that name list carries no access-control weight
+ *    and lives in src/config/seed.js, not here. Rotating or adding another
+ *    shared account later is just editing these allowed_emails rows - no
+ *    code change needed.
  *
  * Whenever you edit this file afterwards, you must create a new
  * deployment VERSION of the *same* deployment (Deploy > Manage
@@ -18,14 +27,21 @@
  * TESTING: this file can't run outside Google's servers, so its pure logic
  * (no SpreadsheetApp/DriveApp calls) is mirrored in apps-script/logic.js
  * and unit-tested there - see TEST_PLAN.md section 3. If you change
- * findRowIndexByRowId, driveThumbnailUrl, the config dedup check, or
- * rowToItem here, update the matching function in logic.js too.
+ * findRowIndexByRowId, driveThumbnailUrl, the config dedup check,
+ * rowToItem, or extractVerifiedEmail here, update the matching function in
+ * logic.js too.
  */
 
-// Not real security - just a deterrent against casual/automated access
-// to the URL, since it's necessarily visible in the app's client code.
-// See SPEC.md "הגנה קלה על ה-URL".
-var SHARED_SECRET = 'CHANGE_ME_TO_SOME_RANDOM_STRING';
+// Real end-to-end protection (task #28): every request must carry a
+// current Google ID token (see src/identity - "Sign In With Google") whose
+// email is on the Config sheet's "allowed_emails" list. This is checked
+// here, server-side, on every single request - not just gating the
+// website's own login screen - so a request straight to this URL with no
+// valid token for an allowed email is rejected regardless of what the
+// client does. Must match the OAuth Client ID created in Google Cloud
+// Console; a token issued for any other client is rejected (see
+// extractVerifiedEmail's `aud` check).
+var GOOGLE_CLIENT_ID = 'CHANGE_ME.apps.googleusercontent.com';
 
 var ITEMS_SHEET_NAME = 'Items';
 var CONFIG_SHEET_NAME = 'Config';
@@ -42,7 +58,14 @@ function doPost(e) {
   lock.waitLock(10000);
   try {
     var body = JSON.parse(e.postData.contents);
-    if (body.secret !== SHARED_SECRET) {
+    var tokenInfo = fetchGoogleTokenInfo(body.id_token);
+    var email = extractVerifiedEmail(tokenInfo, GOOGLE_CLIENT_ID);
+    if (!email) {
+      return jsonResponse({ error: 'forbidden' });
+    }
+    var configSheet = getConfigSheet();
+    var configValues = configSheet.getDataRange().getValues();
+    if (!configValueExists(configValues, 'allowed_emails', email)) {
       return jsonResponse({ error: 'forbidden' });
     }
     var result;
@@ -76,6 +99,45 @@ function doPost(e) {
 function jsonResponse(obj) {
   return ContentService.createTextOutput(JSON.stringify(obj))
     .setMimeType(ContentService.MimeType.JSON);
+}
+
+// Calls Google's own tokeninfo endpoint to verify the ID token is real and
+// current - this is what makes the check trustworthy; anyone can send an
+// arbitrary string as `id_token`, but only a genuine, unexpired Google
+// token gets a 200 response back with matching claims. Returns null for
+// anything else (missing, expired, malformed, or rejected by Google).
+function fetchGoogleTokenInfo(idToken) {
+  if (!idToken) return null;
+  var resp = UrlFetchApp.fetch(
+    'https://oauth2.googleapis.com/tokeninfo?id_token=' + encodeURIComponent(idToken),
+    { muteHttpExceptions: true },
+  );
+  if (resp.getResponseCode() !== 200) return null;
+  try {
+    return JSON.parse(resp.getContentText());
+  } catch (err) {
+    return null;
+  }
+}
+
+// Pure decision logic given an already-fetched tokeninfo response -
+// mirrored in logic.js for unit testing. `aud` must match this specific
+// app's OAuth Client ID (otherwise a token meant for some other Google
+// app would pass), and Google must have verified the email itself.
+function extractVerifiedEmail(tokenInfo, expectedAud) {
+  if (!tokenInfo) return null;
+  if (tokenInfo.aud !== expectedAud) return null;
+  if (tokenInfo.email_verified !== 'true' && tokenInfo.email_verified !== true) return null;
+  return tokenInfo.email || null;
+}
+
+// Shared by the sign-in allowlist check (Config list "allowed_emails") and
+// handleAddConfigOption's own dedup check - same case-insensitive
+// (list_name, value) membership test either way.
+function configValueExists(existingRows, listName, value) {
+  return existingRows.some(function (row) {
+    return row[0] === listName && String(row[1]).toLowerCase() === String(value).toLowerCase();
+  });
 }
 
 function getItemsSheet() {
@@ -169,11 +231,7 @@ function handleSoftDelete(payload) {
 function handleAddConfigOption(payload) {
   var sheet = getConfigSheet();
   var values = sheet.getDataRange().getValues();
-  var exists = values.some(function (row) {
-    return row[0] === payload.list_name &&
-      String(row[1]).toLowerCase() === String(payload.value).toLowerCase();
-  });
-  if (!exists) {
+  if (!configValueExists(values, payload.list_name, payload.value)) {
     sheet.appendRow([payload.list_name, payload.value]);
   }
   return { ok: true };

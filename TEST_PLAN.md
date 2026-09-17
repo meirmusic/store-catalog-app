@@ -157,7 +157,7 @@
 | API-05 | `addConfigOption` - בודק כפילות case-insensitive | ✅ תואם | TC-BE-005 | 🟢 |
 | TECH-01 | גוף בקשה כ-`text/plain`, לא `application/json` (עוקף CORS preflight) | ✅ תואם | TC-BE-006 | 🟢 |
 | TECH-02 | `LockService.getScriptLock()` על כל endpoint שכותב | ✅ תואם (בקוד, נבדק בעין - Apps Script לא ניתן להרצה מקומית) | - | 🔴 |
-| TECH-03 | סוד משותף נבדק בכל בקשה | ✅ תואם | TC-BE-007 | 🟢 |
+| TECH-03 | **עודכן (task #28)**: כל בקשה מאומתת בצד שרת מול Google (tokeninfo) + רשימת אימיילים מורשים ב-Config, לא סוד משותף | ✅ תואם | TC-BE-009/009b/009c/009d | 🟢 |
 
 ---
 
@@ -182,7 +182,12 @@
 | TC-BE-005 | Medium | `addConfigOption` עם ערך קיים באות גדולה/קטנה שונה | לא נוסף בכפילות |
 | TC-BE-006 | Critical | **רגרסיה**: `findRowIndexByRowId` על גיליון עם שורת כותרת בלבד (0 שורות נתונים) | לא זורק שגיאה, מחזיר -1 |
 | TC-BE-007 | Critical | **רגרסיה**: כתיבת עמודת `image_url` כשיש בה תא קיים עם מחרוזת >50,000 תווים | לא זורק שגיאה, כותב רק לתאים שבאמת משתנים |
-| TC-BE-008 | High | בקשה בלי סוד משותף / עם סוד שגוי | מוחזרת שגיאת `forbidden`, לא מבוצעת שום פעולה |
+| TC-BE-008 | Critical | **רגרסיה (REG-012)**: `uploadImage` על `row_id` שהשורה שלו עדיין לא נשמרה (upsert לא הושלם) | מחזיר שגיאה מבוקרת, לא "מצליח" עם קובץ יתום ב-Drive בלי שורה שמצביעה אליו |
+| TC-BE-008b | Medium | `uploadImage` אחרי שהשורה כבר קיימת | מבוצע כרגיל, `{ ok: true }` |
+| TC-BE-009 | Critical | **task #28**: טוקן Google אמיתי ומאומת (aud נכון, email_verified) | האימייל מוחזר ונבדק מול רשימת allowed_emails |
+| TC-BE-009b | Critical | בקשה בלי טוקן בכלל | נדחית - `null`, לא מוחזר אימייל |
+| TC-BE-009c | Critical | טוקן עם `aud` של אפליקציית Google אחרת (לא ה-Client ID שלנו) | נדחה - טוקן שהונפק לאפליקציה אחרת לא יכול לשמש כאן |
+| TC-BE-009d | High | טוקן עם `aud` נכון אבל `email_verified=false` | נדחה - אימייל לא מאומת על ידי Google לא נסמך עליו |
 
 ### Integration/Contract - מול Apps Script מדומה (TC-SYNC-*, page.route)
 

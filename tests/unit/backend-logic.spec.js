@@ -7,7 +7,10 @@ import {
   rowToItem,
   planImageUrlFixes,
   planUploadImageResult,
+  extractVerifiedEmail,
 } from '../../apps-script/logic.js';
+
+const CLIENT_ID = '123-abc.apps.googleusercontent.com';
 
 test.describe('TC-BE: Apps Script pure logic', () => {
   test('TC-BE-006 (REG-002 regression): empty sheet does not crash findRowIndex', () => {
@@ -69,5 +72,26 @@ test.describe('TC-BE: Apps Script pure logic', () => {
 
   test('TC-BE-008b: uploadImage proceeds once the row exists', () => {
     expect(planUploadImageResult(5)).toEqual({ ok: true });
+  });
+
+  // TC-BE-009* (task #28): real Google Sign-In - the email is trusted only
+  // once every check on the token passes.
+  test('TC-BE-009: a genuine, verified token for the right app yields the email', () => {
+    const tokenInfo = { aud: CLIENT_ID, email_verified: 'true', email: 'dov881@gmail.com' };
+    expect(extractVerifiedEmail(tokenInfo, CLIENT_ID)).toBe('dov881@gmail.com');
+  });
+
+  test('TC-BE-009b: no token at all is rejected', () => {
+    expect(extractVerifiedEmail(null, CLIENT_ID)).toBeNull();
+  });
+
+  test('TC-BE-009c: a token issued for a different OAuth client is rejected', () => {
+    const tokenInfo = { aud: 'someone-elses-client-id', email_verified: 'true', email: 'dov881@gmail.com' };
+    expect(extractVerifiedEmail(tokenInfo, CLIENT_ID)).toBeNull();
+  });
+
+  test('TC-BE-009d: an unverified email is rejected even with the right aud', () => {
+    const tokenInfo = { aud: CLIENT_ID, email_verified: 'false', email: 'dov881@gmail.com' };
+    expect(extractVerifiedEmail(tokenInfo, CLIENT_ID)).toBeNull();
   });
 });

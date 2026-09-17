@@ -13,8 +13,14 @@ export const translations = {
     'app.title': 'קטלוג הגלריה',
     'app.subtitle': 'ניהול מלאי יצירות',
 
-    'identity.title': 'מי אתה?',
-    'identity.subtitle': 'בחר/י שם כדי שנדע למי לשייך שינויים',
+    'identity.title': 'התחברות',
+    'identity.subtitle': 'התחבר/י עם חשבון Google של הגלריה כדי לגשת לקטלוג',
+    'identity.notConfigured': 'ההתחברות עדיין לא הוגדרה - פנה/י למנהל המערכת',
+    'identity.signInFailed': 'ההתחברות נכשלה, נסה/י שוב',
+    'identity.signOutGoogleConfirm': 'להתנתק מחשבון הגלריה? כל הצוות ייאלץ להתחבר מחדש כדי להשתמש באפליקציה.',
+
+    'teamMember.title': 'מי אתה?',
+    'teamMember.subtitle': 'בחר/י שם כדי שנדע למי לשייך שינויים',
 
     'search.placeholder': 'חיפוש לפי שם, מק"ט או מספר סידורי…',
 
@@ -39,6 +45,8 @@ export const translations = {
     'actions.generateSerial': 'צור קוד',
     'actions.refresh': 'רענון ידני',
     'actions.close': 'סגירה',
+    'actions.switchUser': 'החלפת משתמש/ת',
+    'actions.signOutGoogle': 'התנתקות מחשבון הגלריה',
 
     'fields.name': 'שם היצירה',
     'fields.size': 'גודל',
@@ -79,8 +87,14 @@ export const translations = {
     'app.title': 'Gallery Catalog',
     'app.subtitle': 'Artwork inventory management',
 
-    'identity.title': 'Who are you?',
-    'identity.subtitle': 'Choose a name so we know who to attribute changes to',
+    'identity.title': 'Sign in',
+    'identity.subtitle': 'Sign in with the gallery\'s Google account to access the catalog',
+    'identity.notConfigured': 'Sign-in isn\'t set up yet - contact the system admin',
+    'identity.signInFailed': 'Sign-in failed, please try again',
+    'identity.signOutGoogleConfirm': 'Sign out of the gallery account? The whole team will need to sign in again to use the app.',
+
+    'teamMember.title': 'Who are you?',
+    'teamMember.subtitle': 'Choose a name so we know who to attribute changes to',
 
     'search.placeholder': 'Search by name, SKU, or serial number…',
 
@@ -105,6 +119,8 @@ export const translations = {
     'actions.generateSerial': 'Generate code',
     'actions.refresh': 'Refresh',
     'actions.close': 'Close',
+    'actions.switchUser': 'Switch user',
+    'actions.signOutGoogle': 'Sign out of gallery account',
 
     'fields.name': 'Artwork name',
     'fields.size': 'Size',
@@ -145,8 +161,14 @@ export const translations = {
     'app.title': 'Galerijcatalogus',
     'app.subtitle': 'Voorraadbeheer kunstwerken',
 
-    'identity.title': 'Wie ben je?',
-    'identity.subtitle': 'Kies een naam zodat we weten wie de wijziging heeft gemaakt',
+    'identity.title': 'Inloggen',
+    'identity.subtitle': 'Log in met het Google-account van de galerie om toegang te krijgen tot de catalogus',
+    'identity.notConfigured': 'Inloggen is nog niet ingesteld - neem contact op met de beheerder',
+    'identity.signInFailed': 'Inloggen mislukt, probeer het opnieuw',
+    'identity.signOutGoogleConfirm': 'Uitloggen bij het account van de galerie? Het hele team moet opnieuw inloggen om de app te gebruiken.',
+
+    'teamMember.title': 'Wie ben je?',
+    'teamMember.subtitle': 'Kies een naam zodat we weten wie de wijziging heeft gemaakt',
 
     'search.placeholder': 'Zoek op naam, SKU of serienummer…',
 
@@ -171,6 +193,8 @@ export const translations = {
     'actions.generateSerial': 'Genereer code',
     'actions.refresh': 'Vernieuwen',
     'actions.close': 'Sluiten',
+    'actions.switchUser': 'Gebruiker wisselen',
+    'actions.signOutGoogle': 'Uitloggen bij account van de galerie',
 
     'fields.name': 'Naam van het kunstwerk',
     'fields.size': 'Afmeting',

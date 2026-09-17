@@ -15,7 +15,6 @@ import { defineConfig, devices } from '@playwright/test';
 // mocks every request with page.route(), so nothing ever really reaches it.
 if (!process.env.VITE_APPS_SCRIPT_URL) {
   process.env.VITE_APPS_SCRIPT_URL = 'https://mock-apps-script.test/exec';
-  process.env.VITE_SHARED_SECRET = 'test-secret';
 }
 
 const CHROMIUM_PATH = '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';

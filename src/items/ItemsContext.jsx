@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useMemo } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, addConfigValue as dbAddConfigValue } from '../db/db.js';
 import { CONFIG_SEED } from '../config/seed.js';
-import { useIdentity } from '../identity/IdentityContext.jsx';
+import { useTeamMember } from '../identity/TeamMemberContext.jsx';
 
 const ItemsContext = createContext(null);
 
@@ -23,7 +23,7 @@ async function ensureConfigSeeded() {
 }
 
 export function ItemsProvider({ children }) {
-  const { user } = useIdentity();
+  const { member } = useTeamMember();
 
   useEffect(() => {
     ensureConfigSeeded();
@@ -57,7 +57,7 @@ export function ItemsProvider({ children }) {
       ...(existing || { row_id, is_deleted: false }),
       ...fields,
       row_id,
-      last_modified_by: user,
+      last_modified_by: member,
       last_modified_at: now,
     };
     await db.items.put(item);
@@ -80,7 +80,7 @@ export function ItemsProvider({ children }) {
     await db.items.put({
       ...existing,
       is_deleted: true,
-      last_modified_by: user,
+      last_modified_by: member,
       last_modified_at: new Date().toISOString(),
     });
     await enqueue(rowId, 'softDelete');
@@ -103,7 +103,7 @@ export function ItemsProvider({ children }) {
       queueImageUpload,
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [items, config, pendingCount, user],
+    [items, config, pendingCount, member],
   );
 
   return <ItemsContext.Provider value={value}>{children}</ItemsContext.Provider>;

@@ -83,4 +83,25 @@ function planUploadImageResult(rowIndex) {
   return { ok: true };
 }
 
-export { findRowIndex, driveThumbnailUrl, configValueExists, rowToItem, planImageUrlFixes, planUploadImageResult };
+// Mirrors Code.gs's extractVerifiedEmail (task #28, real Google Sign-In).
+// Pure decision given an already-fetched tokeninfo response - the actual
+// network call to Google (fetchGoogleTokenInfo) can't run outside Apps
+// Script, but the decision logic itself can be tested here: `aud` must
+// match this app's own OAuth Client ID (else a token meant for some other
+// Google app would pass), and Google must have verified the email itself.
+function extractVerifiedEmail(tokenInfo, expectedAud) {
+  if (!tokenInfo) return null;
+  if (tokenInfo.aud !== expectedAud) return null;
+  if (tokenInfo.email_verified !== 'true' && tokenInfo.email_verified !== true) return null;
+  return tokenInfo.email || null;
+}
+
+export {
+  findRowIndex,
+  driveThumbnailUrl,
+  configValueExists,
+  rowToItem,
+  planImageUrlFixes,
+  planUploadImageResult,
+  extractVerifiedEmail,
+};

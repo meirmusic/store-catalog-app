@@ -48,7 +48,7 @@ test('TC-I18N-007: language choice persists across a reload', async ({ page }) =
   await expect(page.locator('h1')).toHaveText('Gallery Catalog');
 });
 
-test('TC-I18N-008: the identity picker name list always stays in Hebrew (the picker\'s own heading still translates - only the names are exempt)', async ({ page }) => {
+test('TC-I18N-008: switching team member shows the (translated) "who are you" picker, in whatever language was active - names stay untranslated', async ({ page }) => {
   await switchLanguage(page, 'English');
   await page.click('.chip.user');
   await expect(page.locator('text=Who are you?')).toBeVisible(); // UI chrome - translated like any label

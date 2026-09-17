@@ -3,6 +3,7 @@
 // not repeated boilerplate.
 
 const DEFAULT_USER = 'שרה';
+const DEFAULT_EMAIL = 'test-user@example.com';
 
 // index.html links Google Fonts, which this sandboxed test environment has
 // no route to. Chromium's parser blocks on that stylesheet request (adding
@@ -21,12 +22,35 @@ export async function reloadApp(page) {
   await page.reload(NAV_OPTS);
 }
 
-export async function pickIdentity(page, name = DEFAULT_USER) {
+// Two gates now stand before the main app (task #28 v2): the shared office
+// Google account (real access control) and the "who are you" team-member
+// picker (attribution only). Neither can be driven for real here - Google's
+// actual OAuth consent flow can't be automated from Playwright, and the
+// team-member picker is just UI, so both are seeded straight into
+// localStorage via addInitScript, so it's in place before the app's first
+// script runs and the two contexts' lazy useState initializers read it
+// (see src/identity/googleAuth.js's saveIdentity/loadStoredIdentity and
+// src/identity/TeamMemberContext.jsx). `name` doubles as the team member
+// (attribution) and the Google identity's display name; `email` only
+// matters for tests that assert on the signed-in Google account itself.
+export async function pickIdentity(page, name = DEFAULT_USER, email = DEFAULT_EMAIL) {
   await blockGoogleFonts(page);
+  await page.addInitScript(
+    ({ name, email }) => {
+      localStorage.setItem(
+        'gallery_google_identity',
+        JSON.stringify({
+          idToken: 'test-id-token',
+          email,
+          name,
+          exp: Math.floor(Date.now() / 1000) + 3600,
+        }),
+      );
+      localStorage.setItem('gallery_team_member', name);
+    },
+    { name, email },
+  );
   await page.goto('/', NAV_OPTS);
-  await page.waitForSelector('text=מי אתה?', { timeout: 10_000 }).catch(() => {});
-  const pick = page.locator(`button:has-text("${name}")`);
-  if (await pick.count()) await pick.click();
   await page.waitForSelector('text=קטלוג הגלריה');
 }
 
