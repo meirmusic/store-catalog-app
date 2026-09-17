@@ -30,6 +30,7 @@ export const translations = {
     'filters.missingPrice': 'חסר מחיר',
 
     'actions.newItem': '+ פריט חדש',
+    'actions.exportExcel': 'ייצוא לאקסל',
     'actions.save': 'שמירה',
     'actions.cancel': 'ביטול',
     'actions.deleteItem': 'מחיקת פריט…',
@@ -95,6 +96,7 @@ export const translations = {
     'filters.missingPrice': 'Missing price',
 
     'actions.newItem': '+ New item',
+    'actions.exportExcel': 'Export to Excel',
     'actions.save': 'Save',
     'actions.cancel': 'Cancel',
     'actions.deleteItem': 'Delete item…',
@@ -160,6 +162,7 @@ export const translations = {
     'filters.missingPrice': 'Prijs ontbreekt',
 
     'actions.newItem': '+ Nieuw item',
+    'actions.exportExcel': 'Exporteren naar Excel',
     'actions.save': 'Opslaan',
     'actions.cancel': 'Annuleren',
     'actions.deleteItem': 'Item verwijderen…',

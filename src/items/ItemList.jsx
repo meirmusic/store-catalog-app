@@ -5,6 +5,7 @@ import { useToast } from '../toast/ToastContext.jsx';
 import ItemCard from './ItemCard.jsx';
 import ItemForm from './ItemForm.jsx';
 import DeleteConfirm from './DeleteConfirm.jsx';
+import { downloadItemsCsv } from './exportCsv.js';
 
 function matchesSearch(item, q) {
   if (!q) return true;
@@ -146,6 +147,7 @@ export default function ItemList() {
             </select>
           </div>
           <button className="btn primary" onClick={() => setEditingItem(null)}>{t('actions.newItem')}</button>
+          <button className="btn" onClick={() => downloadItemsCsv(filtered)}>{t('actions.exportExcel')}</button>
           <div className="filters-row">
             <label className={`toggle-pill${missingSerial ? ' active' : ''}`}>
               <input type="checkbox" checked={missingSerial} onChange={(e) => setMissingSerial(e.target.checked)} />
