@@ -4,7 +4,7 @@
 // TEST_PLAN.md section 1 for why this is 🟢 (frontend behavior) rather
 // than proof the real Code.gs matches (that stays 🟡, per the plan).
 import { test, expect } from '@playwright/test';
-import { pickIdentity, clearAllData, seedItems, openNewItemForm, fillItemForm, saveItemForm, getItems, reloadApp } from '../helpers/app.js';
+import { pickIdentity, clearAllData, seedItems, openNewItemForm, fillItemForm, saveItemForm, getItems, getPendingChanges, reloadApp } from '../helpers/app.js';
 
 const MOCK_URL = 'https://mock-apps-script.test/exec';
 
@@ -67,9 +67,16 @@ test('TC-SYNC-004: 5 consecutive failures on the same change trip the visible sy
   await fillItemForm(page, { name: 'תמיד נכשל' });
   await saveItemForm(page);
 
+  // Each attempt now includes one quick in-cycle retry before it's counted
+  // as failed (see syncEngine.js's withQuickRetry, REG-014) - polling the
+  // actual attempts count (rather than a fixed pause per click) keeps this
+  // robust to that added latency instead of racing it.
   for (let i = 0; i < 5; i++) {
     await page.click('.icon-btn[title]');
-    await page.waitForTimeout(300);
+    await expect.poll(async () => {
+      const pending = await getPendingChanges(page);
+      return pending[0]?.attempts || 0;
+    }, { timeout: 5000 }).toBeGreaterThanOrEqual(i + 1);
   }
 
   const pendingChip = page.locator('.chip', { hasText: 'ממתינים' });

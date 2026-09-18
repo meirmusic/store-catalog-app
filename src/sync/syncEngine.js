@@ -7,6 +7,28 @@ import { APPS_SCRIPT_URL } from '../api/config.js';
 // "sync problem" indicator rather than failing silently forever.
 export const FAILURE_THRESHOLD = 5;
 
+// A single quick in-cycle retry for a transient failure (REG-014, a real
+// user report) - Apps Script's own response mechanism (a redirect to a
+// temporary script.googleusercontent.com URL) occasionally 404s even
+// though the request already succeeded server-side. Without this, the
+// user's only recourse was waiting out the full ~45s poll interval (or
+// manually refreshing) to find out the next attempt was fine all along.
+// One short retry turns most of these into an invisible blip. Every
+// operation this wraps (getAll, and every pushOne op) is safe to retry
+// immediately - upsert/softDelete/addConfigOption are naturally
+// idempotent, and uploadImage's retries no longer pile up duplicate
+// Drive files either (see Code.gs's trashPreviousDriveFile).
+const QUICK_RETRY_DELAY_MS = 600;
+
+async function withQuickRetry(fn) {
+  try {
+    return await fn();
+  } catch (err) {
+    await new Promise((resolve) => setTimeout(resolve, QUICK_RETRY_DELAY_MS));
+    return fn();
+  }
+}
+
 async function pushOne(change) {
   if (change.op === 'upsert') {
     const item = await db.items.get(change.row_id);
@@ -51,7 +73,7 @@ export async function pushPending() {
   let pushed = 0;
   for (const change of pending) {
     try {
-      await pushOne(change);
+      await withQuickRetry(() => pushOne(change));
       await db.pendingChanges.delete(change.id);
       pushed++;
     } catch (err) {
@@ -88,7 +110,7 @@ export async function syncNow() {
   }
   await pushPending();
   try {
-    await pullLatest();
+    await withQuickRetry(() => pullLatest());
   } catch (err) {
     // SPEC.md section 4: a failed pull keeps showing the last data that
     // did load successfully, with a "not updated since HH:MM" indicator -

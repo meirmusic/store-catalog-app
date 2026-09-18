@@ -152,9 +152,16 @@ test('a photo upload that keeps failing trips the visible sync-problem indicator
   await fillItemForm(page, { name: 'תמונה שתמיד נכשלת', imagePath: SAMPLE_IMAGE });
   await saveItemForm(page);
 
+  // Each attempt now includes one quick in-cycle retry before it's counted
+  // as failed (see syncEngine.js's withQuickRetry, REG-014) - polling the
+  // actual attempts count (rather than a fixed pause per click) keeps this
+  // robust to that added latency instead of racing it.
   for (let i = 0; i < 5; i++) {
     await page.click('.icon-btn[title]');
-    await page.waitForTimeout(300);
+    await expect.poll(async () => {
+      const pending = await getPendingChanges(page);
+      return pending.find((c) => c.op === 'uploadImage')?.attempts || 0;
+    }, { timeout: 5000 }).toBeGreaterThanOrEqual(i + 1);
   }
 
   const pendingChip = page.locator('.chip', { hasText: 'ממתינים' });

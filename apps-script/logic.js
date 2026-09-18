@@ -29,6 +29,15 @@ function driveThumbnailUrl(fileId) {
   return 'https://drive.google.com/thumbnail?id=' + fileId + '&sz=w1000';
 }
 
+// Mirrors Code.gs's extractDriveFileId (REG-014, image-upload cleanup on
+// retry). Only recognizes our own thumbnail URL format - the old
+// uc?export=view links, blank cells, or anything else are left alone.
+function extractDriveFileId(url) {
+  if (typeof url !== 'string') return null;
+  const match = /^https:\/\/drive\.google\.com\/thumbnail\?id=([^&]+)&sz=w1000$/.exec(url);
+  return match ? match[1] : null;
+}
+
 // Mirrors the dedup check inside Code.gs's handleAddConfigOption.
 function configValueExists(existingRows, listName, value) {
   return existingRows.some(
@@ -135,4 +144,5 @@ export {
   extractVerifiedEmail,
   checkLoginCredentials,
   validatePasswordReset,
+  extractDriveFileId,
 };

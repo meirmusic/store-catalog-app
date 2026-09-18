@@ -83,24 +83,34 @@ var ITEM_COLUMNS = [
   'is_deleted', 'last_modified_by', 'last_modified_at',
 ];
 
+// Only these actions write to the Sheet and need the exclusive script
+// lock (to stop two concurrent writes from corrupting each other's
+// findRowIndex + write). 'getAll' is read-only, and as real multi-device
+// usage grows, making every single poll queue up behind that same lock -
+// including other devices' writes - was adding real, avoidable latency
+// and timeout risk to something that never needed it.
+var WRITE_ACTIONS = ['upsert', 'softDelete', 'addConfigOption', 'uploadImage'];
+
 function doPost(e) {
-  var lock = LockService.getScriptLock();
-  lock.waitLock(10000);
+  var body = JSON.parse(e.postData.contents);
+  // These two actions are how someone recovers WITHOUT already having
+  // valid credentials, so they can't sit behind the normal auth gate
+  // below - each validates itself instead (matching email, a
+  // short-lived one-time code sent to LOGIN_EMAIL's own inbox). Neither
+  // touches the Sheet, so neither needs the write lock either.
+  if (body.action === 'requestPasswordReset') {
+    return jsonResponse(handleRequestPasswordReset(body.payload));
+  }
+  if (body.action === 'resetPassword') {
+    return jsonResponse(handleResetPassword(body.payload));
+  }
+  if (!resolveAuthenticatedEmail(body)) {
+    return jsonResponse({ error: 'forbidden' });
+  }
+  var needsLock = WRITE_ACTIONS.indexOf(body.action) !== -1;
+  var lock = needsLock ? LockService.getScriptLock() : null;
+  if (lock) lock.waitLock(10000);
   try {
-    var body = JSON.parse(e.postData.contents);
-    // These two actions are how someone recovers WITHOUT already having
-    // valid credentials, so they can't sit behind the normal auth gate
-    // below - each validates itself instead (matching email, a
-    // short-lived one-time code sent to LOGIN_EMAIL's own inbox).
-    if (body.action === 'requestPasswordReset') {
-      return jsonResponse(handleRequestPasswordReset(body.payload));
-    }
-    if (body.action === 'resetPassword') {
-      return jsonResponse(handleResetPassword(body.payload));
-    }
-    if (!resolveAuthenticatedEmail(body)) {
-      return jsonResponse({ error: 'forbidden' });
-    }
     var result;
     switch (body.action) {
       case 'getAll':
@@ -125,7 +135,7 @@ function doPost(e) {
   } catch (err) {
     return jsonResponse({ error: String(err) });
   } finally {
-    lock.releaseLock();
+    if (lock) lock.releaseLock();
   }
 }
 
@@ -458,14 +468,51 @@ function handleUploadImage(payload) {
   var bytes = Utilities.base64Decode(base64);
   var blob = Utilities.newBlob(bytes, contentType, payload.row_id + '.jpg');
 
+  var imageUrlCol = ITEM_COLUMNS.indexOf('image_url') + 1;
+  var previousUrl = sheet.getRange(rowIndex, imageUrlCol).getValue();
+
   var folder = getOrCreateImageFolder();
   var file = folder.createFile(blob);
   file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
   var imageUrl = driveThumbnailUrl(file.getId());
 
-  var imageUrlCol = ITEM_COLUMNS.indexOf('image_url') + 1;
   sheet.getRange(rowIndex, imageUrlCol).setValue(imageUrl);
+  trashPreviousDriveFile(previousUrl, file.getId());
   return { image_url: imageUrl };
+}
+
+// Best-effort cleanup (REG-014): a request can succeed here on the server
+// while its response to the browser gets lost in transit (a real,
+// user-reported failure mode - Apps Script Web App responses go through
+// a redirect to a temporary script.googleusercontent.com URL, which can
+// occasionally 404 even though this function already ran to completion).
+// When that happens the client never learns it worked, so the sync
+// engine retries the same photo - which used to leave the previous
+// attempt's file orphaned in Drive forever.
+// Now every successful upload trashes whatever file the *previous*
+// image_url pointed to, whether that previous upload was a real earlier
+// photo or just an earlier retry of this same one - so retries replace
+// instead of accumulating. Never lets a cleanup failure fail the request
+// itself - the new photo is already saved in the Sheet either way.
+function trashPreviousDriveFile(previousUrl, newFileId) {
+  var previousId = extractDriveFileId(previousUrl);
+  if (!previousId || previousId === newFileId) return;
+  try {
+    DriveApp.getFileById(previousId).setTrashed(true);
+  } catch (err) {
+    // Already gone, not one of ours, or some other transient issue - not
+    // worth failing the upload itself over.
+  }
+}
+
+// Pure - mirrored in logic.js. Only recognizes our own thumbnail URL
+// format (driveThumbnailUrl's own output); anything else (the old
+// uc?export=view links, blank, garbage) is left alone rather than
+// guessed at.
+function extractDriveFileId(url) {
+  if (typeof url !== 'string') return null;
+  var match = /^https:\/\/drive\.google\.com\/thumbnail\?id=([^&]+)&sz=w1000$/.exec(url);
+  return match ? match[1] : null;
 }
 
 // 'uc?export=view' is Drive's classic hotlink format, but it's unreliable

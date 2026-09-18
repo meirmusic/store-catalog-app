@@ -10,6 +10,7 @@ import {
   extractVerifiedEmail,
   checkLoginCredentials,
   validatePasswordReset,
+  extractDriveFileId,
 } from '../../apps-script/logic.js';
 
 const CLIENT_ID = '123-abc.apps.googleusercontent.com';
@@ -173,5 +174,26 @@ test.describe('TC-BE: Apps Script pure logic', () => {
     const payload = { email: RESET_EMAIL, code: '123456' }; // no newPassword
     const result = validatePasswordReset(payload, RESET_EMAIL, '123456', String(Date.now() + 60_000), Date.now());
     expect(result).toEqual({ ok: false, error: 'invalid request' });
+  });
+
+  // TC-BE-012* (REG-014): a retried uploadImage - the client's own
+  // confirmation of an earlier attempt got lost in transit, even though
+  // that attempt already succeeded server-side - must replace the
+  // previous Drive file, not just pile up an orphaned copy of it.
+  test('TC-BE-012: our own thumbnail URL yields its file id', () => {
+    expect(extractDriveFileId('https://drive.google.com/thumbnail?id=ABC123&sz=w1000')).toBe('ABC123');
+  });
+
+  test('TC-BE-012b: the old uc?export=view format is not recognized - never trash a file we cannot be sure is ours', () => {
+    expect(extractDriveFileId('https://drive.google.com/uc?export=view&id=ABC123')).toBeNull();
+  });
+
+  test('TC-BE-012c: a blank cell yields nothing to trash', () => {
+    expect(extractDriveFileId('')).toBeNull();
+  });
+
+  test('TC-BE-012d: a non-string value (e.g. Sheets returning an empty cell as "") is handled without throwing', () => {
+    expect(extractDriveFileId(null)).toBeNull();
+    expect(extractDriveFileId(undefined)).toBeNull();
   });
 });
