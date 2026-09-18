@@ -1,4 +1,6 @@
+import { useState } from 'react';
 import { useI18n } from '../i18n/I18nContext.jsx';
+import ImageLightbox from './ImageLightbox.jsx';
 
 // A file input's `capture` attribute is what tells mobile browsers to put
 // the camera directly in the picker (not just the photo library) - but on
@@ -44,6 +46,7 @@ function resizeImageFile(file, maxWidth = 900, quality = 0.8) {
 
 export default function ImageField({ value, onChange }) {
   const { t } = useI18n();
+  const [zoomed, setZoomed] = useState(false);
 
   async function handleFile(e) {
     const file = e.target.files[0];
@@ -56,6 +59,7 @@ export default function ImageField({ value, onChange }) {
   return (
     <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
       <div
+        onClick={value ? () => setZoomed(true) : undefined}
         style={{
           width: 76,
           height: 96,
@@ -67,6 +71,7 @@ export default function ImageField({ value, onChange }) {
           alignItems: 'center',
           justifyContent: 'center',
           flex: '0 0 auto',
+          cursor: value ? 'zoom-in' : 'default',
         }}
       >
         {value ? (
@@ -75,6 +80,7 @@ export default function ImageField({ value, onChange }) {
           <span style={{ fontSize: '1.4rem' }}>🖼️</span>
         )}
       </div>
+      {zoomed && <ImageLightbox src={value} onClose={() => setZoomed(false)} />}
       <div style={{ flex: 1 }}>
         <label style={{ display: 'block', fontSize: '.8rem', color: 'var(--ink-dim)', marginBottom: 5 }}>
           {t('fields.image')}

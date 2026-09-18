@@ -234,3 +234,26 @@ test('REG-013: opening an item locks the background from scrolling behind it', a
   const overflowAfter = await page.evaluate(() => getComputedStyle(document.body).overflow);
   expect(overflowAfter).not.toBe('hidden');
 });
+
+test('TC-IMG-ZOOM: clicking a card photo opens a full-size lightbox, without also opening the edit form', async ({ page }) => {
+  const tinyPng = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
+  await seedItems(page, [{ row_id: 'ZM1', name: 'פריט עם תמונה', image_url: tinyPng }]);
+  await reloadApp(page);
+  await page.waitForSelector('text=קטלוג הגלריה');
+
+  await page.click('.thumb-zoom');
+  await expect(page.locator('.lightbox-overlay')).toBeVisible();
+  await expect(page.locator('.lightbox-overlay img')).toHaveAttribute('src', tinyPng);
+  // The edit form must NOT have opened underneath - the zoom button's
+  // click must not have bubbled up to the card (see REG: thumb-zoom
+  // regression that broke TC-SYNC-007/image-upload tests during review).
+  await expect(page.locator('#item-overlay')).toHaveCount(0);
+
+  await page.keyboard.press('Escape');
+  await expect(page.locator('.lightbox-overlay')).toHaveCount(0);
+
+  // Clicking the rest of the card (not the zoom button) still opens the
+  // edit form as always.
+  await page.click('.card');
+  await page.waitForSelector('#item-overlay');
+});
