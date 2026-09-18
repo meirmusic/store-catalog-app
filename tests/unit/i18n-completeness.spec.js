@@ -34,11 +34,11 @@ function extractUsedKeys() {
   return keys;
 }
 
-test('TC-I18N-009: every t() key used in the app exists in he/en/nl', () => {
+test('TC-I18N-009: every t() key used in the app exists in he/en/da', () => {
   const usedKeys = extractUsedKeys();
   expect(usedKeys.size).toBeGreaterThan(10); // sanity check the scan actually found something
 
-  const missing = { he: [], en: [], nl: [] };
+  const missing = { he: [], en: [], da: [] };
   for (const key of usedKeys) {
     for (const lang of Object.keys(missing)) {
       if (!(key in translations[lang])) missing[lang].push(key);

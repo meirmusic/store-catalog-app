@@ -149,7 +149,7 @@ export default function ItemForm({ item, onClose, onRequestDelete, onSaved }) {
                 validation tooltip would pre-empt this submit handler and
                 show in the browser's language, not the app's chosen one
                 (see TEST_PLAN.md / task #15) - errors.nameRequired below
-                is what users actually see, in he/en/nl. */}
+                is what users actually see, in he/en/da. */}
             <input type="text" value={name} onChange={(e) => setName(e.target.value)} />
           </div>
 

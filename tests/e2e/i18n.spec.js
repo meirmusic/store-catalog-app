@@ -21,8 +21,8 @@ test('TC-I18N-001/002/003: switching language updates UI strings, keeps content 
   await expect(page.locator('.card')).toContainText('גלריה');
   await expect(page.locator('.card')).toContainText('פריט לבדיקת שפה');
 
-  await switchLanguage(page, 'Nederlands');
-  await expect(page.locator('h1')).toHaveText('Galerijcatalogus');
+  await switchLanguage(page, 'Dansk');
+  await expect(page.locator('h1')).toHaveText('Galleri Katalog');
 
   await switchLanguage(page, 'עברית');
   await expect(page.locator('h1')).toHaveText('קטלוג הגלריה');
@@ -32,7 +32,7 @@ test('TC-I18N-005: layout direction stays RTL regardless of language', async ({ 
   await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
   await switchLanguage(page, 'English');
   await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
-  await switchLanguage(page, 'Nederlands');
+  await switchLanguage(page, 'Dansk');
   await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
 });
 
