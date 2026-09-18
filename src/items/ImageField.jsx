@@ -1,5 +1,19 @@
 import { useI18n } from '../i18n/I18nContext.jsx';
 
+// A file input's `capture` attribute is what tells mobile browsers to put
+// the camera directly in the picker (not just the photo library) - but on
+// iOS, once the app is installed to the home screen (standalone mode), a
+// file input with `capture` set silently fails to open anything at all
+// (a known WebKit bug - see TEST_PLAN.md REG-008). Everywhere else
+// (regular browser tab, Android in any mode) `capture` is safe and is
+// what actually gets staff the camera option instead of just the gallery.
+// Exported (not used elsewhere yet) so this decision is unit-testable
+// without a real device - see tests/unit/image-capture.spec.js.
+export function shouldOmitCameraCapture(nav) {
+  const isIos = /iP(hone|od|ad)/.test(nav.userAgent) || (nav.platform === 'MacIntel' && nav.maxTouchPoints > 1);
+  return isIos && nav.standalone === true;
+}
+
 // Resizes to a max width and re-encodes as JPEG before it ever reaches
 // state - see SPEC.md "תמונות": keeps upload payloads small on a
 // spotty connection instead of shipping a multi-MB phone photo.
@@ -65,12 +79,12 @@ export default function ImageField({ value, onChange }) {
         <label style={{ display: 'block', fontSize: '.8rem', color: 'var(--ink-dim)', marginBottom: 5 }}>
           {t('fields.image')}
         </label>
-        {/* No `capture` attribute: on iOS, a file input with `capture` set
-            silently fails to open anything once the app is installed to
-            the home screen (a known WebKit standalone-mode bug). Without
-            it, tapping opens the normal action sheet (camera or library),
-            which is what staff want anyway. */}
-        <input type="file" accept="image/*" onChange={handleFile} />
+        <input
+          type="file"
+          accept="image/*"
+          {...(shouldOmitCameraCapture(navigator) ? {} : { capture: 'environment' })}
+          onChange={handleFile}
+        />
         {value && (
           <button
             type="button"

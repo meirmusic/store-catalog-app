@@ -12,6 +12,7 @@ import {
   saveItemForm,
   cancelItemForm,
   reloadApp,
+  seedItems,
 } from '../helpers/app.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -210,4 +211,26 @@ test('TC-SYNC-003 / TC-DM: a fresh photo queues its own uploadImage change, not 
   // the item row itself must NOT carry the raw base64 - see REG-006.
   const items = await getItems(page);
   expect(items[0].image_url == null || !items[0].image_url.startsWith('data:')).toBe(true);
+});
+
+// REG-013 (user report): opening an item's edit form left the item list
+// behind it fully scrollable - a touch/wheel gesture landing outside the
+// modal's own card scrolled the page underneath, which looks broken since
+// the modal itself doesn't move. See src/hooks/useBodyScrollLock.js.
+test('REG-013: opening an item locks the background from scrolling behind it', async ({ page }) => {
+  await seedItems(page, Array.from({ length: 20 }, (_, i) => ({ row_id: `SC${i}`, name: `פריט גלילה ${i}` })));
+  await reloadApp(page);
+  await page.waitForSelector('text=קטלוג הגלריה');
+
+  const overflowBefore = await page.evaluate(() => getComputedStyle(document.body).overflow);
+  expect(overflowBefore).not.toBe('hidden');
+
+  await page.click('.card >> nth=0');
+  await page.waitForSelector('#item-overlay');
+  const overflowWhileOpen = await page.evaluate(() => getComputedStyle(document.body).overflow);
+  expect(overflowWhileOpen).toBe('hidden');
+
+  await cancelItemForm(page);
+  const overflowAfter = await page.evaluate(() => getComputedStyle(document.body).overflow);
+  expect(overflowAfter).not.toBe('hidden');
 });

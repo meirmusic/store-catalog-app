@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useI18n } from '../i18n/I18nContext.jsx';
 import { useItems } from '../items/ItemsContext.jsx';
 import { useToast } from '../toast/ToastContext.jsx';
+import { useBodyScrollLock } from '../hooks/useBodyScrollLock.js';
 
 // SPEC.md CFG-04 (stage 2): a centralized view of every existing value in
 // each config-driven list, with the ability to add new ones - lists stay
@@ -48,6 +49,7 @@ function ConfigListSection({ list, label }) {
 
 export default function ConfigManager({ onClose }) {
   const { t } = useI18n();
+  useBodyScrollLock();
 
   return (
     <div className="overlay" id="config-overlay" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>

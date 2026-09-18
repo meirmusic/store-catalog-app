@@ -1,7 +1,9 @@
 import { useI18n } from '../i18n/I18nContext.jsx';
+import { useBodyScrollLock } from '../hooks/useBodyScrollLock.js';
 
 export default function DeleteConfirm({ item, onCancel, onConfirm }) {
   const { t } = useI18n();
+  useBodyScrollLock();
   return (
     <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && onCancel()}>
       <div className="modal confirm-modal">

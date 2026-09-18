@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useI18n } from '../i18n/I18nContext.jsx';
 import { useItems } from './ItemsContext.jsx';
 import { useToast } from '../toast/ToastContext.jsx';
+import { useBodyScrollLock } from '../hooks/useBodyScrollLock.js';
 import ImageField from './ImageField.jsx';
 
 function ConfigSelect({ list, value, onChange, config, addConfigValue, label }) {
@@ -52,6 +53,7 @@ export default function ItemForm({ item, onClose, onRequestDelete, onSaved }) {
   const { t } = useI18n();
   const { config, saveItem, addConfigValue, queueImageUpload } = useItems();
   const { showToast } = useToast();
+  useBodyScrollLock();
   const isNew = !item;
   const [saving, setSaving] = useState(false);
 
