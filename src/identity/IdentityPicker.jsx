@@ -122,6 +122,9 @@ export default function IdentityPicker() {
                 type="email"
                 required
                 autoComplete="username"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
                 placeholder={t('identity.emailPlaceholder')}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -131,6 +134,9 @@ export default function IdentityPicker() {
                 type="password"
                 required
                 autoComplete="current-password"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
                 placeholder={t('identity.passwordPlaceholder')}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}

@@ -87,6 +87,9 @@ export default function ForgotPasswordPanel({ defaultEmail, onDone, onCancel }) 
           type="email"
           required
           autoComplete="username"
+          autoCapitalize="none"
+          autoCorrect="off"
+          spellCheck={false}
           placeholder={t('identity.emailPlaceholder')}
           value={email}
           onChange={(e) => setEmail(e.target.value)}
@@ -107,6 +110,9 @@ export default function ForgotPasswordPanel({ defaultEmail, onDone, onCancel }) 
               type="text"
               inputMode="numeric"
               required
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
               placeholder={t('identity.codePlaceholder')}
               value={code}
               onChange={(e) => setCode(e.target.value)}
@@ -116,6 +122,9 @@ export default function ForgotPasswordPanel({ defaultEmail, onDone, onCancel }) 
               type="password"
               required
               autoComplete="new-password"
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
               placeholder={t('identity.newPasswordPlaceholder')}
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
@@ -125,6 +134,9 @@ export default function ForgotPasswordPanel({ defaultEmail, onDone, onCancel }) 
               type="password"
               required
               autoComplete="new-password"
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
               placeholder={t('identity.confirmPasswordPlaceholder')}
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
