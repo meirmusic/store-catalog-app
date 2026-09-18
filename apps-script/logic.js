@@ -63,11 +63,21 @@ function rowToItem(headerRow, row) {
 // re-send an untouched oversized cell and hit Sheets' 50,000-char limit -
 // see REG-003. This function only decides *which* cells need a write; the
 // caller (Code.gs) must write only those, never the whole range.
+// Two known-unreliable formats, both replaced by the same reliable
+// thumbnail URL: the old uc?export=view hotlink, and (REG-015) an
+// lh3.googleusercontent.com/d/FILEID=...?authuser=N link - that one is
+// tied to whichever Google account session (authuser slot) generated it,
+// so it renders for some signed-in browsers and not others, even though
+// the file's own "anyone with the link" sharing is fine. This turned up
+// in a real item whose photo showed broken for the very person who'd
+// uploaded it.
 function planImageUrlFixes(cellValues) {
   const fixes = []; // { index, action: 'rewrite' | 'clear', value? }
   cellValues.forEach((url, i) => {
     if (typeof url !== 'string') return;
-    const match = /drive\.google\.com\/uc\?export=view&id=([^&]+)/.exec(url);
+    const match =
+      /drive\.google\.com\/uc\?export=view&id=([^&]+)/.exec(url) ||
+      /lh3\.googleusercontent\.com\/d\/([^=?]+)/.exec(url);
     if (match) {
       fixes.push({ index: i, action: 'rewrite', value: driveThumbnailUrl(match[1]) });
     } else if (url.length > 2000) {

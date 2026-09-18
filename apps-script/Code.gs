@@ -539,7 +539,17 @@ function fixImageUrls() {
   for (var i = 0; i < values.length; i++) {
     var url = values[i][0];
     if (typeof url !== 'string') continue;
-    var match = /drive\.google\.com\/uc\?export=view&id=([^&]+)/.exec(url);
+    // Two known-unreliable formats, both replaced by the same reliable
+    // thumbnail URL: the old uc?export=view hotlink, and (REG-015) an
+    // lh3.googleusercontent.com/d/FILEID=...?authuser=N link - that one
+    // is tied to whichever Google account session (authuser slot)
+    // generated it, so it renders for some signed-in browsers and not
+    // others, even though the file's own "anyone with the link" sharing
+    // is fine. This turned up in a real item whose photo showed broken
+    // for the very person who'd uploaded it.
+    var match =
+      /drive\.google\.com\/uc\?export=view&id=([^&]+)/.exec(url) ||
+      /lh3\.googleusercontent\.com\/d\/([^=?]+)/.exec(url);
     if (match) {
       // Only write the one cell that actually changed - never re-write
       // the whole range, since that would also re-send any oversized

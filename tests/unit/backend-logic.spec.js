@@ -71,6 +71,24 @@ test.describe('TC-BE: Apps Script pure logic', () => {
     expect(fixes).toEqual([]);
   });
 
+  // TC-BE-007c/d (REG-015 real user report): a photo showed broken on the
+  // very device that had uploaded it, but fine elsewhere - the sheet cell
+  // held a lh3.googleusercontent.com/d/FILEID=...?authuser=N link (tied to
+  // a specific Google account session), not our own thumbnail?id= format.
+  test('TC-BE-007c (REG-015): an lh3.googleusercontent.com/d/ link is rewritten to our thumbnail URL', () => {
+    const fixes = planImageUrlFixes(['https://lh3.googleusercontent.com/d/1bUu5NEZKKOj5fg9AugZYQtarn1Czi_F4=w1000?authuser=0']);
+    expect(fixes).toEqual([
+      { index: 0, action: 'rewrite', value: 'https://drive.google.com/thumbnail?id=1bUu5NEZKKOj5fg9AugZYQtarn1Czi_F4&sz=w1000' },
+    ]);
+  });
+
+  test('TC-BE-007d: an lh3.googleusercontent.com/d/ link with no size/authuser suffix is still rewritten', () => {
+    const fixes = planImageUrlFixes(['https://lh3.googleusercontent.com/d/1bUu5NEZKKOj5fg9AugZYQtarn1Czi_F4']);
+    expect(fixes).toEqual([
+      { index: 0, action: 'rewrite', value: 'https://drive.google.com/thumbnail?id=1bUu5NEZKKOj5fg9AugZYQtarn1Czi_F4&sz=w1000' },
+    ]);
+  });
+
   test('TC-BE-008 (REG-012 regression): uploadImage refuses a row that does not exist yet', () => {
     expect(planUploadImageResult(-1)).toEqual({ error: 'row not found - upsert has not been saved yet' });
   });
