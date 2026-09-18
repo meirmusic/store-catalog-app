@@ -26,7 +26,15 @@ function Header() {
   return (
     <header className="top">
       <div className="brand">
-        <h1 className="serif">{t('app.title')}</h1>
+        {/* Kept as a real (visually-hidden) heading, not just the image's alt
+            text, so screen readers get a proper page title and the i18n
+            switcher still has something to translate here (TC-I18N-001..003) -
+            the logo image itself is the gallery's own fixed design, same in
+            every language. */}
+        <h1 className="serif visually-hidden">{t('app.title')}</h1>
+        <span className="brand-logo-plate">
+          <img src="./logo-header.png" alt={t('app.title')} className="brand-logo" />
+        </span>
       </div>
       <div className="status-cluster">
         <span className="chip">

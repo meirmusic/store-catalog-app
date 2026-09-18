@@ -12,8 +12,31 @@ header.top {
   padding: 22px 0 16px;
   flex-wrap: wrap;
 }
-.brand { display: flex; align-items: baseline; gap: 10px; }
+.brand { display: flex; align-items: center; gap: 10px; }
 .brand h1 { font-size: 1.5rem; font-weight: 700; margin: 0; }
+/* Fixed white plate (not var(--wall)) so the logo's dark wordmark stays
+   legible even in dark mode, where the header background itself goes
+   dark - see App.jsx's Header. */
+.brand-logo-plate {
+  background: #FFFFFF;
+  border-radius: 10px;
+  padding: 6px 12px;
+  display: flex;
+  align-items: center;
+}
+.brand-logo { height: 34px; width: auto; display: block; }
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
 .status-cluster { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 
 .chip {
