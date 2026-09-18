@@ -218,7 +218,7 @@ export default function ItemForm({ item, onClose, onRequestDelete, onSaved }) {
               <button type="submit" className="btn primary" disabled={saving}>{t('actions.save')}</button>
             </div>
             {!isNew && (
-              <button type="button" className="danger-link" onClick={() => onRequestDelete(item)}>
+              <button type="button" className="danger-btn" onClick={() => onRequestDelete(item)}>
                 {t('actions.deleteItem')}
               </button>
             )}

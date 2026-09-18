@@ -192,7 +192,22 @@ select:hover, .btn:hover { border-color: var(--accent); }
 .avail-toggle button.on.sold { background: var(--sold-bg); color: var(--sold); border-color: var(--sold); }
 .modal-actions { display: flex; justify-content: space-between; align-items: center; margin-top: 20px; gap: 10px; }
 .modal-actions .left-actions { display: flex; gap: 8px; }
-.danger-link { background: none; border: none; color: var(--sold); font-size: .85rem; cursor: pointer; padding: 8px; }
+/* ACT-09 (UI_STANDARD_GAP_ANALYSIS.md, task #27): a real, tappable
+   outlined button in the "sold"/danger color - visible enough not to be
+   missed, but deliberately not solid-filled like .btn.primary (שמירה),
+   so it never reads as more prominent than, or gets confused with, the
+   primary save action. */
+.danger-btn {
+  background: none;
+  border: 1px solid var(--sold);
+  color: var(--sold);
+  border-radius: 10px;
+  padding: 9px 14px;
+  font-size: .86rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.danger-btn:hover { background: var(--sold-bg); }
 
 .confirm-modal { max-width: 380px; text-align: center; }
 .confirm-modal .confirm-actions { display: flex; gap: 10px; margin-top: 20px; }
@@ -219,7 +234,7 @@ select:hover, .btn:hover { border-color: var(--accent); }
     width: 100%;
   }
   .toolbar-controls > * { flex: 0 0 auto; }
-  .btn, .toggle-pill, select { min-height: 42px; }
+  .btn, .toggle-pill, select, .danger-btn { min-height: 42px; }
   .row2 { grid-template-columns: 1fr; }
   .overlay#item-overlay { padding: 0; align-items: stretch; }
   #item-overlay .modal { max-width: none; width: 100%; min-height: 100%; border-radius: 0; margin-bottom: 0; }
