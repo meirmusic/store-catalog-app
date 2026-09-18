@@ -75,7 +75,7 @@ export default function ImageField({ value, onChange }) {
         }}
       >
         {value ? (
-          <img src={value} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+          <img src={value} alt="" referrerPolicy="no-referrer" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
         ) : (
           <span style={{ fontSize: '1.4rem' }}>🖼️</span>
         )}

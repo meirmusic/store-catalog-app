@@ -24,7 +24,7 @@ export default function ImageLightbox({ src, alt, onClose }) {
       <button type="button" className="lightbox-close" onClick={onClose} aria-label={t('actions.close')} title={t('actions.close')}>
         ×
       </button>
-      <img src={src} alt={alt || ''} className="lightbox-img" />
+      <img src={src} alt={alt || ''} referrerPolicy="no-referrer" className="lightbox-img" />
     </div>
   );
 }

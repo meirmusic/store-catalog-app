@@ -12,7 +12,13 @@ export default function ItemCard({ item, onClick }) {
       <div className="thumb">
         {item.image_url ? (
           <>
-            <img src={item.image_url} alt={item.name} loading="lazy" />
+            {/* referrerPolicy="no-referrer" (REG-015, real user report): a
+                photo that loaded fine when opened directly in its own tab
+                still failed to render embedded here - some browser privacy
+                extensions specifically block third-party embedded images
+                that carry a referrer back to the embedding page. Sending
+                none removes that as a reason to block it. */}
+            <img src={item.image_url} alt={item.name} loading="lazy" referrerPolicy="no-referrer" />
             {/* A dedicated zoom control, not the whole thumbnail, so
                 clicking the photo (a large part of the card) still opens
                 the edit form like the rest of the card does - only this
