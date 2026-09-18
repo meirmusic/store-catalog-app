@@ -107,6 +107,24 @@ function checkLoginCredentials(auth, configuredEmail, configuredHash, hashFn) {
   return hashFn(auth.password) === configuredHash;
 }
 
+// Mirrors Code.gs's validatePasswordReset (task #28 v4, self-service
+// "forgot password"). `now` and the stored code/expiry are passed in
+// rather than read from PropertiesService, so this is testable without
+// any Apps Script service.
+function validatePasswordReset(payload, configuredEmail, storedCode, storedExpires, now) {
+  if (!payload || !payload.email || !payload.code || !payload.newPassword) {
+    return { ok: false, error: 'invalid request' };
+  }
+  if (String(payload.email).trim().toLowerCase() !== String(configuredEmail).trim().toLowerCase()) {
+    return { ok: false, error: 'invalid code' };
+  }
+  if (!storedCode || !storedExpires) return { ok: false, error: 'invalid code' };
+  if (Number(storedExpires) < now) return { ok: false, error: 'code expired' };
+  if (String(payload.code) !== String(storedCode)) return { ok: false, error: 'invalid code' };
+  if (String(payload.newPassword).length < 8) return { ok: false, error: 'password too short' };
+  return { ok: true };
+}
+
 export {
   findRowIndex,
   driveThumbnailUrl,
@@ -116,4 +134,5 @@ export {
   planUploadImageResult,
   extractVerifiedEmail,
   checkLoginCredentials,
+  validatePasswordReset,
 };

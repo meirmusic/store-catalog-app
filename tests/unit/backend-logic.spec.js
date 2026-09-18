@@ -9,10 +9,12 @@ import {
   planUploadImageResult,
   extractVerifiedEmail,
   checkLoginCredentials,
+  validatePasswordReset,
 } from '../../apps-script/logic.js';
 
 const CLIENT_ID = '123-abc.apps.googleusercontent.com';
 const FAKE_HASH = (password) => 'hash:' + password;
+const RESET_EMAIL = 'office@yossibittonart.com';
 
 test.describe('TC-BE: Apps Script pure logic', () => {
   test('TC-BE-006 (REG-002 regression): empty sheet does not crash findRowIndex', () => {
@@ -127,5 +129,49 @@ test.describe('TC-BE: Apps Script pure logic', () => {
 
   test('TC-BE-010f: missing auth object entirely is rejected', () => {
     expect(checkLoginCredentials(null, 'office@yossibittonart.com', FAKE_HASH('x'), FAKE_HASH)).toBe(false);
+  });
+
+  // TC-BE-011* (task #28 v4): self-service "forgot password" - a one-time
+  // code emailed to the office inbox, then exchanged for a new password.
+  test('TC-BE-011: correct email, correct unexpired code, and a valid new password is accepted', () => {
+    const payload = { email: RESET_EMAIL, code: '123456', newPassword: 'a-new-strong-password' };
+    const result = validatePasswordReset(payload, RESET_EMAIL, '123456', String(Date.now() + 60_000), Date.now());
+    expect(result).toEqual({ ok: true });
+  });
+
+  test('TC-BE-011b: wrong code is rejected', () => {
+    const payload = { email: RESET_EMAIL, code: '999999', newPassword: 'a-new-strong-password' };
+    const result = validatePasswordReset(payload, RESET_EMAIL, '123456', String(Date.now() + 60_000), Date.now());
+    expect(result).toEqual({ ok: false, error: 'invalid code' });
+  });
+
+  test('TC-BE-011c: expired code is rejected even if it matches', () => {
+    const payload = { email: RESET_EMAIL, code: '123456', newPassword: 'a-new-strong-password' };
+    const result = validatePasswordReset(payload, RESET_EMAIL, '123456', String(Date.now() - 1000), Date.now());
+    expect(result).toEqual({ ok: false, error: 'code expired' });
+  });
+
+  test('TC-BE-011d: wrong email is rejected even with the right code', () => {
+    const payload = { email: 'someone-else@gmail.com', code: '123456', newPassword: 'a-new-strong-password' };
+    const result = validatePasswordReset(payload, RESET_EMAIL, '123456', String(Date.now() + 60_000), Date.now());
+    expect(result).toEqual({ ok: false, error: 'invalid code' });
+  });
+
+  test('TC-BE-011e: no reset was ever requested (no stored code) is rejected', () => {
+    const payload = { email: RESET_EMAIL, code: '123456', newPassword: 'a-new-strong-password' };
+    const result = validatePasswordReset(payload, RESET_EMAIL, null, null, Date.now());
+    expect(result).toEqual({ ok: false, error: 'invalid code' });
+  });
+
+  test('TC-BE-011f: a too-short new password is rejected even with a valid code', () => {
+    const payload = { email: RESET_EMAIL, code: '123456', newPassword: 'short' };
+    const result = validatePasswordReset(payload, RESET_EMAIL, '123456', String(Date.now() + 60_000), Date.now());
+    expect(result).toEqual({ ok: false, error: 'password too short' });
+  });
+
+  test('TC-BE-011g: a request missing a field entirely is rejected', () => {
+    const payload = { email: RESET_EMAIL, code: '123456' }; // no newPassword
+    const result = validatePasswordReset(payload, RESET_EMAIL, '123456', String(Date.now() + 60_000), Date.now());
+    expect(result).toEqual({ ok: false, error: 'invalid request' });
   });
 });

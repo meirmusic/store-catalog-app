@@ -46,3 +46,15 @@ export function addConfigOption(listName, value) {
 export function uploadImage(rowId, dataUrl) {
   return callApi('uploadImage', { row_id: rowId, image: dataUrl });
 }
+
+// Both below are how someone recovers WITHOUT valid credentials yet, so
+// they intentionally work with whatever getAuthFields() currently has (most
+// likely nothing) - Code.gs handles them before its normal auth gate (task
+// #28 v4).
+export function requestPasswordReset(email) {
+  return callApi('requestPasswordReset', { email });
+}
+
+export function resetPassword(email, code, newPassword) {
+  return callApi('resetPassword', { email, code, newPassword });
+}

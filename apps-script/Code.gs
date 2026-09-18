@@ -14,10 +14,13 @@
  * 5. Deploy > New deployment > type "Web app" > Execute as "Me",
  *    Who has access "Anyone" > Deploy. Copy the Web App URL.
  * 6. Put that URL into the app's environment as VITE_APPS_SCRIPT_URL.
- * 7. Set the shared password once: in this editor, pick promptSetLoginPassword
- *    from the function dropdown (next to Run) and click Run - switch to the
- *    open Sheet tab, a dialog there asks for the password. It's hashed and
- *    stored in this script's Properties, never in the Sheet or in this file.
+ * 7. Set the shared password once: reload the Sheet's own browser tab (this
+ *    runs onOpen below, adding a "קטלוג הגלריה" menu to the Sheet), then use
+ *    that menu's "הגדרת סיסמת כניסה משותפת" item - a dialog asks for the
+ *    password. It's hashed and stored in this script's Properties, never in
+ *    the Sheet or in this file. (Running promptSetLoginPassword directly
+ *    from this editor's own Run button does NOT work - SpreadsheetApp.getUi()
+ *    only works when genuinely triggered from the Sheet's own UI.)
  * 8. In the Config sheet tab, add a row for the shared gallery Google
  *    account everyone signs in with: list_name "allowed_emails", value
  *    that account's email address. Each staff member then picks their own
@@ -26,6 +29,13 @@
  *    and lives in src/config/seed.js, not here. Rotating or adding another
  *    shared account later is just editing these allowed_emails rows - no
  *    code change needed.
+ *
+ * Self-service password reset (task #28 v4): the app's own "שכחתי סיסמה"
+ * (forgot password) link emails a one-time code to LOGIN_EMAIL via
+ * MailApp - no extra setup needed for this beyond steps 1-7 above, since
+ * MailApp sends as the script owner's own Google account. Staff can change
+ * the shared password themselves from there without anyone running
+ * promptSetLoginPassword by hand.
  *
  * Whenever you edit this file afterwards, you must create a new
  * deployment VERSION of the *same* deployment (Deploy > Manage
@@ -78,6 +88,16 @@ function doPost(e) {
   lock.waitLock(10000);
   try {
     var body = JSON.parse(e.postData.contents);
+    // These two actions are how someone recovers WITHOUT already having
+    // valid credentials, so they can't sit behind the normal auth gate
+    // below - each validates itself instead (matching email, a
+    // short-lived one-time code sent to LOGIN_EMAIL's own inbox).
+    if (body.action === 'requestPasswordReset') {
+      return jsonResponse(handleRequestPasswordReset(body.payload));
+    }
+    if (body.action === 'resetPassword') {
+      return jsonResponse(handleResetPassword(body.payload));
+    }
     if (!resolveAuthenticatedEmail(body)) {
       return jsonResponse({ error: 'forbidden' });
     }
@@ -198,11 +218,26 @@ function bytesToHex(bytes) {
     .join('');
 }
 
-// One-time (or whenever it needs to change) setup: run this from the Apps
-// Script editor's function dropdown, then switch to the Sheet's own browser
-// tab - a dialog appears there asking for the new shared password. Typing
-// it here, in a Google-native prompt, is deliberate: the password itself
-// never has to appear in this file or get committed anywhere.
+// Simple trigger - runs automatically whenever the Sheet is opened/reloaded
+// (no deployment needed for this, unlike doPost). Exists only so
+// promptSetLoginPassword can be launched from an actual in-Sheet menu
+// click: SpreadsheetApp.getUi() throws "Cannot call ... from this
+// context" when a function is run directly from the Apps Script editor's
+// own Run button - it only works when the call genuinely originates from
+// the Sheet's UI, such as a menu item.
+function onOpen() {
+  SpreadsheetApp.getUi()
+    .createMenu('קטלוג הגלריה')
+    .addItem('הגדרת סיסמת כניסה משותפת', 'promptSetLoginPassword')
+    .addToUi();
+}
+
+// One-time (or whenever it needs to change) setup: in the Sheet itself
+// (not the script editor), use the menu "קטלוג הגלריה" >
+// "הגדרת סיסמת כניסה משותפת" (added by onOpen above) - a dialog appears
+// asking for the new shared password. Typing it here, in a Google-native
+// prompt, is deliberate: the password itself never has to appear in this
+// file or get committed anywhere.
 function promptSetLoginPassword() {
   var ui = SpreadsheetApp.getUi();
   var result = ui.prompt(
@@ -218,6 +253,75 @@ function promptSetLoginPassword() {
   }
   PropertiesService.getScriptProperties().setProperty('LOGIN_PASSWORD_HASH', hashPassword(password));
   ui.alert('הסיסמה עודכנה בהצלחה.');
+}
+
+// Self-service "forgot password" (task #28 v4) - staff shouldn't need
+// someone to run promptSetLoginPassword by hand every time. Emails a
+// short-lived one-time code to LOGIN_EMAIL's own inbox; the response is
+// deliberately the same {ok:true} whether or not the submitted email
+// matched, so this can't be used to probe what the configured email is.
+var PW_RESET_CODE_TTL_MS = 15 * 60 * 1000;
+var PW_RESET_MIN_RESEND_MS = 60 * 1000;
+
+function handleRequestPasswordReset(payload) {
+  var email = payload && payload.email;
+  if (!email || String(email).trim().toLowerCase() !== LOGIN_EMAIL.toLowerCase()) {
+    return { ok: true };
+  }
+  var props = PropertiesService.getScriptProperties();
+  var lastSent = Number(props.getProperty('PW_RESET_LAST_SENT') || 0);
+  var now = Date.now();
+  if (now - lastSent < PW_RESET_MIN_RESEND_MS) {
+    return { ok: true }; // already sent one very recently - don't spam the inbox
+  }
+  var code = generateResetCode();
+  props.setProperty('PW_RESET_CODE', code);
+  props.setProperty('PW_RESET_EXPIRES', String(now + PW_RESET_CODE_TTL_MS));
+  props.setProperty('PW_RESET_LAST_SENT', String(now));
+  MailApp.sendEmail(
+    LOGIN_EMAIL,
+    'קוד לאיפוס סיסמת קטלוג הגלריה',
+    'קוד האיפוס שלך: ' + code + '\nהקוד תקף ל-15 דקות. אם לא ביקשת זאת, אפשר להתעלם מהמייל.',
+  );
+  return { ok: true };
+}
+
+function generateResetCode() {
+  return String(Math.floor(100000 + Math.random() * 900000)); // 6 digits
+}
+
+function handleResetPassword(payload) {
+  var props = PropertiesService.getScriptProperties();
+  var check = validatePasswordReset(
+    payload,
+    LOGIN_EMAIL,
+    props.getProperty('PW_RESET_CODE'),
+    props.getProperty('PW_RESET_EXPIRES'),
+    Date.now(),
+  );
+  if (!check.ok) return { error: check.error };
+  props.setProperty('LOGIN_PASSWORD_HASH', hashPassword(payload.newPassword));
+  props.deleteProperty('PW_RESET_CODE');
+  props.deleteProperty('PW_RESET_EXPIRES');
+  return { ok: true };
+}
+
+// Pure decision logic for handleResetPassword - mirrored in logic.js.
+// `now` and the stored code/expiry are passed in (not read from
+// PropertiesService directly) so this can be unit-tested without Apps
+// Script's services.
+function validatePasswordReset(payload, configuredEmail, storedCode, storedExpires, now) {
+  if (!payload || !payload.email || !payload.code || !payload.newPassword) {
+    return { ok: false, error: 'invalid request' };
+  }
+  if (String(payload.email).trim().toLowerCase() !== String(configuredEmail).trim().toLowerCase()) {
+    return { ok: false, error: 'invalid code' };
+  }
+  if (!storedCode || !storedExpires) return { ok: false, error: 'invalid code' };
+  if (Number(storedExpires) < now) return { ok: false, error: 'code expired' };
+  if (String(payload.code) !== String(storedCode)) return { ok: false, error: 'invalid code' };
+  if (String(payload.newPassword).length < 8) return { ok: false, error: 'password too short' };
+  return { ok: true };
 }
 
 // Shared by the sign-in allowlist check (Config list "allowed_emails") and

@@ -194,6 +194,13 @@
 | TC-BE-010d | Critical | אימייל שגוי (גם עם סיסמה נכונה) | נדחה |
 | TC-BE-010e | High | אף אחד עדיין לא הגדיר סיסמה (`promptSetLoginPassword` לא הורץ) | נדחה תמיד (fail closed), לא מתקבלת כל סיסמה |
 | TC-BE-010f | Medium | אין אובייקט `auth` בבקשה בכלל | נדחה |
+| TC-BE-011 | Critical | **task #28 v4**: "שכחתי סיסמה" - אימייל נכון, קוד נכון ולא פג תוקף, סיסמה חדשה תקינה | מתקבל |
+| TC-BE-011b | Critical | קוד שגוי | נדחה (`invalid code`) |
+| TC-BE-011c | Critical | קוד נכון אבל פג תוקף (מעל 15 דקות) | נדחה (`code expired`) |
+| TC-BE-011d | High | אימייל שגוי (גם עם קוד נכון) | נדחה |
+| TC-BE-011e | High | לא בוצעה בקשת איפוס מעולם (אין קוד שמור) | נדחה |
+| TC-BE-011f | Medium | סיסמה חדשה קצרה מ-8 תווים | נדחה (`password too short`) |
+| TC-BE-011g | Medium | בקשה עם שדה חסר (למשל בלי סיסמה חדשה) | נדחה (`invalid request`) |
 
 ### Integration/Contract - מול Apps Script מדומה (TC-SYNC-*, page.route)
 
