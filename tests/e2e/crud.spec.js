@@ -194,6 +194,25 @@ test('TC-ACT-005: the save button locks for the duration of the save, preventing
   expect(pending.filter((c) => c.op === 'upsert')).toHaveLength(1);
 });
 
+// REG-016 (real user report): a local save that failed (e.g. IndexedDB
+// blocked/full on that specific device) used to look exactly like nothing
+// happened at all - no error, no success, the form just sat there. Now a
+// failed save shows a persistent error toast and leaves the form open
+// (unlike a success, which closes it) so the item isn't lost.
+test('REG-016: a failed save shows an error toast instead of silently doing nothing', async ({ page }) => {
+  await page.evaluate(() => { window.__testForceSaveError = true; });
+  await openNewItemForm(page);
+  await fillItemForm(page, { name: 'שמירה שנכשלת' });
+
+  const saveBtn = page.locator('#item-overlay button:has-text("שמירה")');
+  await saveBtn.click();
+
+  await expect(page.locator('.toast.error')).toContainText('השמירה נכשלה');
+  await expect(page.locator('#item-overlay')).toBeVisible(); // the form stays open, nothing was lost
+  const items = await getItems(page);
+  expect(items).toHaveLength(0); // never actually saved
+});
+
 test('TC-SYNC-003 / TC-DM: a fresh photo queues its own uploadImage change, not a raw upsert payload', async ({ page }) => {
   await openNewItemForm(page);
   await fillItemForm(page, { name: 'עם תמונה', imagePath: SAMPLE_IMAGE });

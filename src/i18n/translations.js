@@ -78,6 +78,7 @@ export const translations = {
     'fields.image': 'תמונה',
 
     'errors.nameRequired': 'יש להזין שם ליצירה',
+    'errors.saveFailed': 'השמירה נכשלה. בדקו את החיבור לאינטרנט ונסו שוב.',
 
     'delete.title': 'האם אתה בטוח?',
     'delete.confirm': 'מחיקה',
@@ -171,6 +172,7 @@ export const translations = {
     'fields.image': 'Image',
 
     'errors.nameRequired': 'Please enter a name for the artwork',
+    'errors.saveFailed': 'Save failed. Check your internet connection and try again.',
 
     'delete.title': 'Are you sure?',
     'delete.confirm': 'Delete',
@@ -264,6 +266,7 @@ export const translations = {
     'fields.image': 'Billede',
 
     'errors.nameRequired': 'Indtast venligst et navn til kunstværket',
+    'errors.saveFailed': 'Det lykkedes ikke at gemme. Tjek din internetforbindelse, og prøv igen.',
 
     'delete.title': 'Er du sikker?',
     'delete.confirm': 'Slet',

@@ -98,6 +98,13 @@ export default function ItemForm({ item, onClose, onRequestDelete, onSaved }) {
       if (typeof window !== 'undefined' && window.__testSlowSave) {
         await new Promise((resolve) => setTimeout(resolve, window.__testSlowSave));
       }
+      // Test-only hook (see tests/e2e/crud.spec.js REG-016): simulates a
+      // local write failure (e.g. IndexedDB blocked/full on a specific
+      // device - a real user report) without needing to actually break
+      // IndexedDB in the browser running the test.
+      if (typeof window !== 'undefined' && window.__testForceSaveError) {
+        throw new Error('forced test failure');
+      }
       // A freshly-picked photo is a data: URL - too big to write straight
       // into the Sheet's image_url column (and not what that column is
       // for). Keep the row's previous image_url untouched and upload the
@@ -126,6 +133,13 @@ export default function ItemForm({ item, onClose, onRequestDelete, onSaved }) {
       // not the background sync to the server has finished yet.
       showToast(t('sync.savedLocal'));
       onSaved();
+    } catch (err) {
+      // Real user report: a local write (e.g. IndexedDB blocked/full on
+      // that specific device) used to fail silently here - the button
+      // looked like it simply did nothing, with no way to tell the local
+      // save itself (not just the background sync) never happened.
+      console.error('[save] item save failed', err);
+      showToast(t('errors.saveFailed'), { type: 'error' });
     } finally {
       setSaving(false);
     }
