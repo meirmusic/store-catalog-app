@@ -1,5 +1,5 @@
 import { db } from '../db/db.js';
-import { getAll, upsertItem, softDeleteItem, addConfigOption, uploadImage } from '../api/client.js';
+import { getAll, upsertItem, softDeleteItem, addConfigOption, uploadImage, AuthError } from '../api/client.js';
 import { APPS_SCRIPT_URL } from '../api/config.js';
 
 // See SPEC.md "מדיניות כשלים": a change that keeps failing stays queued
@@ -24,6 +24,7 @@ async function withQuickRetry(fn) {
   try {
     return await fn();
   } catch (err) {
+    if (err instanceof AuthError) throw err; // retrying can't fix a rejected sign-in
     await new Promise((resolve) => setTimeout(resolve, QUICK_RETRY_DELAY_MS));
     return fn();
   }
@@ -77,6 +78,11 @@ export async function pushPending() {
       await db.pendingChanges.delete(change.id);
       pushed++;
     } catch (err) {
+      // A rejected sign-in isn't this change's fault, and every other
+      // change would be rejected too - stop here, leave the queue exactly
+      // as it is (no attempt counted, so it never trips the "sync problem"
+      // indicator for the wrong reason), and let syncNow report it.
+      if (err instanceof AuthError) throw err;
       console.error('[sync] push failed for change', change, err);
       await db.pendingChanges.update(change.id, {
         attempts: (change.attempts || 0) + 1,
@@ -129,10 +135,17 @@ export async function syncNow() {
     // No backend configured yet - nothing to do but leave the queue as-is.
     return { ok: false, reason: 'not-configured', pushed: 0 };
   }
-  const pushed = await pushPending();
+  let pushed;
+  try {
+    pushed = await pushPending();
+  } catch (err) {
+    if (err instanceof AuthError) return { ok: false, reason: 'auth', pushed: 0 };
+    throw err;
+  }
   try {
     await withQuickRetry(() => pullLatest());
   } catch (err) {
+    if (err instanceof AuthError) return { ok: false, reason: 'auth', pushed };
     // SPEC.md section 4: a failed pull keeps showing the last data that
     // did load successfully, with a "not updated since HH:MM" indicator -
     // never a blocking error screen. Local changes already pushed above

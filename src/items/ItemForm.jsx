@@ -93,6 +93,18 @@ export default function ItemForm({ item, onClose, onRequestDelete, onSaved }) {
   const [imageUrl, setImageUrl] = useState(item?.image_url || null);
   const [error, setError] = useState('');
 
+  // SPEC.md section 9: closing with unsaved edits asks first. Compared as
+  // strings so e.g. a price of 100 vs '100' isn't mistaken for an edit.
+  const currentValues = [name, size, sku, type, location, status, price, serial, notes, availability, imageUrl];
+  const initialValuesRef = useRef(currentValues.map(String));
+  const isDirty = currentValues.some((v, i) => String(v) !== initialValuesRef.current[i]);
+
+  function requestClose() {
+    // Mid-save the edits are already on their way to being stored.
+    if (isDirty && !saving && !window.confirm(t('form.discardConfirm'))) return;
+    onClose();
+  }
+
   function generateSerial() {
     let code = '';
     for (let i = 0; i < 6; i++) code += Math.floor(Math.random() * 10);
@@ -101,8 +113,13 @@ export default function ItemForm({ item, onClose, onRequestDelete, onSaved }) {
 
   async function handleSubmit(e) {
     e.preventDefault();
+    setError('');
     if (!name.trim()) {
       setError(t('errors.nameRequired'));
+      return;
+    }
+    if (price !== '' && !(Number(price) >= 0)) {
+      setError(t('errors.priceInvalid'));
       return;
     }
     // ACT-04 (UI_STANDARD_GAP_ANALYSIS.md): lock the button for the
@@ -169,7 +186,7 @@ export default function ItemForm({ item, onClose, onRequestDelete, onSaved }) {
   }
 
   return (
-    <div className="overlay" id="item-overlay" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+    <div className="overlay" id="item-overlay" onMouseDown={(e) => e.target === e.currentTarget && requestClose()}>
       <div className="modal">
         <h2 className="serif">{isNew ? t('actions.newItem').replace('+ ', '') : item.name}</h2>
         {!isNew && (
@@ -177,7 +194,11 @@ export default function ItemForm({ item, onClose, onRequestDelete, onSaved }) {
             {item.last_modified_by} · {item.last_modified_at ? new Date(item.last_modified_at).toLocaleString() : ''}
           </p>
         )}
-        <form onSubmit={handleSubmit}>
+        {/* noValidate: the browser must never block a save on its own -
+            its tooltip shows in the browser's language, often out of view,
+            and reads as "nothing happened" (REG-018). All checks are ours,
+            in handleSubmit, shown as the app's own message. */}
+        <form onSubmit={handleSubmit} noValidate>
           <div className="field">
             <ImageField value={imageUrl} onChange={setImageUrl} />
           </div>
@@ -212,7 +233,7 @@ export default function ItemForm({ item, onClose, onRequestDelete, onSaved }) {
             <ConfigSelect list="physical_status" label={t('fields.status')} value={status} onChange={setStatus} config={config} addConfigValue={addConfigValue} />
             <div className="field">
               <label>{t('fields.price')}</label>
-              <input type="number" min="0" step="1" value={price} onChange={(e) => setPrice(e.target.value)} />
+              <input type="number" min="0" step="any" inputMode="decimal" value={price} onChange={(e) => setPrice(e.target.value)} />
             </div>
           </div>
 
@@ -256,7 +277,7 @@ export default function ItemForm({ item, onClose, onRequestDelete, onSaved }) {
             <div className="left-actions">
               {/* Cancel stays available during a save (SPEC.md section 9) -
                   it's the way out if a save is stuck. */}
-              <button type="button" className="btn" onClick={onClose}>{t('actions.cancel')}</button>
+              <button type="button" className="btn" onClick={requestClose}>{t('actions.cancel')}</button>
               <button type="submit" className="btn primary" disabled={saving}>
                 {saving ? t('actions.saving') : t('actions.save')}
               </button>

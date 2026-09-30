@@ -18,7 +18,7 @@ function Header() {
   const { t } = useI18n()
   const { signOut } = useIdentity()
   const { member, clearMember } = useTeamMember()
-  const { isOnline, syncing, lastSyncedAt, pendingCount, syncProblem, stale, refresh } = useSyncStatus()
+  const { isOnline, syncing, lastSyncedAt, pendingCount, syncProblem, stale, authExpired, refresh } = useSyncStatus()
   const [managingLists, setManagingLists] = useState(false)
   const { showToast } = useToast()
 
@@ -83,6 +83,16 @@ function Header() {
         )}
       </div>
       {managingLists && <ConfigManager onClose={() => setManagingLists(false)} />}
+      {/* SPEC.md section 9: signing out here keeps the local data and the
+          change queue - after signing back in, queued changes go out. */}
+      {authExpired && (
+        <div className="auth-banner" role="alert">
+          <span>{t('sync.authExpired')}</span>
+          <button type="button" className="btn primary" onClick={signOut}>
+            {t('sync.signInAgain')}
+          </button>
+        </div>
+      )}
     </header>
   )
 }

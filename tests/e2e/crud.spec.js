@@ -132,10 +132,37 @@ test('TC-CRUD-007: canceling the delete confirmation keeps the item', async ({ p
 test('TC-CRUD-008: canceling add/edit without saving writes nothing', async ({ page }) => {
   await openNewItemForm(page);
   await fillItemForm(page, { name: 'לא יישמר' });
+  // SAVE-70: there are unsaved edits, so closing asks first - confirm it.
+  let dialogMessage = null;
+  page.once('dialog', (dialog) => { dialogMessage = dialog.message(); dialog.accept(); });
   await cancelItemForm(page);
 
+  expect(dialogMessage).toBe('יש שינויים שלא נשמרו. לצאת בלי לשמור?');
   expect(await getItems(page)).toHaveLength(0);
   expect(await getPendingChanges(page)).toHaveLength(0);
+});
+
+// SAVE-70 (SPEC.md section 9): declining the "unsaved changes" question
+// keeps the form open with everything typed so far; clicking outside the
+// form asks the same question; a form with no edits closes with no question.
+test('TC-CRUD-010: closing a form with unsaved edits asks first, and declining keeps the edits', async ({ page }) => {
+  await openNewItemForm(page);
+  await fillItemForm(page, { name: 'עריכה שלא נשמרה' });
+
+  let asked = false;
+  page.once('dialog', (dialog) => { asked = true; dialog.dismiss(); });
+  await page.mouse.click(5, 5); // outside the modal, on the backdrop
+  await expect.poll(() => asked).toBe(true);
+  await expect(page.locator('#item-overlay')).toBeVisible();
+  await expect(page.locator('#item-overlay input[type=text] >> nth=0')).toHaveValue('עריכה שלא נשמרה');
+});
+
+test('TC-CRUD-011: a form with no edits closes without asking', async ({ page }) => {
+  let dialogShown = false;
+  page.on('dialog', (dialog) => { dialogShown = true; dialog.dismiss(); });
+  await openNewItemForm(page);
+  await cancelItemForm(page);
+  expect(dialogShown).toBe(false);
 });
 
 // UI_STANDARD_GAP_ANALYSIS.md ACT-03/MSG-06: a successful save shows a
@@ -308,4 +335,46 @@ test('TC-IMG-ZOOM: clicking a card photo opens a full-size lightbox, without als
   // edit form as always.
   await page.click('.card');
   await page.waitForSelector('#item-overlay');
+});
+
+// REG-018 / SAVE-03 (found while building the save-button test plan,
+// TEST_PLAN.md section 3a): the price input only accepted whole numbers,
+// so the browser itself silently blocked the save of any item whose price
+// had a decimal point - including existing items whose Sheet price was
+// already decimal, where no change at all could be saved. The browser's
+// own tooltip (in the browser's language, often scrolled out of view) was
+// the only feedback; the button didn't even switch to "שומר...".
+test('REG-018: an existing item with a decimal price can be edited and saved', async ({ page }) => {
+  await seedItems(page, [{ row_id: 'DEC1', name: 'מחיר עשרוני', price: 1234.5 }]);
+  await reloadApp(page);
+  await page.waitForSelector('text=קטלוג הגלריה');
+  await page.click('.card');
+  await page.waitForSelector('#item-overlay');
+  await page.fill('#item-overlay textarea', 'שינוי הערה');
+  await saveItemForm(page);
+
+  const item = (await getItems(page)).find((it) => it.row_id === 'DEC1');
+  expect(item.notes).toBe('שינוי הערה');
+  expect(item.price).toBe(1234.5);
+});
+
+test('REG-018b: a new item can be saved with a decimal price', async ({ page }) => {
+  await openNewItemForm(page);
+  await fillItemForm(page, { name: 'מחיר חדש עשרוני', price: '99.9' });
+  await saveItemForm(page);
+
+  const items = await getItems(page);
+  expect(items[0].price).toBe(99.9);
+});
+
+// SAVE-04: a negative price is rejected by the app itself, with its own
+// message in the app's language - never by a browser tooltip.
+test('TC-CRUD-009: a negative price is rejected with an app message, and nothing is saved', async ({ page }) => {
+  await openNewItemForm(page);
+  await fillItemForm(page, { name: 'מחיר שלילי', price: '-5' });
+  await page.click('#item-overlay button[type=submit]');
+
+  await expect(page.locator('#item-overlay')).toContainText('המחיר חייב להיות 0 או יותר');
+  await expect(page.locator('#item-overlay')).toBeVisible();
+  expect(await getItems(page)).toHaveLength(0);
 });

@@ -12,6 +12,17 @@ import { getAuthFields } from './authToken.js';
 // signed-in identity currently is; Code.gs verifies either one server-side
 // on every request, so a request with neither is rejected regardless of
 // what the website does.
+// Code.gs answers 'forbidden' only when the credential itself is rejected
+// (expired Google token, or an office password changed elsewhere) - kept
+// distinct so the sync engine can ask the user to sign in again instead
+// of counting it as an ordinary push failure (SPEC.md section 9).
+export class AuthError extends Error {
+  constructor() {
+    super('forbidden');
+    this.name = 'AuthError';
+  }
+}
+
 async function callApi(action, payload) {
   if (!APPS_SCRIPT_URL) {
     throw new Error('APPS_SCRIPT_URL not configured yet');
@@ -23,6 +34,7 @@ async function callApi(action, payload) {
   });
   if (!res.ok) throw new Error(`API error ${res.status}`);
   const data = await res.json();
+  if (data && data.error === 'forbidden') throw new AuthError();
   if (data && data.error) throw new Error(data.error);
   return data;
 }

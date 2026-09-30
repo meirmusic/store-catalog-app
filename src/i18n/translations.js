@@ -79,6 +79,8 @@ export const translations = {
     'fields.image': 'תמונה',
 
     'errors.nameRequired': 'יש להזין שם ליצירה',
+    'form.discardConfirm': 'יש שינויים שלא נשמרו. לצאת בלי לשמור?',
+    'errors.priceInvalid': 'המחיר חייב להיות 0 או יותר',
     'errors.saveFailed': 'השמירה במכשיר נכשלה. רעננו את הדף ונסו שוב; אם זה חוזר - פנו למנהל.',
     'sync.saveDelayed': 'השמירה מתעכבת...',
 
@@ -91,6 +93,8 @@ export const translations = {
     'sync.savedLocal': 'נשמר מקומית - ימתין לסנכרון',
     'sync.savedSynced': 'נשמר וסונכרן',
     'sync.synced': 'סונכרן ✓',
+    'sync.authExpired': 'פג תוקף ההתחברות - התחברו מחדש. השינויים שלכם שמורים במכשיר וישלחו אחרי ההתחברות.',
+    'sync.signInAgain': 'התחברות מחדש',
     'update.available': 'גרסה חדשה של האפליקציה זמינה',
     'update.reload': 'עדכון',
     'sync.problemIntro': 'לא הצליחו להישלח לשרת:',
@@ -181,6 +185,8 @@ export const translations = {
     'fields.image': 'Image',
 
     'errors.nameRequired': 'Please enter a name for the artwork',
+    'form.discardConfirm': 'You have unsaved changes. Leave without saving?',
+    'errors.priceInvalid': 'Price must be 0 or more',
     'errors.saveFailed': 'Saving on this device failed. Refresh the page and try again; if it keeps happening, contact your manager.',
     'sync.saveDelayed': 'Saving is taking longer than usual...',
 
@@ -193,6 +199,8 @@ export const translations = {
     'sync.savedLocal': 'Saved locally - will sync later',
     'sync.savedSynced': 'Saved and synced',
     'sync.synced': 'Synced ✓',
+    'sync.authExpired': 'Your sign-in has expired - please sign in again. Your changes are saved on this device and will be sent after you sign in.',
+    'sync.signInAgain': 'Sign in again',
     'update.available': 'A new version of the app is available',
     'update.reload': 'Update',
     'sync.problemIntro': 'Could not be sent to the server:',
@@ -283,6 +291,8 @@ export const translations = {
     'fields.image': 'Billede',
 
     'errors.nameRequired': 'Indtast venligst et navn til kunstværket',
+    'form.discardConfirm': 'Du har ændringer, der ikke er gemt. Vil du lukke uden at gemme?',
+    'errors.priceInvalid': 'Prisen skal være 0 eller mere',
     'errors.saveFailed': 'Det lykkedes ikke at gemme på enheden. Genindlæs siden, og prøv igen; hvis det sker igen, kontakt din leder.',
     'sync.saveDelayed': 'Gemningen tager længere tid end normalt...',
 
@@ -295,6 +305,8 @@ export const translations = {
     'sync.savedLocal': 'Gemt lokalt - synkroniseres senere',
     'sync.savedSynced': 'Gemt og synkroniseret',
     'sync.synced': 'Synkroniseret ✓',
+    'sync.authExpired': 'Dit login er udløbet - log venligst ind igen. Dine ændringer er gemt på enheden og sendes, når du har logget ind.',
+    'sync.signInAgain': 'Log ind igen',
     'update.available': 'En ny version af appen er tilgængelig',
     'update.reload': 'Opdater',
     'sync.problemIntro': 'Kunne ikke sendes til serveren:',

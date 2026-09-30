@@ -286,3 +286,19 @@ select:hover, .btn:hover { border-color: var(--accent); }
   border-bottom: 1px solid var(--line);
   font-size: .9rem;
 }
+
+.auth-banner {
+  flex-basis: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 8px;
+  padding: 10px 14px;
+  border: 1px solid var(--sold);
+  border-radius: 10px;
+  color: var(--sold);
+  background: var(--wall);
+  font-size: .9rem;
+}

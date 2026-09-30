@@ -300,3 +300,49 @@ test('TC-SYNC-010: a "synced" confirmation never replaces an open error message'
   await page.waitForTimeout(300);
   await expect(page.locator('.toast.error')).toBeVisible();
 });
+
+// REG-019 / SAVE-48-49 (found while building the save-button test plan):
+// a Google sign-in is only valid for about an hour and isn't renewed while
+// the app stays open (the same happens when the office password is changed
+// from another device). The server then rejected every push as
+// 'forbidden' - silently: saves piled up as "pending", and after 5 tries
+// the red chip blamed the internet connection. Now a rejected sign-in
+// shows a "sign in again" banner, isn't counted as a push failure, and the
+// queued changes go out right after signing back in.
+test('REG-019: an expired sign-in shows a "sign in again" banner, and queued changes are sent after re-login', async ({ page }) => {
+  let signInValid = false;
+  let upserts = 0;
+  await page.route(MOCK_URL, async (route) => {
+    const body = await readAction(route);
+    if (!signInValid) return route.fulfill({ json: { error: 'forbidden' } });
+    if (body.action === 'getAll') return route.fulfill({ json: { items: [], config: {} } });
+    if (body.action === 'upsert') upserts++;
+    return route.fulfill({ json: { ...body.payload } });
+  });
+
+  await reloadApp(page);
+  await page.waitForSelector('text=קטלוג הגלריה');
+  await openNewItemForm(page);
+  await fillItemForm(page, { name: 'נשמר בזמן שההתחברות פגה' });
+  await saveItemForm(page);
+
+  const banner = page.locator('.auth-banner');
+  await expect(banner).toContainText('פג תוקף ההתחברות', { timeout: 3000 });
+  const pending = await getPendingChanges(page);
+  expect(pending).toHaveLength(1);
+  expect(pending[0].attempts || 0).toBe(0); // not counted as a push failure
+  await expect(page.locator('.chip-problem')).toHaveCount(0);
+
+  signInValid = true;
+  await banner.locator('button').click();
+  await page.fill('input[type=email]', 'office@example.com');
+  await page.fill('input[type=password]', 'correct-password');
+  await page.press('input[type=password]', 'Enter');
+  await page.waitForSelector('text=קטלוג הגלריה');
+
+  await expect.poll(() => upserts, { timeout: 5000 }).toBe(1);
+  await expect.poll(async () => (await getPendingChanges(page)).length, { timeout: 5000 }).toBe(0);
+  await expect(page.locator('.auth-banner')).toHaveCount(0);
+  const items = await getItems(page);
+  expect(items.map((it) => it.name)).toContain('נשמר בזמן שההתחברות פגה');
+});

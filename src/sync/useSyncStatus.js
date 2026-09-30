@@ -15,6 +15,7 @@ export function useSyncStatus() {
   const [lastSyncedAt, setLastSyncedAt] = useState(null);
   const [syncProblem, setSyncProblem] = useState(false);
   const [stale, setStale] = useState(false);
+  const [authExpired, setAuthExpired] = useState(false);
   const inFlightRef = useRef(false);
   const rerunRef = useRef(false);
   const tRef = useRef(t);
@@ -41,6 +42,11 @@ export function useSyncStatus() {
         if (result.pushed > 0) {
           showToast(tRef.current('sync.synced'), { background: true });
         }
+        if (result.reason === 'auth') {
+          setAuthExpired(true);
+          break; // every further attempt would be rejected too, until the user signs in again
+        }
+        setAuthExpired(false);
         if (result.ok) {
           setLastSyncedAt(new Date());
           setStale(false);
@@ -81,6 +87,7 @@ export function useSyncStatus() {
     pendingCount: pendingCount || 0,
     syncProblem,
     stale,
+    authExpired,
     refresh: runSync,
   };
 }
