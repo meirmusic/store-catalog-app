@@ -50,7 +50,7 @@ export function ItemsProvider({ children }) {
     await db.pendingChanges.add({ row_id, op, payload: payload ?? null, createdAt: Date.now(), attempts: 0 });
   }
 
-  async function saveItem(fields, existingRowId) {
+  async function saveItem(fields, existingRowId, { discardPendingPhoto = false } = {}) {
     const row_id = existingRowId || uid();
     const now = new Date().toISOString();
     // One transaction so a concurrent pull (which skips items with queued
@@ -58,13 +58,18 @@ export function ItemsProvider({ children }) {
     // queue entry.
     await db.transaction('rw', db.items, db.pendingChanges, async () => {
       const existing = existingRowId ? await db.items.get(existingRowId) : null;
-      await db.items.put({
+      const next = {
         ...(existing || { row_id, is_deleted: false }),
         ...fields,
         row_id,
         last_modified_by: member,
         last_modified_at: now,
-      });
+      };
+      if (discardPendingPhoto) {
+        delete next.pending_image;
+        await db.pendingChanges.where('row_id').equals(row_id).and((c) => c.op === 'uploadImage').delete();
+      }
+      await db.items.put(next);
       await enqueue(row_id, 'upsert');
     });
     requestSync();
@@ -76,8 +81,14 @@ export function ItemsProvider({ children }) {
   // Drive (see api/client.js uploadImage) and get back a real, small,
   // shareable URL instead of shipping the raw image bytes through the
   // Sheet's image_url column.
+  // Until the upload succeeds, the photo is also kept on the item as a
+  // local-only `pending_image` so the card and form show it right away
+  // (SPEC.md section 10). Never sent with the item - see syncEngine pushOne.
   async function queueImageUpload(row_id, dataUrl) {
-    await enqueue(row_id, 'uploadImage', { image: dataUrl });
+    await db.transaction('rw', db.items, db.pendingChanges, async () => {
+      await enqueue(row_id, 'uploadImage', { image: dataUrl });
+      await db.items.update(row_id, { pending_image: dataUrl });
+    });
     requestSync();
   }
 

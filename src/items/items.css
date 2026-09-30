@@ -305,3 +305,28 @@ select:hover, .btn:hover { border-color: var(--accent); }
 
 .discard-confirm .confirm-actions { flex-direction: column; }
 .discard-confirm .confirm-actions button.primary { background: var(--accent); border-color: var(--accent); color: var(--wall); }
+
+.image-field { display: flex; gap: 12px; align-items: flex-start; }
+.image-preview {
+  position: relative; width: 76px; height: 96px; flex: 0 0 auto;
+  border-radius: 8px; overflow: hidden; background: var(--stone); border: 1px solid var(--line);
+  display: flex; align-items: center; justify-content: center;
+}
+.image-preview img { width: 100%; height: 100%; object-fit: cover; }
+.image-processing {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; text-align: center;
+  padding: 4px; font-size: .72rem; font-weight: 600; color: var(--ink); background: color-mix(in srgb, var(--wall) 82%, transparent);
+}
+.pending-badge {
+  position: absolute; inset-inline: 4px; bottom: 4px; padding: 2px 4px; border-radius: 6px;
+  font-size: .66rem; font-weight: 700; text-align: center; line-height: 1.2;
+  color: var(--ink); background: color-mix(in srgb, var(--wall) 88%, transparent);
+}
+.image-controls { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.image-label { font-size: .8rem; color: var(--ink-dim); }
+.image-buttons { display: flex; flex-wrap: wrap; gap: 6px; }
+.image-buttons label.btn { cursor: pointer; }
+.image-buttons input:disabled + label { opacity: .5; pointer-events: none; }
+.image-buttons input:focus-visible + label { outline: 2px solid var(--accent); outline-offset: 2px; }
+.image-error { color: var(--sold); font-size: .85rem; margin: 0; }
+.thumb .pending-badge { font-size: .7rem; }

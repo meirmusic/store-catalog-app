@@ -9,10 +9,8 @@ import { defineConfig, devices } from '@playwright/test';
 // Set directly on process.env (not via webServer.env below) so it's
 // guaranteed to reach the spawned `npm run dev` regardless of Vite's own
 // .env-file loading precedence, and so the suite works the same whether or
-// not a developer's machine happens to have a real .env.local. The actual
-// value never matters - every test that depends on it matches the URL
-// generically (see tests/helpers/app.js's APPS_SCRIPT_URL_PATTERN) and
-// mocks every request with page.route(), so nothing ever really reaches it.
+// not a developer's machine happens to have a real .env.local. Tests mock
+// exactly this URL with page.route(), so nothing ever really reaches it.
 if (!process.env.VITE_APPS_SCRIPT_URL) {
   process.env.VITE_APPS_SCRIPT_URL = 'https://mock-apps-script.test/exec';
 }
@@ -63,7 +61,12 @@ export default defineConfig({
   webServer: {
     command: 'npm run dev',
     url: 'http://localhost:5173',
-    reuseExistingServer: !process.env.CI,
+    // Never reuse an already-running dev server: one started by hand may
+    // carry the REAL Apps Script URL from .env.local, which the tests' mocks
+    // (keyed on the mock URL above) wouldn't match - saves made by tests
+    // would then reach the production backend. A busy port fails loudly
+    // instead.
+    reuseExistingServer: false,
     timeout: 30_000,
   },
 });

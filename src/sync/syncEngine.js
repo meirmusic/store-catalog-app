@@ -34,20 +34,18 @@ async function pushOne(change) {
   if (change.op === 'upsert') {
     const item = await db.items.get(change.row_id);
     if (item) {
-      // The server is authoritative for last_modified_at/last_modified_by
-      // (see SPEC.md section 6, conflict resolution) - adopt whatever it
-      // echoes back instead of keeping the client's own guessed values.
-      // Deliberately narrow: do NOT adopt the rest of the echoed row
-      // (image_url in particular) - a brand-new item's upsert always
-      // carries image_url: null (the real photo goes out separately as
-      // its own 'uploadImage' change - see ItemForm's isNewPhoto split),
-      // so blanket-adopting the echo here can stomp a real Drive URL
-      // that 'uploadImage' already wrote locally, if this upsert's
-      // response lands after it (overlapping sync cycles - REG-011).
-      const result = await upsertItem(item);
+      // pending_image is local-only (a photo waiting for its own
+      // 'uploadImage') - never ship it with the row.
+      const { pending_image: _localOnly, ...toSend } = item;
+      const result = await upsertItem(toSend);
       if (result) {
-        await db.items.put({
-          ...item,
+        // The server is authoritative for last_modified_at/last_modified_by
+        // (SPEC.md section 6) - adopt exactly those, nothing else: a new
+        // item's upsert echoes image_url empty, which must not stomp a
+        // Drive URL 'uploadImage' already wrote (REG-011). A field-level
+        // update, not a put of the copy read above, so anything written
+        // to the item meanwhile (e.g. a just-queued pending_image) stays.
+        await db.items.update(change.row_id, {
           last_modified_at: result.last_modified_at,
           last_modified_by: result.last_modified_by,
         });
@@ -60,8 +58,15 @@ async function pushOne(change) {
   } else if (change.op === 'uploadImage') {
     const result = await uploadImage(change.row_id, change.payload.image);
     if (result && result.image_url) {
-      const item = await db.items.get(change.row_id);
-      if (item) await db.items.put({ ...item, image_url: result.image_url });
+      await db.transaction('rw', db.items, async () => {
+        const item = await db.items.get(change.row_id);
+        if (!item) return;
+        const updates = { image_url: result.image_url };
+        // Stop showing it as pending - unless a newer photo was picked
+        // meanwhile, which stays pending until its own upload lands.
+        if (item.pending_image === change.payload.image) updates.pending_image = undefined;
+        await db.items.update(change.row_id, updates);
+      });
     }
   }
 }
@@ -74,7 +79,17 @@ export async function pushPending() {
   let pushed = 0;
   for (const change of pending) {
     try {
-      await withQuickRetry(() => pushOne(change));
+      // The list above is a snapshot: a change can be cancelled while this
+      // cycle runs (e.g. removing a photo cancels its queued upload), so
+      // check it's still queued right before each attempt, retry included -
+      // otherwise the cancelled upload would still go out and bring the
+      // removed photo back.
+      const sent = await withQuickRetry(async () => {
+        if (!(await db.pendingChanges.get(change.id))) return false;
+        await pushOne(change);
+        return true;
+      });
+      if (!sent) continue;
       await db.pendingChanges.delete(change.id);
       pushed++;
     } catch (err) {

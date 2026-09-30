@@ -22,6 +22,17 @@ export async function reloadApp(page) {
   await page.reload(NAV_OPTS);
 }
 
+export async function reloadAndWait(page) {
+  await reloadApp(page);
+  await page.waitForSelector('text=קטלוג הגלריה');
+}
+
+// The header's manual refresh (⟳) - by its exact title, since several header
+// icon buttons carry a title.
+export async function clickRefresh(page) {
+  await page.click('button[title="רענון ידני"]');
+}
+
 // Two gates now stand before the main app (task #28 v2): the shared office
 // Google account (real access control) and the "who are you" team-member
 // picker (attribution only). Neither can be driven for real here - Google's
@@ -33,22 +44,24 @@ export async function reloadApp(page) {
 // src/identity/TeamMemberContext.jsx). `name` doubles as the team member
 // (attribution) and the Google identity's display name; `email` only
 // matters for tests that assert on the signed-in Google account itself.
-export async function pickIdentity(page, name = DEFAULT_USER, email = DEFAULT_EMAIL) {
+// `googleName` lets a test give the shared Google account a different name
+// from the team member, to tell the two apart.
+export async function pickIdentity(page, name = DEFAULT_USER, email = DEFAULT_EMAIL, googleName = name) {
   await blockGoogleFonts(page);
   await page.addInitScript(
-    ({ name, email }) => {
+    ({ name, email, googleName }) => {
       localStorage.setItem(
         'gallery_google_identity',
         JSON.stringify({
           idToken: 'test-id-token',
           email,
-          name,
+          name: googleName,
           exp: Math.floor(Date.now() / 1000) + 3600,
         }),
       );
       localStorage.setItem('gallery_team_member', name);
     },
-    { name, email },
+    { name, email, googleName },
   );
   await page.goto('/', NAV_OPTS);
   await page.waitForSelector('text=קטלוג הגלריה');
@@ -132,6 +145,12 @@ export async function fillItemForm(page, fields) {
   if (fields.price !== undefined) {
     const priceInput = await page.$('#item-overlay input[type=number]');
     if (priceInput) await priceInput.fill(String(fields.price));
+  }
+  if (fields.serial !== undefined) {
+    await page.locator('#item-overlay .field:has-text("מספר סידורי") input').fill(fields.serial);
+  }
+  if (fields.notes !== undefined) {
+    await page.fill('#item-overlay textarea', fields.notes);
   }
   if (fields.sold) {
     await page.click('#item-overlay button:has-text("נמכר")');

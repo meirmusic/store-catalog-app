@@ -1,16 +1,19 @@
 import { useState } from 'react';
 import { useI18n } from '../i18n/I18nContext.jsx';
 import ImageLightbox from './ImageLightbox.jsx';
+import { displayImage, sizedImageUrl, THUMB_IMAGE_WIDTH, FULL_IMAGE_WIDTH } from './imageUrl.js';
 
 export default function ItemCard({ item, onClick }) {
   const { t } = useI18n();
   const sold = item.availability_status === 'sold';
   const [zoomed, setZoomed] = useState(false);
+  const photo = displayImage(item);
+  const isPending = Boolean(item.pending_image);
 
   return (
     <article className={`card${sold ? ' sold' : ''}`} onClick={onClick}>
       <div className="thumb">
-        {item.image_url ? (
+        {photo ? (
           <>
             {/* referrerPolicy="no-referrer" (REG-015, real user report): a
                 photo that loaded fine when opened directly in its own tab
@@ -18,7 +21,8 @@ export default function ItemCard({ item, onClick }) {
                 extensions specifically block third-party embedded images
                 that carry a referrer back to the embedding page. Sending
                 none removes that as a reason to block it. */}
-            <img src={item.image_url} alt={item.name} loading="lazy" referrerPolicy="no-referrer" />
+            <img src={isPending ? photo : sizedImageUrl(photo, THUMB_IMAGE_WIDTH)} alt={item.name} loading="lazy" referrerPolicy="no-referrer" />
+            {isPending && <span className="pending-badge">{t('image.pendingUpload')}</span>}
             {/* A dedicated zoom control, not the whole thumbnail, so
                 clicking the photo (a large part of the card) still opens
                 the edit form like the rest of the card does - only this
@@ -38,7 +42,13 @@ export default function ItemCard({ item, onClick }) {
         )}
         {sold && <div className="ribbon">{t('filters.sold')}</div>}
       </div>
-      {zoomed && <ImageLightbox src={item.image_url} alt={item.name} onClose={() => setZoomed(false)} />}
+      {zoomed && (
+        <ImageLightbox
+          src={isPending ? photo : sizedImageUrl(photo, FULL_IMAGE_WIDTH)}
+          alt={item.name}
+          onClose={() => setZoomed(false)}
+        />
+      )}
       <div className="body">
         <div className="name">{item.name}</div>
         <div className="meta">

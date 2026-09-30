@@ -91,7 +91,11 @@ export default function ItemForm({ item, onClose, onRequestDelete, onSaved }) {
   const [serial, setSerial] = useState(item?.serial_number || '');
   const [notes, setNotes] = useState(item?.notes || '');
   const [availability, setAvailability] = useState(item?.availability_status || 'available');
-  const [imageUrl, setImageUrl] = useState(item?.image_url || null);
+  // A saved photo still waiting to upload is what the item shows (SPEC.md
+  // section 10), so the form starts from it too.
+  const pendingPhoto = item?.pending_image || null;
+  const [imageUrl, setImageUrl] = useState(pendingPhoto || item?.image_url || null);
+  const [imageBusy, setImageBusy] = useState(false);
   const [error, setError] = useState('');
 
   // SPEC.md section 9: closing with unsaved edits asks first. Compared as
@@ -136,7 +140,7 @@ export default function ItemForm({ item, onClose, onRequestDelete, onSaved }) {
     // ACT-04 (UI_STANDARD_GAP_ANALYSIS.md): lock the button for the
     // duration of the save so a fast double-click/double-tap can't queue
     // the item twice.
-    if (saving) return;
+    if (saving || imageBusy) return;
     setSaving(true);
     try {
       // Test-only hook (see tests/e2e/crud.spec.js TC-ACT-005): a local
@@ -161,7 +165,8 @@ export default function ItemForm({ item, onClose, onRequestDelete, onSaved }) {
       // for). Keep the row's previous image_url untouched and upload the
       // new photo separately; the sync engine swaps in the real Drive URL
       // once the upload succeeds.
-      const isNewPhoto = imageUrl && imageUrl.startsWith('data:');
+      const isNewPhoto = Boolean(imageUrl && imageUrl.startsWith('data:') && imageUrl !== pendingPhoto);
+      const keepsPendingPhoto = Boolean(pendingPhoto && imageUrl === pendingPhoto);
       const row_id = await saveItem(
         {
           name: name.trim(),
@@ -174,9 +179,12 @@ export default function ItemForm({ item, onClose, onRequestDelete, onSaved }) {
           serial_number: serial.trim() || null,
           notes: notes.trim() || null,
           availability_status: availability,
-          image_url: isNewPhoto ? (item?.image_url || null) : imageUrl,
+          image_url: isNewPhoto || keepsPendingPhoto ? (item?.image_url || null) : imageUrl,
         },
         item?.row_id,
+        // Removing a photo that was still waiting to upload also cancels that
+        // upload - otherwise it would bring the photo back once it finished.
+        { discardPendingPhoto: Boolean(pendingPhoto && !imageUrl) },
       );
       if (isNewPhoto) await queueImageUpload(row_id, imageUrl);
       // ACT-03/MSG-06 (UI_STANDARD_GAP_ANALYSIS.md): local save is what
@@ -212,7 +220,12 @@ export default function ItemForm({ item, onClose, onRequestDelete, onSaved }) {
               in handleSubmit, shown as the app's own message. */}
           <form onSubmit={handleSubmit} noValidate>
             <div className="field">
-              <ImageField value={imageUrl} onChange={setImageUrl} />
+              <ImageField
+                value={imageUrl}
+                onChange={setImageUrl}
+                pending={Boolean(pendingPhoto && imageUrl === pendingPhoto)}
+                onBusyChange={setImageBusy}
+              />
             </div>
 
             <div className="field">
@@ -290,7 +303,7 @@ export default function ItemForm({ item, onClose, onRequestDelete, onSaved }) {
                 {/* Cancel stays available during a save (SPEC.md section 9) -
                     it's the way out if a save is stuck. */}
                 <button type="button" className="btn" onClick={requestClose}>{t('actions.cancel')}</button>
-                <button type="submit" className="btn primary" disabled={saving}>
+                <button type="submit" className="btn primary" disabled={saving || imageBusy}>
                   {saving ? t('actions.saving') : t('actions.save')}
                 </button>
               </div>
