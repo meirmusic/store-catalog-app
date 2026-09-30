@@ -98,11 +98,16 @@ function doPost(e) {
   // below - each validates itself instead (matching email, a
   // short-lived one-time code sent to LOGIN_EMAIL's own inbox). Neither
   // touches the Sheet, so neither needs the write lock either.
-  if (body.action === 'requestPasswordReset') {
-    return jsonResponse(handleRequestPasswordReset(body.payload));
-  }
-  if (body.action === 'resetPassword') {
-    return jsonResponse(handleResetPassword(body.payload));
+  // Wrapped so a failure (e.g. MailApp not yet authorized) comes back as a
+  // JSON error the app can show, not Apps Script's HTML error page.
+  if (body.action === 'requestPasswordReset' || body.action === 'resetPassword') {
+    try {
+      return jsonResponse(body.action === 'requestPasswordReset'
+        ? handleRequestPasswordReset(body.payload)
+        : handleResetPassword(body.payload));
+    } catch (err) {
+      return jsonResponse({ error: String(err) });
+    }
   }
   if (!resolveAuthenticatedEmail(body)) {
     return jsonResponse({ error: 'forbidden' });
@@ -285,15 +290,26 @@ function handleRequestPasswordReset(payload) {
     return { ok: true }; // already sent one very recently - don't spam the inbox
   }
   var code = generateResetCode();
-  props.setProperty('PW_RESET_CODE', code);
-  props.setProperty('PW_RESET_EXPIRES', String(now + PW_RESET_CODE_TTL_MS));
-  props.setProperty('PW_RESET_LAST_SENT', String(now));
+  // Send first, and only then record the code and the "last sent" time -
+  // otherwise a failed send (e.g. MailApp not authorized yet) would make
+  // every retry within the next minute report success without sending.
   MailApp.sendEmail(
     LOGIN_EMAIL,
     'קוד לאיפוס סיסמת קטלוג הגלריה',
-    'קוד האיפוס שלך: ' + code + '\nהקוד תקף ל-15 דקות. אם לא ביקשת זאת, אפשר להתעלם מהמייל.',
+    'קוד האיפוס שלך: ' + code + '\nהקוד תקף ל-15 דקות. אם לא ביקשת זאת, אפשר להתעלם מהמייל.'
   );
+  props.setProperty('PW_RESET_CODE', code);
+  props.setProperty('PW_RESET_EXPIRES', String(now + PW_RESET_CODE_TTL_MS));
+  props.setProperty('PW_RESET_LAST_SENT', String(now));
   return { ok: true };
+}
+
+// One-off: run this from the Apps Script editor (select it next to Run)
+// after deploying, to grant the "send email" permission the forgot-password
+// flow needs. It sends nothing - just checks today's remaining mail quota,
+// which requires the same permission.
+function authorizeMail() {
+  return 'mail quota left today: ' + MailApp.getRemainingDailyQuota();
 }
 
 function generateResetCode() {

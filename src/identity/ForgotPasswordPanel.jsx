@@ -43,12 +43,16 @@ export default function ForgotPasswordPanel({ defaultEmail, onDone, onCancel }) 
   async function handleRequestCode(e) {
     e.preventDefault();
     setError('');
+    if (!email.trim()) {
+      setError(t('identity.fieldsRequired'));
+      return;
+    }
     setRequesting(true);
     try {
       await requestPasswordReset(email.trim());
       setCodeRequested(true);
     } catch {
-      setError(t('identity.signInFailed'));
+      setError(t('identity.sendCodeFailed'));
     } finally {
       setRequesting(false);
     }
@@ -57,6 +61,10 @@ export default function ForgotPasswordPanel({ defaultEmail, onDone, onCancel }) 
   async function handleReset(e) {
     e.preventDefault();
     setError('');
+    if (!code.trim() || !newPassword || !confirmPassword) {
+      setError(t('identity.fieldsRequired'));
+      return;
+    }
     if (newPassword.length < 8) {
       setError(t('identity.passwordTooShort'));
       return;
@@ -69,8 +77,11 @@ export default function ForgotPasswordPanel({ defaultEmail, onDone, onCancel }) 
     try {
       await resetPassword(email.trim(), code.trim(), newPassword);
       onDone(email.trim());
-    } catch {
-      setError(t('identity.resetCodeInvalid'));
+    } catch (err) {
+      // Only a wrong/expired code is the user's to fix by requesting a new
+      // one - anything else (network, server) gets an honest generic message.
+      const codeProblem = err && (err.message === 'invalid code' || err.message === 'code expired');
+      setError(t(codeProblem ? 'identity.resetCodeInvalid' : 'identity.resetFailed'));
     } finally {
       setSubmitting(false);
     }
@@ -82,7 +93,7 @@ export default function ForgotPasswordPanel({ defaultEmail, onDone, onCancel }) 
         {t('identity.forgotSubtitle')}
       </p>
 
-      <form onSubmit={handleRequestCode} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <form onSubmit={handleRequestCode} noValidate style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         <input
           type="email"
           required
@@ -105,7 +116,7 @@ export default function ForgotPasswordPanel({ defaultEmail, onDone, onCancel }) 
           <p style={{ color: 'var(--ink-dim)', fontSize: '.85rem', margin: '14px 0 10px' }}>
             {t('identity.codeSentInfo')}
           </p>
-          <form onSubmit={handleReset} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <form onSubmit={handleReset} noValidate style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             <input
               type="text"
               inputMode="numeric"
