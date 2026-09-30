@@ -132,37 +132,66 @@ test('TC-CRUD-007: canceling the delete confirmation keeps the item', async ({ p
 test('TC-CRUD-008: canceling add/edit without saving writes nothing', async ({ page }) => {
   await openNewItemForm(page);
   await fillItemForm(page, { name: 'לא יישמר' });
-  // SAVE-70: there are unsaved edits, so closing asks first - confirm it.
-  let dialogMessage = null;
-  page.once('dialog', (dialog) => { dialogMessage = dialog.message(); dialog.accept(); });
-  await cancelItemForm(page);
+  // SAVE-70: there are unsaved edits, so closing asks first.
+  await page.click('#item-overlay button:has-text("ביטול")');
+  await page.click('.discard-confirm button:has-text("יציאה בלי שמירה")');
 
-  expect(dialogMessage).toBe('יש שינויים שלא נשמרו. לצאת בלי לשמור?');
+  await expect(page.locator('#item-overlay')).toHaveCount(0);
   expect(await getItems(page)).toHaveLength(0);
   expect(await getPendingChanges(page)).toHaveLength(0);
 });
 
-// SAVE-70 (SPEC.md section 9): declining the "unsaved changes" question
-// keeps the form open with everything typed so far; clicking outside the
-// form asks the same question; a form with no edits closes with no question.
-test('TC-CRUD-010: closing a form with unsaved edits asks first, and declining keeps the edits', async ({ page }) => {
+// SAVE-70 (SPEC.md section 9): an in-app dialog (not the browser's own)
+// with three buttons that each say exactly what they do.
+test('TC-CRUD-010: closing with unsaved edits asks first; "back to editing", Esc and clicking outside all keep the edits', async ({ page }) => {
   await openNewItemForm(page);
   await fillItemForm(page, { name: 'עריכה שלא נשמרה' });
+  const nameInput = page.locator('#item-overlay input[type=text] >> nth=0');
+  const dialog = page.locator('.discard-confirm');
 
-  let asked = false;
-  page.once('dialog', (dialog) => { asked = true; dialog.dismiss(); });
-  await page.mouse.click(5, 5); // outside the modal, on the backdrop
-  await expect.poll(() => asked).toBe(true);
-  await expect(page.locator('#item-overlay')).toBeVisible();
-  await expect(page.locator('#item-overlay input[type=text] >> nth=0')).toHaveValue('עריכה שלא נשמרה');
+  await page.mouse.click(5, 5); // outside the form, on its backdrop
+  await expect(dialog).toContainText('יש שינויים שלא נשמרו');
+  await dialog.locator('button:has-text("חזרה לעריכה")').click();
+  await expect(dialog).toHaveCount(0);
+  await expect(nameInput).toHaveValue('עריכה שלא נשמרה');
+
+  await page.click('#item-overlay button:has-text("ביטול")');
+  await expect(dialog).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(dialog).toHaveCount(0);
+  await expect(nameInput).toHaveValue('עריכה שלא נשמרה');
+  expect(await getItems(page)).toHaveLength(0);
 });
 
 test('TC-CRUD-011: a form with no edits closes without asking', async ({ page }) => {
-  let dialogShown = false;
-  page.on('dialog', (dialog) => { dialogShown = true; dialog.dismiss(); });
   await openNewItemForm(page);
   await cancelItemForm(page);
-  expect(dialogShown).toBe(false);
+  await expect(page.locator('.discard-confirm')).toHaveCount(0);
+});
+
+test('TC-CRUD-012: "save" in the unsaved-changes dialog saves and closes, like the form\'s own save', async ({ page }) => {
+  await openNewItemForm(page);
+  await fillItemForm(page, { name: 'נשמר מהחלון' });
+  await page.click('#item-overlay button:has-text("ביטול")');
+  await page.click('.discard-confirm button:has-text("שמירה")');
+
+  await page.waitForSelector('#item-overlay', { state: 'detached' });
+  expect((await getItems(page)).map((it) => it.name)).toContain('נשמר מהחלון');
+});
+
+test('TC-CRUD-013: "save" in the dialog runs the same checks - an empty name shows the error in the form', async ({ page }) => {
+  await seedItems(page, [{ row_id: 'NAMED', name: 'שם קיים' }]);
+  await reloadApp(page);
+  await page.waitForSelector('text=קטלוג הגלריה');
+  await page.click('.card');
+  await page.waitForSelector('#item-overlay');
+  await fillItemForm(page, { name: '' });
+  await page.click('#item-overlay button:has-text("ביטול")');
+  await page.click('.discard-confirm button:has-text("שמירה")');
+
+  await expect(page.locator('.discard-confirm')).toHaveCount(0);
+  await expect(page.locator('#item-overlay')).toContainText('יש להזין שם ליצירה');
+  expect((await getItems(page))[0].name).toBe('שם קיים');
 });
 
 // UI_STANDARD_GAP_ANALYSIS.md ACT-03/MSG-06: a successful save shows a

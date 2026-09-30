@@ -4,6 +4,7 @@ import { useItems } from './ItemsContext.jsx';
 import { useToast } from '../toast/ToastContext.jsx';
 import { useBodyScrollLock } from '../hooks/useBodyScrollLock.js';
 import ImageField from './ImageField.jsx';
+import DiscardConfirm from './DiscardConfirm.jsx';
 
 function ConfigSelect({ list, value, onChange, config, addConfigValue, label }) {
   const { t } = useI18n();
@@ -99,10 +100,20 @@ export default function ItemForm({ item, onClose, onRequestDelete, onSaved }) {
   const initialValuesRef = useRef(currentValues.map(String));
   const isDirty = currentValues.some((v, i) => String(v) !== initialValuesRef.current[i]);
 
+  const [confirmingDiscard, setConfirmingDiscard] = useState(false);
+
   function requestClose() {
     // Mid-save the edits are already on their way to being stored.
-    if (isDirty && !saving && !window.confirm(t('form.discardConfirm'))) return;
+    if (isDirty && !saving) {
+      setConfirmingDiscard(true);
+      return;
+    }
     onClose();
+  }
+
+  function saveFromDiscardConfirm() {
+    setConfirmingDiscard(false);
+    handleSubmit({ preventDefault: () => {} }); // same path as the form's own save, validation included
   }
 
   function generateSerial() {
@@ -186,110 +197,119 @@ export default function ItemForm({ item, onClose, onRequestDelete, onSaved }) {
   }
 
   return (
-    <div className="overlay" id="item-overlay" onMouseDown={(e) => e.target === e.currentTarget && requestClose()}>
-      <div className="modal">
-        <h2 className="serif">{isNew ? t('actions.newItem').replace('+ ', '') : item.name}</h2>
-        {!isNew && (
-          <p className="sub">
-            {item.last_modified_by} · {item.last_modified_at ? new Date(item.last_modified_at).toLocaleString() : ''}
-          </p>
-        )}
-        {/* noValidate: the browser must never block a save on its own -
-            its tooltip shows in the browser's language, often out of view,
-            and reads as "nothing happened" (REG-018). All checks are ours,
-            in handleSubmit, shown as the app's own message. */}
-        <form onSubmit={handleSubmit} noValidate>
-          <div className="field">
-            <ImageField value={imageUrl} onChange={setImageUrl} />
-          </div>
-
-          <div className="field">
-            <label>{t('fields.name')}</label>
-            {/* No native `required` here on purpose: the browser's own
-                validation tooltip would pre-empt this submit handler and
-                show in the browser's language, not the app's chosen one
-                (see TEST_PLAN.md / task #15) - errors.nameRequired below
-                is what users actually see, in he/en/da. */}
-            <input type="text" value={name} onChange={(e) => setName(e.target.value)} />
-          </div>
-
-          <div className="row2">
+    <>
+      <div className="overlay" id="item-overlay" onMouseDown={(e) => e.target === e.currentTarget && requestClose()}>
+        <div className="modal">
+          <h2 className="serif">{isNew ? t('actions.newItem').replace('+ ', '') : item.name}</h2>
+          {!isNew && (
+            <p className="sub">
+              {item.last_modified_by} · {item.last_modified_at ? new Date(item.last_modified_at).toLocaleString() : ''}
+            </p>
+          )}
+          {/* noValidate: the browser must never block a save on its own -
+              its tooltip shows in the browser's language, often out of view,
+              and reads as "nothing happened" (REG-018). All checks are ours,
+              in handleSubmit, shown as the app's own message. */}
+          <form onSubmit={handleSubmit} noValidate>
             <div className="field">
-              <label>{t('fields.size')}</label>
-              <input type="text" value={size} onChange={(e) => setSize(e.target.value)} placeholder="91X132" />
+              <ImageField value={imageUrl} onChange={setImageUrl} />
             </div>
+
             <div className="field">
-              <label>{t('fields.sku')}</label>
-              <input type="text" value={sku} onChange={(e) => setSku(e.target.value)} />
+              <label>{t('fields.name')}</label>
+              {/* No native `required` here on purpose: the browser's own
+                  validation tooltip would pre-empt this submit handler and
+                  show in the browser's language, not the app's chosen one
+                  (see TEST_PLAN.md / task #15) - errors.nameRequired below
+                  is what users actually see, in he/en/da. */}
+              <input type="text" value={name} onChange={(e) => setName(e.target.value)} />
             </div>
-          </div>
 
-          <div className="row2">
-            <ConfigSelect list="type" label={t('filters.type')} value={type} onChange={setType} config={config} addConfigValue={addConfigValue} />
-            <ConfigSelect list="location" label={t('filters.location')} value={location} onChange={setLocation} config={config} addConfigValue={addConfigValue} />
-          </div>
+            <div className="row2">
+              <div className="field">
+                <label>{t('fields.size')}</label>
+                <input type="text" value={size} onChange={(e) => setSize(e.target.value)} placeholder="91X132" />
+              </div>
+              <div className="field">
+                <label>{t('fields.sku')}</label>
+                <input type="text" value={sku} onChange={(e) => setSku(e.target.value)} />
+              </div>
+            </div>
 
-          <div className="row2">
-            <ConfigSelect list="physical_status" label={t('fields.status')} value={status} onChange={setStatus} config={config} addConfigValue={addConfigValue} />
+            <div className="row2">
+              <ConfigSelect list="type" label={t('filters.type')} value={type} onChange={setType} config={config} addConfigValue={addConfigValue} />
+              <ConfigSelect list="location" label={t('filters.location')} value={location} onChange={setLocation} config={config} addConfigValue={addConfigValue} />
+            </div>
+
+            <div className="row2">
+              <ConfigSelect list="physical_status" label={t('fields.status')} value={status} onChange={setStatus} config={config} addConfigValue={addConfigValue} />
+              <div className="field">
+                <label>{t('fields.price')}</label>
+                <input type="number" min="0" step="any" inputMode="decimal" value={price} onChange={(e) => setPrice(e.target.value)} />
+              </div>
+            </div>
+
             <div className="field">
-              <label>{t('fields.price')}</label>
-              <input type="number" min="0" step="any" inputMode="decimal" value={price} onChange={(e) => setPrice(e.target.value)} />
+              <label>{t('fields.serialNumber')}</label>
+              <div style={{ display: 'flex', gap: 6 }}>
+                <input type="text" value={serial} onChange={(e) => setSerial(e.target.value)} style={{ flex: 1 }} />
+                <button type="button" className="btn" onClick={generateSerial}>{t('actions.generateSerial')}</button>
+              </div>
             </div>
-          </div>
 
-          <div className="field">
-            <label>{t('fields.serialNumber')}</label>
-            <div style={{ display: 'flex', gap: 6 }}>
-              <input type="text" value={serial} onChange={(e) => setSerial(e.target.value)} style={{ flex: 1 }} />
-              <button type="button" className="btn" onClick={generateSerial}>{t('actions.generateSerial')}</button>
+            <div className="field">
+              <label>{t('filters.availability')}</label>
+              <div className="avail-toggle">
+                <button
+                  type="button"
+                  className={availability === 'available' ? 'on available' : ''}
+                  onClick={() => setAvailability('available')}
+                >
+                  {t('filters.available')}
+                </button>
+                <button
+                  type="button"
+                  className={availability === 'sold' ? 'on sold' : ''}
+                  onClick={() => setAvailability('sold')}
+                >
+                  {t('filters.sold')}
+                </button>
+              </div>
             </div>
-          </div>
 
-          <div className="field">
-            <label>{t('filters.availability')}</label>
-            <div className="avail-toggle">
-              <button
-                type="button"
-                className={availability === 'available' ? 'on available' : ''}
-                onClick={() => setAvailability('available')}
-              >
-                {t('filters.available')}
-              </button>
-              <button
-                type="button"
-                className={availability === 'sold' ? 'on sold' : ''}
-                onClick={() => setAvailability('sold')}
-              >
-                {t('filters.sold')}
-              </button>
+            <div className="field">
+              <label>{t('fields.notes')}</label>
+              <textarea value={notes} onChange={(e) => setNotes(e.target.value)} />
             </div>
-          </div>
 
-          <div className="field">
-            <label>{t('fields.notes')}</label>
-            <textarea value={notes} onChange={(e) => setNotes(e.target.value)} />
-          </div>
+            {error && <p style={{ color: 'var(--sold)', fontSize: '.85rem' }}>{error}</p>}
+            {saveDelayed && <p className="save-delayed" role="status">{t('sync.saveDelayed')}</p>}
 
-          {error && <p style={{ color: 'var(--sold)', fontSize: '.85rem' }}>{error}</p>}
-          {saveDelayed && <p className="save-delayed" role="status">{t('sync.saveDelayed')}</p>}
-
-          <div className="modal-actions">
-            <div className="left-actions">
-              {/* Cancel stays available during a save (SPEC.md section 9) -
-                  it's the way out if a save is stuck. */}
-              <button type="button" className="btn" onClick={requestClose}>{t('actions.cancel')}</button>
-              <button type="submit" className="btn primary" disabled={saving}>
-                {saving ? t('actions.saving') : t('actions.save')}
-              </button>
+            <div className="modal-actions">
+              <div className="left-actions">
+                {/* Cancel stays available during a save (SPEC.md section 9) -
+                    it's the way out if a save is stuck. */}
+                <button type="button" className="btn" onClick={requestClose}>{t('actions.cancel')}</button>
+                <button type="submit" className="btn primary" disabled={saving}>
+                  {saving ? t('actions.saving') : t('actions.save')}
+                </button>
+              </div>
+              {!isNew && (
+                <button type="button" className="danger-btn" onClick={() => onRequestDelete(item)}>
+                  {t('actions.deleteItem')}
+                </button>
+              )}
             </div>
-            {!isNew && (
-              <button type="button" className="danger-btn" onClick={() => onRequestDelete(item)}>
-                {t('actions.deleteItem')}
-              </button>
-            )}
-          </div>
-        </form>
+          </form>
+        </div>
       </div>
-    </div>
+      {confirmingDiscard && (
+        <DiscardConfirm
+          onSave={saveFromDiscardConfirm}
+          onDiscard={onClose}
+          onKeepEditing={() => setConfirmingDiscard(false)}
+        />
+      )}
+    </>
   );
 }

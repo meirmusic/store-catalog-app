@@ -302,3 +302,6 @@ select:hover, .btn:hover { border-color: var(--accent); }
   background: var(--wall);
   font-size: .9rem;
 }
+
+.discard-confirm .confirm-actions { flex-direction: column; }
+.discard-confirm .confirm-actions button.primary { background: var(--accent); border-color: var(--accent); color: var(--wall); }
