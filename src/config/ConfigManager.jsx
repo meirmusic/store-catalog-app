@@ -4,9 +4,9 @@ import { useItems } from '../items/ItemsContext.jsx';
 import { useToast } from '../toast/ToastContext.jsx';
 import { useBodyScrollLock } from '../hooks/useBodyScrollLock.js';
 
-// SPEC.md CFG-04 (stage 2): a centralized view of every existing value in
-// each config-driven list, with the ability to add new ones - lists stay
-// add-only (see CFG-01), so there's deliberately no delete control here.
+// SPEC.md CFG-04 (stage 2) and sections 13/15: every existing value in each
+// shared list - including the team list - with the ability to add new ones.
+// Lists stay add-only (CFG-01), so there's deliberately no delete control.
 function ConfigListSection({ list, label }) {
   const { t } = useI18n();
   const { config, addConfigValue } = useItems();
@@ -15,11 +15,10 @@ function ConfigListSection({ list, label }) {
   const values = config[list] || [];
 
   async function confirmAdd() {
-    if (!draft.trim()) return;
-    const added = await addConfigValue(list, draft);
-    if (added) {
+    const result = await addConfigValue(list, draft);
+    if (result) {
       setDraft('');
-      showToast(t('toast.valueAdded'));
+      showToast(t(result.added ? 'toast.valueAdded' : 'toast.valueExists'));
     }
   }
 
@@ -41,7 +40,7 @@ function ConfigListSection({ list, label }) {
           onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), confirmAdd())}
           placeholder={t('config.addPlaceholder')}
         />
-        <button type="button" className="btn" onClick={confirmAdd}>{t('actions.addValue')}</button>
+        <button type="button" className="btn" onClick={confirmAdd} disabled={!draft.trim()}>{t('actions.addValue')}</button>
       </div>
     </div>
   );
@@ -60,6 +59,7 @@ export default function ConfigManager({ onClose }) {
         <ConfigListSection list="type" label={t('filters.type')} />
         <ConfigListSection list="location" label={t('filters.location')} />
         <ConfigListSection list="physical_status" label={t('fields.status')} />
+        <ConfigListSection list="team" label={t('config.team')} />
 
         <div className="modal-actions">
           <div className="left-actions">

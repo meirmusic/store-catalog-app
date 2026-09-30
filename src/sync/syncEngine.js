@@ -52,7 +52,7 @@ async function pushOne(change) {
       }
     }
   } else if (change.op === 'softDelete') {
-    await softDeleteItem(change.row_id);
+    await softDeleteItem(change.row_id, change.payload?.last_modified_by);
   } else if (change.op === 'addConfigOption') {
     await addConfigOption(change.payload.list_name, change.payload.value);
   } else if (change.op === 'uploadImage') {
@@ -119,12 +119,36 @@ export async function pullLatest() {
     await db.transaction('rw', db.items, db.pendingChanges, async () => {
       const pendingRowIds = new Set((await db.pendingChanges.toArray()).map((c) => c.row_id));
       await db.items.bulkPut(data.items.filter((it) => !pendingRowIds.has(it.row_id)));
+      // SPEC.md section 11: the server stops returning an item once it's
+      // deleted anywhere, so an item it no longer returns was deleted on
+      // another device - remove it here too (it used to stay forever).
+      // Items with queued changes are kept (e.g. a new item not sent yet).
+      // An entirely empty answer while this device has items is treated as
+      // a server problem, not a wiped catalog, and removes nothing.
+      const localIds = await db.items.toCollection().primaryKeys();
+      if (data.items.length === 0 && localIds.length > 0) return;
+      const serverIds = new Set(data.items.map((it) => it.row_id));
+      const gone = localIds.filter((id) => !serverIds.has(id) && !pendingRowIds.has(id));
+      if (gone.length) await db.items.bulkDelete(gone);
     });
   }
   if (data.config) {
-    await db.config.bulkPut(
-      Object.entries(data.config).map(([list_name, values]) => ({ list_name, values })),
-    );
+    // A value added on this device whose addConfigOption hasn't reached the
+    // server yet must survive the pull (SPEC.md section 13) - otherwise it
+    // vanished from the list until the send finally succeeded.
+    await db.transaction('rw', db.config, db.pendingChanges, async () => {
+      const pendingValues = (await db.pendingChanges.toArray())
+        .filter((c) => c.op === 'addConfigOption' && c.payload)
+        .map((c) => c.payload);
+      const merged = { ...data.config };
+      pendingValues.forEach(({ list_name, value }) => {
+        const list = merged[list_name] || [];
+        if (!list.some((v) => String(v).toLowerCase() === String(value).toLowerCase())) {
+          merged[list_name] = [...list, value];
+        }
+      });
+      await db.config.bulkPut(Object.entries(merged).map(([list_name, values]) => ({ list_name, values })));
+    });
   }
 }
 

@@ -7,21 +7,26 @@ import ItemForm from './ItemForm.jsx';
 import DeleteConfirm from './DeleteConfirm.jsx';
 import { downloadItemsCsv } from './exportCsv.js';
 
+const UNDO_WINDOW_MS = 8000;
+
 function matchesSearch(item, q) {
-  if (!q) return true;
-  const needle = q.toLowerCase();
+  // Stray spaces (common when pasting, or from a phone keyboard) must not
+  // turn a real match into "nothing found" (SPEC.md section 12).
+  const needle = q.trim().toLowerCase();
+  if (!needle) return true;
   return (
     (item.name && item.name.toLowerCase().includes(needle)) ||
     (item.sku && String(item.sku).toLowerCase().includes(needle)) ||
+    (item.notes && String(item.notes).toLowerCase().includes(needle)) ||
     // SPEC.md section 1: serial-number search is exact-match only (unlike
-    // name/sku, which are partial/textual) - see TEST_PLAN.md SRCH-02.
-    (item.serial_number && String(item.serial_number).toLowerCase() === needle)
+    // the others, which are partial) - see TEST_PLAN.md SRCH-02.
+    (item.serial_number && String(item.serial_number).trim().toLowerCase() === needle)
   );
 }
 
 export default function ItemList() {
   const { t } = useI18n();
-  const { items, config, softDeleteItem } = useItems();
+  const { items, config, softDeleteItem, restoreItem } = useItems();
   const { showToast } = useToast();
 
   const [search, setSearch] = useState('');
@@ -63,6 +68,21 @@ export default function ItemList() {
       .filter((it) => !missingPrice || it.price == null || it.price === '')
       .sort((a, b) => (a.name || '').localeCompare(b.name || '', 'he'));
   }, [items, search, availability, locationFilter, typeFilter, statusFilter, missingSerial, missingSku, missingPrice]);
+
+  const filtersActive =
+    search.trim() !== '' || availability !== 'all' || locationFilter !== 'all' || typeFilter !== 'all' ||
+    statusFilter !== 'all' || missingSerial || missingSku || missingPrice;
+
+  function clearFilters() {
+    setSearch('');
+    setAvailability('all');
+    setLocationFilter('all');
+    setTypeFilter('all');
+    setStatusFilter('all');
+    setMissingSerial(false);
+    setMissingSku(false);
+    setMissingPrice(false);
+  }
 
   const stats = useMemo(() => {
     const tiles = [[t('stats.total'), items.length]];
@@ -147,7 +167,7 @@ export default function ItemList() {
             </select>
           </div>
           <button className="btn primary" onClick={() => setEditingItem(null)}>{t('actions.newItem')}</button>
-          <button className="btn" onClick={() => downloadItemsCsv(filtered)}>{t('actions.exportExcel')}</button>
+          <button className="btn" onClick={() => downloadItemsCsv(filtered, t)}>{t('actions.exportExcel')}</button>
           <div className="filters-row">
             <label className={`toggle-pill${missingSerial ? ' active' : ''}`}>
               <input type="checkbox" checked={missingSerial} onChange={(e) => setMissingSerial(e.target.checked)} />
@@ -165,8 +185,20 @@ export default function ItemList() {
         </div>
       </div>
 
+      {filtersActive && (
+        <div className="results-line" role="status">
+          <span>{t('list.showing')} {filtered.length} {t('list.of')} {items.length}</span>
+          <button type="button" className="btn clear-filters" onClick={clearFilters}>{t('filters.clear')}</button>
+        </div>
+      )}
+
       {filtered.length === 0 ? (
-        <div className="empty-state">{t('list.empty')}</div>
+        <div className="empty-state">
+          <p>{t('list.empty')}</p>
+          {filtersActive && (
+            <button type="button" className="btn clear-filters" onClick={clearFilters}>{t('filters.clear')}</button>
+          )}
+        </div>
       ) : (
         <div className="grid">
           {filtered.map((item) => (
@@ -189,10 +221,21 @@ export default function ItemList() {
           item={deleteTarget}
           onCancel={() => setDeleteTarget(null)}
           onConfirm={async () => {
-            await softDeleteItem(deleteTarget.row_id);
+            const deleted = deleteTarget;
+            await softDeleteItem(deleted.row_id);
             setDeleteTarget(null);
             setEditingItem(undefined);
-            showToast(t('toast.itemDeleted'));
+            // SPEC.md section 11: a mistaken delete can be undone right here.
+            showToast(t('toast.itemDeleted'), {
+              duration: UNDO_WINDOW_MS,
+              action: {
+                label: t('actions.undo'),
+                onClick: async () => {
+                  await restoreItem(deleted);
+                  showToast(t('toast.itemRestored'));
+                },
+              },
+            });
           }}
         />
       )}

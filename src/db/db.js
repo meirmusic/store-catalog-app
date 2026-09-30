@@ -1,4 +1,5 @@
 import Dexie from 'dexie';
+import { TEAM_NAMES } from '../config/seed.js';
 
 // Local cache + offline sync queue. See SPEC.md "מבנה הנתונים" and
 // "עבודה אופליין" - this is the on-device mirror of the Google Sheet,
@@ -34,14 +35,18 @@ export async function getConfigList(listName) {
   return row ? row.values : [];
 }
 
+// Returns { value, added } - `value` is the list's own spelling when an
+// equivalent value already exists (so "mixed" selects the existing "Mixed"),
+// and `added` tells a real addition from a duplicate (SPEC.md section 13).
 export async function addConfigValue(listName, rawValue) {
   const value = (rawValue || '').trim();
   if (!value) return null;
   const row = await db.config.get(listName);
   const values = row ? row.values : [];
-  const exists = values.some((v) => v.toLowerCase() === value.toLowerCase());
-  if (!exists) {
-    await db.config.put({ list_name: listName, values: [...values, value] });
-  }
-  return value;
+  // The built-in team names always belong to the team list (SPEC.md 15).
+  const known = listName === 'team' ? [...TEAM_NAMES, ...values] : values;
+  const existing = known.find((v) => String(v).toLowerCase() === value.toLowerCase());
+  if (existing !== undefined) return { value: existing, added: false };
+  await db.config.put({ list_name: listName, values: [...values, value] });
+  return { value, added: true };
 }

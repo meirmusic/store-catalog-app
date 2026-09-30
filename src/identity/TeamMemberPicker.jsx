@@ -1,9 +1,12 @@
-import { TEAM_NAMES } from '../config/seed.js';
+import { useItems } from '../items/ItemsContext.jsx';
 import { useTeamMember } from './TeamMemberContext.jsx';
 import { useI18n } from '../i18n/I18nContext.jsx';
 
 export default function TeamMemberPicker() {
   const { member, setMember } = useTeamMember();
+  // The shared team list (SPEC.md section 15): built-in names plus any
+  // added in "manage lists", sorted.
+  const { config } = useItems();
   const { t } = useI18n();
 
   if (member) return null;
@@ -39,7 +42,7 @@ export default function TeamMemberPicker() {
           {t('teamMember.subtitle')}
         </p>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, justifyContent: 'center' }}>
-          {TEAM_NAMES.map((name) => (
+          {config.team.map((name) => (
             <button
               key={name}
               type="button"

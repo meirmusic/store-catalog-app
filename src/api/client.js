@@ -47,8 +47,8 @@ export function upsertItem(item) {
   return callApi('upsert', item);
 }
 
-export function softDeleteItem(rowId) {
-  return callApi('softDelete', { row_id: rowId });
+export function softDeleteItem(rowId, lastModifiedBy) {
+  return callApi('softDelete', { row_id: rowId, last_modified_by: lastModifiedBy || '' });
 }
 
 export function addConfigOption(listName, value) {

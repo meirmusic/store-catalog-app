@@ -12,6 +12,7 @@ import { getStuckChangeLabels } from './sync/syncEngine.js'
 import ConfigManager from './config/ConfigManager.jsx'
 import { ToastProvider, useToast } from './toast/ToastContext.jsx'
 import UpdateBanner from './pwa/UpdateBanner.jsx'
+import SignOutConfirm from './identity/SignOutConfirm.jsx'
 import './items/items.css'
 
 function Header() {
@@ -20,11 +21,8 @@ function Header() {
   const { member, clearMember } = useTeamMember()
   const { isOnline, syncing, lastSyncedAt, pendingCount, syncProblem, stale, authExpired, refresh } = useSyncStatus()
   const [managingLists, setManagingLists] = useState(false)
+  const [confirmingSignOut, setConfirmingSignOut] = useState(false)
   const { showToast } = useToast()
-
-  function signOutOfSharedAccount() {
-    if (window.confirm(t('identity.signOutGoogleConfirm'))) signOut()
-  }
 
   async function explainSyncProblem() {
     const labels = await getStuckChangeLabels()
@@ -74,7 +72,7 @@ function Header() {
         ))}
         <button className={`icon-btn${syncing ? ' spin' : ''}`} onClick={refresh} title={t('actions.refresh')}>⟳</button>
         <button className="icon-btn" onClick={() => setManagingLists(true)} title={t('config.manageLists')}>⚙</button>
-        <button className="icon-btn" onClick={signOutOfSharedAccount} title={t('actions.signOutGoogle')}>🔐</button>
+        <button className="icon-btn" onClick={() => setConfirmingSignOut(true)} title={t('actions.signOutGoogle')}>🔐</button>
         <LanguageSwitcher />
         {member && (
           <span className="chip user" onClick={clearMember} title={t('actions.switchUser')}>
@@ -83,6 +81,7 @@ function Header() {
         )}
       </div>
       {managingLists && <ConfigManager onClose={() => setManagingLists(false)} />}
+      {confirmingSignOut && <SignOutConfirm onCancel={() => setConfirmingSignOut(false)} onConfirm={signOut} />}
       {/* SPEC.md section 9: signing out here keeps the local data and the
           change queue - after signing back in, queued changes go out. */}
       {authExpired && (

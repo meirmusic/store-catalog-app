@@ -6,39 +6,59 @@
 // avoids adding a third-party xlsx-writing library: the only one readily
 // installable from npm (SheetJS's `xlsx` package) currently ships with two
 // unpatched high-severity advisories (prototype pollution, ReDoS) with "no
-// fix available" on the npm registry. Those specifically affect *parsing*
-// untrusted files, which this app never does - but for a business's own
-// inventory data, a zero-dependency export with zero audit findings is the
-// safer choice when it costs nothing in capability.
+// fix available" on the npm registry. For a business's own inventory data,
+// a zero-dependency export with zero audit findings is the safer choice.
 //
-// Column order matches the Items sheet schema (see db.js) so an export from
-// the app and an export of the Google Sheet are directly comparable field
-// by field.
+// SPEC.md section 14: the export is for staff - headers in the app's
+// language, availability as "available"/"sold", a readable date, and no
+// technical columns (row_id, raw timestamps). To compare against the Sheet
+// field by field, export from the Sheet itself.
 const COLUMNS = [
-  'row_id', 'serial_number', 'sku', 'name', 'size', 'type', 'location',
-  'physical_status', 'availability_status', 'price', 'notes', 'image_url',
-  'last_modified_by', 'last_modified_at',
+  ['serial_number', 'fields.serialNumber'],
+  ['sku', 'fields.sku'],
+  ['name', 'fields.name'],
+  ['size', 'fields.size'],
+  ['type', 'filters.type'],
+  ['location', 'filters.location'],
+  ['physical_status', 'fields.status'],
+  ['availability_status', 'filters.availability', (v, t) => (v === 'sold' ? t('filters.sold') : t('filters.available'))],
+  ['price', 'fields.price'],
+  ['notes', 'fields.notes'],
+  ['image_url', 'export.imageLink'],
+  ['last_modified_by', 'export.modifiedBy'],
+  ['last_modified_at', 'export.modifiedAt', (v) => formatDate(v)],
 ];
+
+function formatDate(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
 
 function escapeCsvValue(value) {
   if (value == null) return '';
-  const str = String(value);
+  let str = String(value);
+  // Excel reads text starting with = + - @ as a formula - e.g. a note like
+  // "- small flaw" shows as #NAME?. A leading space keeps it plain text.
+  if (typeof value === 'string' && /^[=+\-@]/.test(str)) str = ' ' + str;
   if (/[",\n\r]/.test(str)) {
     return '"' + str.replace(/"/g, '""') + '"';
   }
   return str;
 }
 
-export function itemsToCsv(items) {
-  const lines = [COLUMNS.join(',')];
+export function itemsToCsv(items, t) {
+  const lines = [COLUMNS.map(([, header]) => escapeCsvValue(t(header))).join(',')];
   for (const item of items) {
-    lines.push(COLUMNS.map((col) => escapeCsvValue(item[col])).join(','));
+    lines.push(COLUMNS.map(([key, , format]) => escapeCsvValue(format ? format(item[key], t) : item[key])).join(','));
   }
   return lines.join('\r\n');
 }
 
-export function downloadItemsCsv(items, filename) {
-  const csv = itemsToCsv(items);
+export function downloadItemsCsv(items, t, filename) {
+  const csv = itemsToCsv(items, t);
   // Leading UTF-8 BOM: without it, Excel guesses the system locale's
   // encoding instead of UTF-8 and Hebrew text renders as mojibake.
   const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });

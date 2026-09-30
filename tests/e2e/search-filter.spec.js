@@ -76,3 +76,46 @@ test('TC-SRCH-007 (documents existing UX gap): a new item outside the active fil
   await page.selectOption('.filter-group:has-text("מיקום") select', { label: 'הכל' });
   await expect(page.locator('.card')).toHaveCount(5);
 });
+
+// REG-025 (SPEC.md section 12): spaces at the start or end of a search -
+// common when pasting, or from a phone keyboard - found nothing at all.
+test('REG-025: spaces around the search text are ignored', async ({ page }) => {
+  await page.fill('.search-box input', '  112345 ');
+  await expect(page.locator('.card')).toHaveCount(1);
+  await expect(page.locator('.card')).toContainText('שביל תפילה');
+
+  await page.fill('.search-box input', ' שביל ');
+  await expect(page.locator('.card')).toHaveCount(1);
+});
+
+test('TC-SRCH-006: the search also finds words in the notes', async ({ page }) => {
+  await seedItems(page, [{ row_id: 'N1', name: 'בלי מילה בשם', notes: 'פגם קטן בפינה השמאלית' }]);
+  await reloadApp(page);
+  await page.waitForSelector('text=קטלוג הגלריה');
+  await page.fill('.search-box input', 'פגם');
+  await expect(page.locator('.card')).toHaveCount(1);
+  await expect(page.locator('.card')).toContainText('בלי מילה בשם');
+});
+
+test('TC-SRCH-007: with a search or filter on, "מוצגים X מתוך Y" shows; none when nothing is filtered', async ({ page }) => {
+  await expect(page.locator('.results-line')).toHaveCount(0);
+  await page.locator('.filter-group:has-text("מיקום") select').selectOption({ label: 'גלריה' });
+  await expect(page.locator('.results-line')).toContainText('מוצגים 2 מתוך 4');
+});
+
+test('TC-SRCH-008: "ניקוי סינון" resets every search and filter at once, from the results line and from "no results"', async ({ page }) => {
+  await page.fill('.search-box input', 'אין כזה פריט');
+  await page.locator('.filter-group:has-text("זמינות") select').selectOption('sold');
+  await page.click('label:has-text("חסר מחיר")');
+  await expect(page.locator('.card')).toHaveCount(0);
+
+  await page.click('.empty-state button:has-text("ניקוי סינון")');
+  await expect(page.locator('.card')).toHaveCount(4);
+  await expect(page.locator('.search-box input')).toHaveValue('');
+  await expect(page.locator('.filter-group:has-text("זמינות") select')).toHaveValue('all');
+  await expect(page.locator('.results-line')).toHaveCount(0);
+
+  await page.locator('.filter-group:has-text("סוג") select').selectOption({ label: 'מקורי' });
+  await page.click('.results-line button:has-text("ניקוי סינון")');
+  await expect(page.locator('.card')).toHaveCount(4);
+});

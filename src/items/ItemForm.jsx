@@ -13,12 +13,12 @@ function ConfigSelect({ list, value, onChange, config, addConfigValue, label }) 
   const [draft, setDraft] = useState('');
 
   async function confirmAdd() {
-    const added = await addConfigValue(list, draft);
-    if (added) {
-      onChange(added);
+    const result = await addConfigValue(list, draft);
+    if (result) {
+      onChange(result.value);
       setDraft('');
       setAdding(false);
-      showToast(t('toast.valueAdded'));
+      showToast(t(result.added ? 'toast.valueAdded' : 'toast.valueExists'));
     }
   }
 
@@ -43,7 +43,7 @@ function ConfigSelect({ list, value, onChange, config, addConfigValue, label }) 
             onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), confirmAdd())}
             autoFocus
           />
-          <button type="button" className="btn" onClick={confirmAdd}>+</button>
+          <button type="button" className="btn" onClick={confirmAdd} disabled={!draft.trim()}>+</button>
         </div>
       )}
     </div>

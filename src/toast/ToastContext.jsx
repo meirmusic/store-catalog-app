@@ -9,7 +9,7 @@ const ToastContext = createContext(null);
 const DEFAULT_DURATION = 3500;
 
 export function ToastProvider({ children }) {
-  const [toast, setToastState] = useState(null); // { message, type: 'success' | 'error' }
+  const [toast, setToastState] = useState(null); // { message, type: 'success' | 'error', action?: { label, onClick } }
   const toastRef = useRef(null);
   const timerRef = useRef(null);
 
@@ -24,11 +24,13 @@ export function ToastProvider({ children }) {
   }, [setToast]);
 
   // `background`: a message the user didn't directly trigger (e.g. "synced")
-  // - it must never replace an error that's still waiting to be read.
-  const showToast = useCallback((message, { type = 'success', duration = DEFAULT_DURATION, background = false } = {}) => {
-    if (background && toastRef.current?.type === 'error') return;
+  // - it must never replace an error still waiting to be read, or a message
+  // that offers an action (e.g. undo a delete) while it's still offered.
+  // `action`: { label, onClick } - a button in the message (SPEC.md 11).
+  const showToast = useCallback((message, { type = 'success', duration = DEFAULT_DURATION, background = false, action } = {}) => {
+    if (background && (toastRef.current?.type === 'error' || toastRef.current?.action)) return;
     if (timerRef.current) clearTimeout(timerRef.current);
-    setToast({ message, type });
+    setToast({ message, type, action });
     if (type !== 'error') {
       timerRef.current = setTimeout(() => setToast(null), duration);
     }
@@ -41,6 +43,15 @@ export function ToastProvider({ children }) {
         <div className="toast-wrap">
           <div className={`toast${toast.type === 'error' ? ' error' : ''}`} role="status">
             <span>{toast.message}</span>
+            {toast.action && (
+              <button
+                type="button"
+                className="toast-action"
+                onClick={() => { const { onClick } = toast.action; dismissToast(); onClick(); }}
+              >
+                {toast.action.label}
+              </button>
+            )}
             {toast.type === 'error' && (
               <button type="button" className="toast-close" onClick={dismissToast} aria-label="סגור">×</button>
             )}
