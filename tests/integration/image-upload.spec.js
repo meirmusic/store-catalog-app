@@ -164,9 +164,7 @@ test('a photo upload that keeps failing trips the visible sync-problem indicator
     }, { timeout: 5000 }).toBeGreaterThanOrEqual(i + 1);
   }
 
-  const pendingChip = page.locator('.chip', { hasText: 'ממתינים' });
-  const style = await pendingChip.getAttribute('style');
-  expect(style).toContain('border-color');
+  await expect(page.locator('.chip-problem', { hasText: 'ממתינים' })).toBeVisible();
 
   // Crucially: the item must never look like it has a broken/blank photo
   // silently - image_url stays null (no partial/garbage state), and the

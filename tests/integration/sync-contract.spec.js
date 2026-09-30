@@ -79,10 +79,16 @@ test('TC-SYNC-004: 5 consecutive failures on the same change trip the visible sy
     }, { timeout: 5000 }).toBeGreaterThanOrEqual(i + 1);
   }
 
-  const pendingChip = page.locator('.chip', { hasText: 'ממתינים' });
-  await expect(pendingChip).toHaveCSS('border-color', /.+/); // has some border-color set at all
-  const style = await pendingChip.getAttribute('style');
-  expect(style).toContain('border-color');
+  const pendingChip = page.locator('.chip-problem', { hasText: 'ממתינים' });
+  await expect(pendingChip).toBeVisible();
+
+  // SPEC.md section 9 (gap 5): clicking the red chip explains what wasn't
+  // sent and what to do, in a message that stays until closed.
+  await pendingChip.click();
+  const explanation = page.locator('.toast.error');
+  await expect(explanation).toContainText('לא הצליחו להישלח לשרת');
+  await expect(explanation).toContainText('תמיד נכשל');
+  await expect(explanation).toContainText('פנו למנהל');
 });
 
 // Fixed per task #15 (was SYNC-05): when a pull fails, syncNow() reports
@@ -176,4 +182,121 @@ test('TC-SYNC-007 (REG-011 regression): an upsert response never overwrites the 
 
   const items = await getItems(page);
   expect(items[0].image_url).toBe(REAL_URL);
+});
+
+// REG-017 (found by reading the code while writing the save-flow spec,
+// SPEC.md section 9): when pushing a local edit fails but the pull in the
+// same sync cycle succeeds, the pull used to overwrite the edited item
+// with the server's older version - and the next cycle would then push
+// that older version back, silently losing the user's edit for good.
+// A pull must never overwrite an item that still has a queued change.
+test('REG-017: a pull never overwrites a local edit whose push is still pending', async ({ page }) => {
+  const serverVersion = { row_id: 'EDITME', name: 'גרסת שרת ישנה', is_deleted: false, availability_status: 'available' };
+  await seedItems(page, [serverVersion]);
+
+  await page.route(MOCK_URL, async (route) => {
+    const body = await readAction(route);
+    if (body.action === 'getAll') {
+      await route.fulfill({ json: { items: [serverVersion], config: {} } });
+    } else {
+      await route.fulfill({ json: { error: 'simulated push failure' } });
+    }
+  });
+
+  await reloadApp(page);
+  await page.waitForSelector('text=קטלוג הגלריה');
+  await page.click('.card');
+  await page.waitForSelector('#item-overlay');
+  await fillItemForm(page, { name: 'עריכה מקומית' });
+  await saveItemForm(page);
+
+  await page.click('.icon-btn[title]');
+  await expect.poll(async () => {
+    const pending = await getPendingChanges(page);
+    return pending[0]?.attempts || 0;
+  }, { timeout: 5000 }).toBeGreaterThanOrEqual(1);
+  await page.waitForTimeout(300); // let the pull that follows the failed push land
+
+  const items = await getItems(page);
+  expect(items.find((it) => it.row_id === 'EDITME').name).toBe('עריכה מקומית');
+  const pending = await getPendingChanges(page);
+  expect(pending.some((c) => c.row_id === 'EDITME' && c.op === 'upsert')).toBe(true);
+});
+
+// SPEC.md section 9 (gap 1): a save goes out to the server right away -
+// no manual refresh, and well inside the 45s poll interval.
+test('TC-SYNC-008: a save is pushed immediately, without waiting for the next poll', async ({ page }) => {
+  let upserts = 0;
+  await page.route(MOCK_URL, async (route) => {
+    const body = await readAction(route);
+    if (body.action === 'getAll') {
+      await route.fulfill({ json: { items: [], config: {} } });
+    } else {
+      if (body.action === 'upsert') upserts++;
+      await route.fulfill({ json: { ...body.payload } });
+    }
+  });
+
+  await reloadApp(page);
+  await page.waitForSelector('text=קטלוג הגלריה');
+  await openNewItemForm(page);
+  await fillItemForm(page, { name: 'נשלח מיד' });
+  await saveItemForm(page);
+
+  await expect.poll(() => upserts, { timeout: 3000 }).toBe(1);
+  await expect.poll(async () => (await getPendingChanges(page)).length, { timeout: 3000 }).toBe(0);
+});
+
+// SPEC.md section 9 (gap 2): once the change reaches the server, the user
+// is told so ("סונכרן ✓").
+test('TC-SYNC-009: a change that reaches the server shows a "synced" confirmation', async ({ page }) => {
+  await page.route(MOCK_URL, async (route) => {
+    const body = await readAction(route);
+    if (body.action === 'getAll') {
+      await route.fulfill({ json: { items: [], config: {} } });
+    } else {
+      await route.fulfill({ json: { ...body.payload } });
+    }
+  });
+
+  await reloadApp(page);
+  await page.waitForSelector('text=קטלוג הגלריה');
+  await openNewItemForm(page);
+  await fillItemForm(page, { name: 'אישור סנכרון' });
+  await saveItemForm(page);
+
+  await expect(page.locator('.toast')).toContainText('סונכרן', { timeout: 3000 });
+});
+
+// The "synced" message is a background one - it must never replace an
+// error the user hasn't read yet (SPEC.md section 9).
+test('TC-SYNC-010: a "synced" confirmation never replaces an open error message', async ({ page }) => {
+  let releaseUpsert;
+  const upsertHeld = new Promise((resolve) => { releaseUpsert = resolve; });
+  await page.route(MOCK_URL, async (route) => {
+    const body = await readAction(route);
+    if (body.action === 'getAll') {
+      await route.fulfill({ json: { items: [], config: {} } });
+    } else {
+      await upsertHeld;
+      await route.fulfill({ json: { ...body.payload } });
+    }
+  });
+
+  await reloadApp(page);
+  await page.waitForSelector('text=קטלוג הגלריה');
+  await openNewItemForm(page);
+  await fillItemForm(page, { name: 'ראשון' });
+  await saveItemForm(page); // its push is held at the mock
+
+  await page.evaluate(() => { window.__testForceSaveError = true; });
+  await openNewItemForm(page);
+  await fillItemForm(page, { name: 'שני' });
+  await page.click('#item-overlay button:has-text("שמירה")');
+  await expect(page.locator('.toast.error')).toBeVisible();
+
+  releaseUpsert();
+  await expect.poll(async () => (await getPendingChanges(page)).length, { timeout: 3000 }).toBe(0);
+  await page.waitForTimeout(300);
+  await expect(page.locator('.toast.error')).toBeVisible();
 });

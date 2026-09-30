@@ -260,3 +260,29 @@ select:hover, .btn:hover { border-color: var(--accent); }
   .overlay#item-overlay { padding: 0; align-items: stretch; }
   #item-overlay .modal { max-width: none; width: 100%; min-height: 100%; border-radius: 0; margin-bottom: 0; }
 }
+
+.save-delayed {
+  color: var(--ink-dim);
+  font-size: .85rem;
+}
+
+.chip-problem {
+  border-color: var(--sold);
+  color: var(--sold);
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.update-banner {
+  position: sticky;
+  top: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 8px 16px;
+  background: var(--stone);
+  border-bottom: 1px solid var(--line);
+  font-size: .9rem;
+}

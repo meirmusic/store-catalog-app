@@ -9,21 +9,30 @@ const ToastContext = createContext(null);
 const DEFAULT_DURATION = 3500;
 
 export function ToastProvider({ children }) {
-  const [toast, setToast] = useState(null); // { message, type: 'success' | 'error' }
+  const [toast, setToastState] = useState(null); // { message, type: 'success' | 'error' }
+  const toastRef = useRef(null);
   const timerRef = useRef(null);
+
+  const setToast = useCallback((value) => {
+    toastRef.current = value;
+    setToastState(value);
+  }, []);
 
   const dismissToast = useCallback(() => {
     if (timerRef.current) clearTimeout(timerRef.current);
     setToast(null);
-  }, []);
+  }, [setToast]);
 
-  const showToast = useCallback((message, { type = 'success', duration = DEFAULT_DURATION } = {}) => {
+  // `background`: a message the user didn't directly trigger (e.g. "synced")
+  // - it must never replace an error that's still waiting to be read.
+  const showToast = useCallback((message, { type = 'success', duration = DEFAULT_DURATION, background = false } = {}) => {
+    if (background && toastRef.current?.type === 'error') return;
     if (timerRef.current) clearTimeout(timerRef.current);
     setToast({ message, type });
     if (type !== 'error') {
       timerRef.current = setTimeout(() => setToast(null), duration);
     }
-  }, []);
+  }, [setToast]);
 
   return (
     <ToastContext.Provider value={{ showToast, dismissToast }}>

@@ -182,7 +182,7 @@ test('TC-ACT-005: the save button locks for the duration of the save, preventing
   await openNewItemForm(page);
   await fillItemForm(page, { name: 'נעילת כפתור שמירה' });
 
-  const saveBtn = page.locator('#item-overlay button:has-text("שמירה")');
+  const saveBtn = page.locator('#item-overlay button[type=submit]');
   await saveBtn.click();
   await expect(saveBtn).toBeDisabled();
   await saveBtn.click({ force: true }); // a second click while locked must be a no-op
@@ -207,10 +207,43 @@ test('REG-016: a failed save shows an error toast instead of silently doing noth
   const saveBtn = page.locator('#item-overlay button:has-text("שמירה")');
   await saveBtn.click();
 
-  await expect(page.locator('.toast.error')).toContainText('השמירה נכשלה');
+  await expect(page.locator('.toast.error')).toContainText('השמירה במכשיר נכשלה');
   await expect(page.locator('#item-overlay')).toBeVisible(); // the form stays open, nothing was lost
   const items = await getItems(page);
   expect(items).toHaveLength(0); // never actually saved
+});
+
+// SPEC.md section 9 (gap 3): the click itself is acknowledged at once -
+// "nothing happens" can no longer be what the user sees.
+test('TC-ACT-006: the save button shows "שומר..." the moment it is clicked', async ({ page }) => {
+  await page.evaluate(() => { window.__testSlowSave = 800; });
+  await openNewItemForm(page);
+  await fillItemForm(page, { name: 'תווית שומר' });
+
+  const saveBtn = page.locator('#item-overlay button[type=submit]');
+  await saveBtn.click();
+  await expect(saveBtn).toHaveText('שומר...');
+  await page.waitForSelector('#item-overlay', { state: 'detached' });
+});
+
+// SPEC.md section 9 (gap 3): a save still running after 5s shows a soft
+// "delayed" notice - not a failure, save stays locked, cancel stays
+// available - and still completes normally if it finishes.
+test('TC-ACT-007: a save still running after 5s shows a "delayed" notice, then completes normally', async ({ page }) => {
+  await page.evaluate(() => { window.__testSlowSave = 6500; });
+  await openNewItemForm(page);
+  await fillItemForm(page, { name: 'שמירה איטית' });
+
+  const saveBtn = page.locator('#item-overlay button[type=submit]');
+  await saveBtn.click();
+  await expect(page.locator('#item-overlay .save-delayed')).toHaveText('השמירה מתעכבת...', { timeout: 6000 });
+  await expect(saveBtn).toBeDisabled();
+  await expect(page.locator('#item-overlay button:has-text("ביטול")')).toBeEnabled();
+  await expect(page.locator('.toast.error')).toHaveCount(0);
+
+  await page.waitForSelector('#item-overlay', { state: 'detached', timeout: 5000 });
+  const items = await getItems(page);
+  expect(items.map((it) => it.name)).toContain('שמירה איטית');
 });
 
 test('TC-SYNC-003 / TC-DM: a fresh photo queues its own uploadImage change, not a raw upsert payload', async ({ page }) => {

@@ -91,7 +91,14 @@ export async function pullLatest() {
   const data = await getAll();
   if (!data) return;
   if (Array.isArray(data.items)) {
-    await db.items.bulkPut(data.items);
+    // REG-017: never overwrite an item that still has a queued change -
+    // if its push just failed, the server's copy is the older version,
+    // and adopting it would make the next push send that older version
+    // back, silently losing the user's edit.
+    await db.transaction('rw', db.items, db.pendingChanges, async () => {
+      const pendingRowIds = new Set((await db.pendingChanges.toArray()).map((c) => c.row_id));
+      await db.items.bulkPut(data.items.filter((it) => !pendingRowIds.has(it.row_id)));
+    });
   }
   if (data.config) {
     await db.config.bulkPut(
@@ -100,15 +107,29 @@ export async function pullLatest() {
   }
 }
 
+// SPEC.md section 9: a local write kicks off a sync right away instead of
+// waiting up to a full poll interval. Deferred with setTimeout so the
+// listener never runs inside the caller's Dexie transaction zone.
+const syncRequestListeners = new Set();
+
+export function requestSync() {
+  setTimeout(() => syncRequestListeners.forEach((fn) => fn()), 0);
+}
+
+export function onSyncRequested(fn) {
+  syncRequestListeners.add(fn);
+  return () => syncRequestListeners.delete(fn);
+}
+
 // Push-then-pull, per SPEC.md section 4: local changes go out first so
 // they "win" with the server's timestamp before a pull could overwrite
 // them with a stale snapshot from a concurrent poll.
 export async function syncNow() {
   if (!APPS_SCRIPT_URL) {
     // No backend configured yet - nothing to do but leave the queue as-is.
-    return { ok: false, reason: 'not-configured' };
+    return { ok: false, reason: 'not-configured', pushed: 0 };
   }
-  await pushPending();
+  const pushed = await pushPending();
   try {
     await withQuickRetry(() => pullLatest());
   } catch (err) {
@@ -117,9 +138,24 @@ export async function syncNow() {
     // never a blocking error screen. Local changes already pushed above
     // are not affected either way.
     console.error('[sync] pull failed', err);
-    return { ok: false, reason: 'pull-failed' };
+    return { ok: false, reason: 'pull-failed', pushed };
   }
-  return { ok: true };
+  return { ok: true, pushed };
+}
+
+// What the red "sync problem" chip explains when clicked (SPEC.md
+// section 9): a readable name per stuck change, deduplicated (an item's
+// upsert and its photo upload are one thing to the user).
+export async function getStuckChangeLabels() {
+  const stuck = await db.pendingChanges.filter((c) => (c.attempts || 0) >= FAILURE_THRESHOLD).toArray();
+  const labels = [];
+  for (const change of stuck) {
+    const label = change.op === 'addConfigOption'
+      ? change.payload?.value
+      : (await db.items.get(change.row_id))?.name;
+    if (label && !labels.includes(label)) labels.push(label);
+  }
+  return labels;
 }
 
 export async function hasSyncProblem() {

@@ -20,6 +20,15 @@ db.version(1).stores({
   pendingChanges: '++id, row_id, createdAt',
 });
 
+// SPEC.md section 9: ask the browser not to evict this database on its own
+// when the device runs low on space - the catalog copy would just
+// re-download, but queued changes not yet sent would be lost.
+if (typeof navigator !== 'undefined' && navigator.storage?.persist) {
+  navigator.storage.persisted()
+    .then((already) => already || navigator.storage.persist())
+    .catch(() => {});
+}
+
 export async function getConfigList(listName) {
   const row = await db.config.get(listName);
   return row ? row.values : [];

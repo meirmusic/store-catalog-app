@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useMemo } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, addConfigValue as dbAddConfigValue } from '../db/db.js';
+import { requestSync } from '../sync/syncEngine.js';
 import { CONFIG_SEED } from '../config/seed.js';
 import { useTeamMember } from '../identity/TeamMemberContext.jsx';
 
@@ -52,16 +53,21 @@ export function ItemsProvider({ children }) {
   async function saveItem(fields, existingRowId) {
     const row_id = existingRowId || uid();
     const now = new Date().toISOString();
-    const existing = existingRowId ? await db.items.get(existingRowId) : null;
-    const item = {
-      ...(existing || { row_id, is_deleted: false }),
-      ...fields,
-      row_id,
-      last_modified_by: member,
-      last_modified_at: now,
-    };
-    await db.items.put(item);
-    await enqueue(row_id, 'upsert');
+    // One transaction so a concurrent pull (which skips items with queued
+    // changes - REG-017) can never land between the item write and its
+    // queue entry.
+    await db.transaction('rw', db.items, db.pendingChanges, async () => {
+      const existing = existingRowId ? await db.items.get(existingRowId) : null;
+      await db.items.put({
+        ...(existing || { row_id, is_deleted: false }),
+        ...fields,
+        row_id,
+        last_modified_by: member,
+        last_modified_at: now,
+      });
+      await enqueue(row_id, 'upsert');
+    });
+    requestSync();
     return row_id;
   }
 
@@ -72,23 +78,30 @@ export function ItemsProvider({ children }) {
   // Sheet's image_url column.
   async function queueImageUpload(row_id, dataUrl) {
     await enqueue(row_id, 'uploadImage', { image: dataUrl });
+    requestSync();
   }
 
   async function softDeleteItem(rowId) {
-    const existing = await db.items.get(rowId);
-    if (!existing) return;
-    await db.items.put({
-      ...existing,
-      is_deleted: true,
-      last_modified_by: member,
-      last_modified_at: new Date().toISOString(),
+    await db.transaction('rw', db.items, db.pendingChanges, async () => {
+      const existing = await db.items.get(rowId);
+      if (!existing) return;
+      await db.items.put({
+        ...existing,
+        is_deleted: true,
+        last_modified_by: member,
+        last_modified_at: new Date().toISOString(),
+      });
+      await enqueue(rowId, 'softDelete');
     });
-    await enqueue(rowId, 'softDelete');
+    requestSync();
   }
 
   async function addConfigValueAndQueue(listName, rawValue) {
     const value = await dbAddConfigValue(listName, rawValue);
-    if (value) await enqueue(null, 'addConfigOption', { list_name: listName, value });
+    if (value) {
+      await enqueue(null, 'addConfigOption', { list_name: listName, value });
+      requestSync();
+    }
     return value;
   }
 

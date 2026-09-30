@@ -8,8 +8,10 @@ import TeamMemberPicker from './identity/TeamMemberPicker.jsx'
 import { ItemsProvider } from './items/ItemsContext.jsx'
 import ItemList from './items/ItemList.jsx'
 import { useSyncStatus } from './sync/useSyncStatus.js'
+import { getStuckChangeLabels } from './sync/syncEngine.js'
 import ConfigManager from './config/ConfigManager.jsx'
-import { ToastProvider } from './toast/ToastContext.jsx'
+import { ToastProvider, useToast } from './toast/ToastContext.jsx'
+import UpdateBanner from './pwa/UpdateBanner.jsx'
 import './items/items.css'
 
 function Header() {
@@ -18,9 +20,17 @@ function Header() {
   const { member, clearMember } = useTeamMember()
   const { isOnline, syncing, lastSyncedAt, pendingCount, syncProblem, stale, refresh } = useSyncStatus()
   const [managingLists, setManagingLists] = useState(false)
+  const { showToast } = useToast()
 
   function signOutOfSharedAccount() {
     if (window.confirm(t('identity.signOutGoogleConfirm'))) signOut()
+  }
+
+  async function explainSyncProblem() {
+    const labels = await getStuckChangeLabels()
+    const shown = labels.slice(0, 3).join(', ')
+    const more = labels.length > 3 ? ` +${labels.length - 3}` : ''
+    showToast(`${t('sync.problemIntro')} ${shown}${more}. ${t('sync.problemHelp')}`, { type: 'error' })
   }
 
   return (
@@ -47,11 +57,21 @@ function Header() {
             {lastSyncedAt ? ` ${lastSyncedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : ''}
           </span>
         )}
-        {pendingCount > 0 && (
-          <span className="chip" style={syncProblem ? { borderColor: 'var(--sold)', color: 'var(--sold)' } : undefined}>
+        {pendingCount > 0 && (syncProblem ? (
+          <button
+            type="button"
+            className="chip chip-problem"
+            onClick={explainSyncProblem}
+            title={t('sync.problemDetails')}
+            aria-label={t('sync.problemDetails')}
+          >
+            ⏳ {pendingCount} {t('sync.pending')}
+          </button>
+        ) : (
+          <span className="chip">
             ⏳ {pendingCount} {t('sync.pending')}
           </span>
-        )}
+        ))}
         <button className={`icon-btn${syncing ? ' spin' : ''}`} onClick={refresh} title={t('actions.refresh')}>⟳</button>
         <button className="icon-btn" onClick={() => setManagingLists(true)} title={t('config.manageLists')}>⚙</button>
         <button className="icon-btn" onClick={signOutOfSharedAccount} title={t('actions.signOutGoogle')}>🔐</button>
@@ -78,15 +98,18 @@ function AppShell() {
 
 function App() {
   return (
-    <IdentityProvider>
-      <TeamMemberProvider>
-        <ToastProvider>
-          <ItemsProvider>
-            <IdentityGate />
-          </ItemsProvider>
-        </ToastProvider>
-      </TeamMemberProvider>
-    </IdentityProvider>
+    <>
+      <UpdateBanner />
+      <IdentityProvider>
+        <TeamMemberProvider>
+          <ToastProvider>
+            <ItemsProvider>
+              <IdentityGate />
+            </ItemsProvider>
+          </ToastProvider>
+        </TeamMemberProvider>
+      </IdentityProvider>
+    </>
   )
 }
 

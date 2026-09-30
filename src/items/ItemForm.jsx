@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useI18n } from '../i18n/I18nContext.jsx';
 import { useItems } from './ItemsContext.jsx';
 import { useToast } from '../toast/ToastContext.jsx';
@@ -49,6 +49,8 @@ function ConfigSelect({ list, value, onChange, config, addConfigValue, label }) 
   );
 }
 
+const SAVE_DELAY_NOTICE_MS = 5000;
+
 export default function ItemForm({ item, onClose, onRequestDelete, onSaved }) {
   const { t } = useI18n();
   const { config, saveItem, addConfigValue, queueImageUpload } = useItems();
@@ -56,6 +58,27 @@ export default function ItemForm({ item, onClose, onRequestDelete, onSaved }) {
   useBodyScrollLock();
   const isNew = !item;
   const [saving, setSaving] = useState(false);
+  const [saveDelayed, setSaveDelayed] = useState(false);
+  // Cancel stays enabled mid-save, so a slow save can finish after this
+  // form is gone - it must not then close whatever form is open by then.
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true; // re-set: StrictMode runs effect -> cleanup -> effect in dev
+    return () => { mountedRef.current = false; };
+  }, []);
+
+  // SPEC.md section 9: a local save normally takes milliseconds. If it
+  // hasn't finished after 5s, say so - without claiming it failed (it may
+  // still complete) and without unlocking save (a second attempt would
+  // only queue behind the stuck one).
+  useEffect(() => {
+    if (!saving) {
+      setSaveDelayed(false);
+      return undefined;
+    }
+    const id = setTimeout(() => setSaveDelayed(true), SAVE_DELAY_NOTICE_MS);
+    return () => clearTimeout(id);
+  }, [saving]);
 
   const [name, setName] = useState(item?.name || '');
   const [size, setSize] = useState(item?.size || '');
@@ -132,7 +155,7 @@ export default function ItemForm({ item, onClose, onRequestDelete, onSaved }) {
       // just actually happened - "נשמר מקומית" is accurate whether or
       // not the background sync to the server has finished yet.
       showToast(t('sync.savedLocal'));
-      onSaved();
+      if (mountedRef.current) onSaved();
     } catch (err) {
       // Real user report: a local write (e.g. IndexedDB blocked/full on
       // that specific device) used to fail silently here - the button
@@ -227,11 +250,16 @@ export default function ItemForm({ item, onClose, onRequestDelete, onSaved }) {
           </div>
 
           {error && <p style={{ color: 'var(--sold)', fontSize: '.85rem' }}>{error}</p>}
+          {saveDelayed && <p className="save-delayed" role="status">{t('sync.saveDelayed')}</p>}
 
           <div className="modal-actions">
             <div className="left-actions">
-              <button type="button" className="btn" onClick={onClose} disabled={saving}>{t('actions.cancel')}</button>
-              <button type="submit" className="btn primary" disabled={saving}>{t('actions.save')}</button>
+              {/* Cancel stays available during a save (SPEC.md section 9) -
+                  it's the way out if a save is stuck. */}
+              <button type="button" className="btn" onClick={onClose}>{t('actions.cancel')}</button>
+              <button type="submit" className="btn primary" disabled={saving}>
+                {saving ? t('actions.saving') : t('actions.save')}
+              </button>
             </div>
             {!isNew && (
               <button type="button" className="danger-btn" onClick={() => onRequestDelete(item)}>

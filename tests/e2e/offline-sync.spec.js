@@ -64,7 +64,9 @@ test('TC-OFF-003: reconnecting triggers an automatic sync attempt', async ({ pag
   await page.evaluate(() => window.dispatchEvent(new Event('offline')));
   await context.setOffline(false);
   await page.evaluate(() => window.dispatchEvent(new Event('online')));
-  await page.waitForTimeout(500);
 
-  expect(syncAttempted).toBe(true);
+  // Polled rather than a fixed pause: sync cycles never overlap (SPEC.md
+  // section 9), so if the startup cycle is still in flight, the reconnect
+  // cycle runs right after it rather than alongside it.
+  await expect.poll(() => syncAttempted, { timeout: 5000 }).toBe(true);
 });
