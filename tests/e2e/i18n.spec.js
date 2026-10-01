@@ -36,10 +36,11 @@ test('TC-I18N-005: layout direction stays RTL regardless of language', async ({ 
   await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
 });
 
-test('TC-I18N-006: price is always shown in ₪, in every language', async ({ page }) => {
-  await expect(page.locator('.card .price')).toContainText('₪');
+test('TC-I18N-006: price is always shown in dollars ($), in every language', async ({ page }) => {
+  await expect(page.locator('.card .price')).toContainText(/^\$[\d,.]+$/);
+  await expect(page.locator('.card .price')).not.toContainText('₪');
   await switchLanguage(page, 'English');
-  await expect(page.locator('.card .price')).toContainText('₪');
+  await expect(page.locator('.card .price')).toContainText(/^\$[\d,.]+$/);
 });
 
 test('TC-I18N-007: language choice persists across a reload', async ({ page }) => {

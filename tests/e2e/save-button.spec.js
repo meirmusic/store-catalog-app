@@ -40,13 +40,13 @@ test('SAVE-02: a name of only spaces is rejected like an empty one', async ({ pa
   expect(await getItems(page)).toHaveLength(0);
 });
 
-test('SAVE-05: a price of 0 is saved as 0 and shown as ₪0, not as "missing price"', async ({ page }) => {
+test('SAVE-05: a price of 0 is saved as 0 and shown as $0, not as "missing price"', async ({ page }) => {
   await openNewItemForm(page);
   await fillItemForm(page, { name: 'מחיר אפס', price: 0 });
   await saveItemForm(page);
   expect((await getItems(page))[0].price).toBe(0);
   const card = page.locator('.card', { hasText: 'מחיר אפס' });
-  await expect(card.locator('.price')).toHaveText('₪0');
+  await expect(card.locator('.price')).toHaveText('$0');
   await expect(card).not.toContainText('חסר מחיר');
 });
 
@@ -147,7 +147,7 @@ test('SAVE-21: a new item with every field filled keeps all values, on the card 
   const card = page.locator('.card', { hasText: 'פריט מלא' });
   await expect(card).toContainText('91X132');
   await expect(card).toContainText('גלריה');
-  await expect(card).toContainText('₪2,500');
+  await expect(card).toContainText('$2,500');
 
   await card.click();
   await page.waitForSelector('#item-overlay');

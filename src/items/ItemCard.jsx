@@ -70,7 +70,7 @@ export default function ItemCard({ item, onClick }) {
             {item.serial_number ? ` #${item.serial_number}` : ''}
           </span>
           {item.price != null && item.price !== '' ? (
-            <span className="price">₪{Number(item.price).toLocaleString()}</span>
+            <span className="price">${Number(item.price).toLocaleString()}</span>
           ) : (
             <span className="badge missing">{t('filters.missingPrice')}</span>
           )}
