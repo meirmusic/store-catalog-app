@@ -7,10 +7,15 @@ import { useTeamMember } from '../identity/TeamMemberContext.jsx';
 
 const ItemsContext = createContext(null);
 
-function uid() {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  let code = '';
-  for (let i = 0; i < 6; i++) code += chars[Math.floor(Math.random() * chars.length)];
+// SPEC.md 18.5 (REG-034): always starts with a letter - an all-digit id
+// (or one like 3E4567) would turn into a number in the Sheet and stop
+// matching its own row. Not E, which reads as an exponent.
+const ID_FIRST = 'ABCDFGHJKLMNPQRSTUVWXYZ';
+const ID_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+
+export function uid() {
+  let code = ID_FIRST[Math.floor(Math.random() * ID_FIRST.length)];
+  for (let i = 1; i < 6; i++) code += ID_CHARS[Math.floor(Math.random() * ID_CHARS.length)];
   return code;
 }
 
@@ -98,10 +103,15 @@ export function ItemsProvider({ children }) {
     requestSync();
   }
 
+  // Returns what "undo" needs (SPEC.md 18.3/18.4): the item exactly as it
+  // was at the moment of deleting, and a photo still waiting to upload.
   async function softDeleteItem(rowId) {
+    let undo = null;
     await db.transaction('rw', db.items, db.pendingChanges, async () => {
       const existing = await db.items.get(rowId);
       if (!existing) return;
+      const queuedPhotos = await db.pendingChanges.where('row_id').equals(rowId).and((c) => c.op === 'uploadImage').toArray();
+      undo = { snapshot: existing, pendingPhoto: queuedPhotos.length ? queuedPhotos[queuedPhotos.length - 1].payload?.image : null };
       const { pending_image: _cancelled, ...rest } = existing;
       await db.items.put({
         ...rest,
@@ -115,22 +125,27 @@ export function ItemsProvider({ children }) {
       await enqueue(rowId, 'softDelete', { last_modified_by: member });
     });
     requestSync();
+    return undo;
   }
 
   // Undo of a delete (SPEC.md section 11): works whether or not the delete
   // already reached the server - a queued delete is dropped, and a save of
   // the item (is_deleted: false) brings it back on the server either way.
-  async function restoreItem(item) {
+  // `undo` is what softDeleteItem returned: the item comes back exactly as
+  // it was when deleted, and a photo that hadn't uploaded yet is queued again.
+  async function restoreItem({ snapshot, pendingPhoto }) {
     await db.transaction('rw', db.items, db.pendingChanges, async () => {
-      await db.pendingChanges.where('row_id').equals(item.row_id).and((c) => c.op === 'softDelete').delete();
-      const { pending_image: _cancelledWithDelete, ...rest } = item;
+      await db.pendingChanges.where('row_id').equals(snapshot.row_id).and((c) => c.op === 'softDelete').delete();
+      const { pending_image: _stale, ...rest } = snapshot;
       await db.items.put({
         ...rest,
+        ...(pendingPhoto ? { pending_image: pendingPhoto } : {}),
         is_deleted: false,
         last_modified_by: member,
         last_modified_at: new Date().toISOString(),
       });
-      await enqueue(item.row_id, 'upsert');
+      await enqueue(snapshot.row_id, 'upsert');
+      if (pendingPhoto) await enqueue(snapshot.row_id, 'uploadImage', { image: pendingPhoto });
     });
     requestSync();
   }

@@ -128,6 +128,7 @@ export const translations = {
     'sync.refreshed': 'עודכן',
     'sync.offlineToast': 'אין חיבור - מוצגים הנתונים המקומיים',
     'sync.staleSince': 'לא עודכן מאז',
+    'sync.noConnection': 'אין חיבור לשרת. בדקו שהאינטרנט עובד (נסו לפתוח אתר), או עברו מ-Wi-Fi לסלולר, ואז לחצו ⟳. השמירות שלכם שמורות במכשיר ויישלחו כשהחיבור יחזור.',
     'sync.staleExplain': 'לא הצלחנו לקבל נתונים עדכניים מהשרת, ולכן מוצגים הנתונים מהעדכון האחרון שהצליח. השמירות שלכם לא נפגעות, והאפליקציה ממשיכה לנסות לבד.',
 
     'stats.total': 'סה"כ פריטים',
@@ -270,6 +271,7 @@ export const translations = {
     'sync.refreshed': 'Updated',
     'sync.offlineToast': 'No connection - showing local data',
     'sync.staleSince': 'Not updated since',
+    'sync.noConnection': "Can't reach the server. Check that the internet works (try opening a website), or switch from Wi-Fi to mobile data, then tap ⟳. Your saves are kept on this device and will be sent once the connection is back.",
     'sync.staleExplain': "Couldn't get fresh data from the server, so the data from the last successful update is shown. Your saves aren't affected, and the app keeps retrying on its own.",
 
     'stats.total': 'Total items',
@@ -412,6 +414,7 @@ export const translations = {
     'sync.refreshed': 'Opdateret',
     'sync.offlineToast': 'Ingen forbindelse - viser lokale data',
     'sync.staleSince': 'Ikke opdateret siden',
+    'sync.noConnection': 'Serveren kan ikke nås. Tjek at internettet virker (prøv at åbne en hjemmeside), eller skift fra Wi-Fi til mobildata, og tryk så på ⟳. Dine ændringer er gemt på enheden og sendes, når forbindelsen er tilbage.',
     'sync.staleExplain': 'Kunne ikke hente nye data fra serveren, så data fra den seneste vellykkede opdatering vises. Dine gemte ændringer påvirkes ikke, og appen bliver ved med at prøve.',
 
     'stats.total': 'Antal emner i alt',

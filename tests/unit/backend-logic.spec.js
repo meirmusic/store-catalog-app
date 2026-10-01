@@ -243,4 +243,16 @@ test.describe('TC-BE: Apps Script pure logic', () => {
     expect(buildErrorLogRow({ count: 10 ** 9 }, 'now')[9]).toBe(100000);
     expect(buildErrorLogRow(null, 'now')).toHaveLength(10);
   });
+
+  // SPEC.md 18.5 (REG-034): the Sheet turns an all-digit id into a number.
+  test('TC-BE-014: a row whose id the Sheet turned into a number is still found, and comes back as text', () => {
+    expect(findRowIndex(['A1B2C3', 234567], '234567')).toBe(1);
+    expect(rowToItem(['row_id', 'name'], [234567, 'x']).row_id).toBe('234567');
+  });
+
+  // SPEC.md 18.7: a tab or line break before = + - @ is defused too.
+  test('TC-BE-013d: a report starting with a tab or line break is kept as plain text', () => {
+    expect(buildErrorLogRow({ message: '\t=HYPERLINK("x")' }, 'now')[3]).toBe('\'\t=HYPERLINK("x")');
+    expect(buildErrorLogRow({ message: '\r=1' }, 'now')[3]).toBe('\'\r=1');
+  });
 });

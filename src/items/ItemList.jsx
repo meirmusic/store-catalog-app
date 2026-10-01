@@ -231,8 +231,9 @@ export default function ItemList() {
           onConfirm={async () => {
             const deleted = deleteTarget;
             setDeleteTarget(null);
+            let undo;
             try {
-              await softDeleteItem(deleted.row_id);
+              undo = await softDeleteItem(deleted.row_id);
             } catch (err) {
               showErrorToast(t('errors.deleteFailed'), 'delete', err);
               return; // the edit form stays open - nothing was deleted
@@ -245,7 +246,7 @@ export default function ItemList() {
                 label: t('actions.undo'),
                 onClick: async () => {
                   try {
-                    await restoreItem(deleted);
+                    if (undo) await restoreItem(undo);
                     showToast(t('toast.itemRestored'));
                   } catch (err) {
                     showErrorToast(t('errors.restoreFailed'), 'undo-delete', err);

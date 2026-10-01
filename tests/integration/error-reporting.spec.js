@@ -74,6 +74,7 @@ test('TC-ERR-002: queued errors go to the ErrorLog with the next sync, and leave
       device: 'test', app_version: 'dev', occurred_at: now, first_at: now, count: 1,
     }]));
   });
+  await page.addInitScript(() => { window.__testErrorLogRetryMs = 0; }); // TC-ERR-012 covers the wait
   await reloadAndWait(page);
 
   await clickRefresh(page); // the server can't take it yet (Apps Script not redeployed) - kept, silently

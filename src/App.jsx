@@ -8,7 +8,8 @@ import TeamMemberPicker from './identity/TeamMemberPicker.jsx'
 import { ItemsProvider } from './items/ItemsContext.jsx'
 import ItemList from './items/ItemList.jsx'
 import { useSyncStatus } from './sync/useSyncStatus.js'
-import { getStuckChangeLabels } from './sync/syncEngine.js'
+import { getStuckChangeLabels, getStuckChangeError } from './sync/syncEngine.js'
+import { isNetworkError } from './errors/errorReporting.js'
 import ConfigManager from './config/ConfigManager.jsx'
 import { ToastProvider, useToast } from './toast/ToastContext.jsx'
 import UpdateBanner from './pwa/UpdateBanner.jsx'
@@ -28,9 +29,12 @@ function Header() {
   async function explainSyncProblem() {
     try {
       const labels = await getStuckChangeLabels()
+      const lastError = await getStuckChangeError()
       const shown = labels.slice(0, 3).join(', ')
       const more = labels.length > 3 ? ` +${labels.length - 3}` : ''
-      showToast(`${t('sync.problemIntro')} ${shown}${more}. ${t('sync.problemHelp')}`, { type: 'error' })
+      // SPEC.md 18.2: no connection gets its own, actionable explanation.
+      const help = isNetworkError(lastError) ? t('sync.noConnection') : t('sync.problemHelp')
+      showToast(`${t('sync.problemIntro')} ${shown}${more}. ${help}`, { type: 'error', details: lastError || undefined })
     } catch (err) {
       showErrorToast(t('errors.unexpected'), 'sync-problem-details', err)
     }
@@ -60,7 +64,7 @@ function Header() {
           <button
             type="button"
             className="chip chip-problem"
-            onClick={() => showToast(t('sync.staleExplain'), { type: 'error', code: staleError?.code, details: staleError?.details })}
+            onClick={() => showToast(isNetworkError(staleError?.details) ? t('sync.noConnection') : t('sync.staleExplain'), { type: 'error', code: staleError?.code, details: staleError?.details })}
             title={t('sync.problemDetails')}
           >
             {t('sync.staleSince')}

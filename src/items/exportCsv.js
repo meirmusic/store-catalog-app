@@ -42,7 +42,8 @@ function escapeCsvValue(value) {
   let str = String(value);
   // Excel reads text starting with = + - @ as a formula - e.g. a note like
   // "- small flaw" shows as #NAME?. A leading space keeps it plain text.
-  if (typeof value === 'string' && /^[=+\-@]/.test(str)) str = ' ' + str;
+  // A tab or line break before them is stripped by some apps first (SPEC 18.7).
+  if (typeof value === 'string' && /^[\t\r\n]*[=+\-@]/.test(str)) str = ' ' + str;
   if (/[",\n\r]/.test(str)) {
     return '"' + str.replace(/"/g, '""') + '"';
   }

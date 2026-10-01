@@ -84,16 +84,41 @@ export function reportError(action, error, { log = true } = {}) {
   return { code: entry.code, details };
 }
 
-// Sends what's queued; a failure is silent and simply retried next sync
-// (reporting it would only loop).
+// Sends what's queued; a failure is silent and retried no sooner than
+// RETRY_AFTER_MS (SPEC.md 18.6 - e.g. before the server knows logErrors,
+// it must not cost an extra failing request every cycle). Never two sends
+// at once. Repeats counted while a send is in flight stay queued, as the
+// difference, for the next send - nothing is lost.
+const RETRY_AFTER_MS = 10 * 60 * 1000;
+let flushing = false;
+let retryAt = 0;
+
 export async function flushErrorLog(send) {
+  if (flushing || Date.now() < retryAt) return;
   const queue = loadQueue();
   if (!queue.length) return;
+  flushing = true;
   try {
     await send(queue.map(({ first_at: _local, ...entry }) => entry));
-    const sent = new Set(queue.map((e) => e.code));
-    saveQueue(loadQueue().filter((e) => !sent.has(e.code)));
+    const sentCount = new Map(queue.map((e) => [e.code, e.count]));
+    saveQueue(loadQueue().flatMap((e) => {
+      if (!sentCount.has(e.code)) return [e];
+      const more = e.count - sentCount.get(e.code);
+      return more > 0 ? [{ ...e, count: more }] : [];
+    }));
+    retryAt = 0;
   } catch {
-    // keep for the next sync
+    // keep for later
+    const backoff = typeof window !== 'undefined' && window.__testErrorLogRetryMs != null ? window.__testErrorLogRetryMs : RETRY_AFTER_MS;
+    retryAt = Date.now() + backoff;
+  } finally {
+    flushing = false;
   }
+}
+
+// SPEC.md 18.2: the browser's own words for "the request never got an
+// answer it could read" - no connection, or (before REG-031) a server error
+// page. iPhone: "Load failed"; Chrome: "Failed to fetch"; Firefox: "NetworkError...".
+export function isNetworkError(details) {
+  return /Load failed|Failed to fetch|NetworkError|network connection was lost|Network request failed/i.test(String(details || ''));
 }

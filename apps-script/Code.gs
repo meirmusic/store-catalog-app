@@ -91,57 +91,53 @@ var ITEM_COLUMNS = [
 // and timeout risk to something that never needed it.
 var WRITE_ACTIONS = ['upsert', 'softDelete', 'addConfigOption', 'uploadImage'];
 
+// SPEC.md section 18.1 (REG-031): EVERYTHING is inside the guard - reading
+// the request, the sign-in check and waiting for the lock included. Any
+// uncaught exception makes Apps Script answer with its own HTML error page,
+// which has no CORS header - so the browser refuses it and iPhones report
+// only "TypeError: Load failed", hiding the real reason.
 function doPost(e) {
+  try {
+    return jsonResponse(handleRequest(e));
+  } catch (err) {
+    return jsonResponse({ error: String(err) });
+  }
+}
+
+function handleRequest(e) {
   var body = JSON.parse(e.postData.contents);
   // These two actions are how someone recovers WITHOUT already having
   // valid credentials, so they can't sit behind the normal auth gate
   // below - each validates itself instead (matching email, a
   // short-lived one-time code sent to LOGIN_EMAIL's own inbox). Neither
   // touches the Sheet, so neither needs the write lock either.
-  // Wrapped so a failure (e.g. MailApp not yet authorized) comes back as a
-  // JSON error the app can show, not Apps Script's HTML error page.
-  if (body.action === 'requestPasswordReset' || body.action === 'resetPassword') {
-    try {
-      return jsonResponse(body.action === 'requestPasswordReset'
-        ? handleRequestPasswordReset(body.payload)
-        : handleResetPassword(body.payload));
-    } catch (err) {
-      return jsonResponse({ error: String(err) });
-    }
-  }
-  if (!resolveAuthenticatedEmail(body)) {
-    return jsonResponse({ error: 'forbidden' });
-  }
+  if (body.action === 'requestPasswordReset') return handleRequestPasswordReset(body.payload);
+  if (body.action === 'resetPassword') return handleResetPassword(body.payload);
+  if (!resolveAuthenticatedEmail(body)) return { error: 'forbidden' };
   var needsLock = WRITE_ACTIONS.indexOf(body.action) !== -1;
   var lock = needsLock ? LockService.getScriptLock() : null;
-  if (lock) lock.waitLock(10000);
+  if (lock && !lock.tryLock(10000)) {
+    // Another save holds the Sheet - an ordinary failed attempt, retried
+    // by the app's next sync cycle.
+    return { error: 'server busy - another save is in progress' };
+  }
   try {
-    var result;
     switch (body.action) {
       case 'getAll':
-        result = handleGetAll();
-        break;
+        return handleGetAll();
       case 'upsert':
-        result = handleUpsert(body.payload);
-        break;
+        return handleUpsert(body.payload);
       case 'softDelete':
-        result = handleSoftDelete(body.payload);
-        break;
+        return handleSoftDelete(body.payload);
       case 'addConfigOption':
-        result = handleAddConfigOption(body.payload);
-        break;
+        return handleAddConfigOption(body.payload);
       case 'uploadImage':
-        result = handleUploadImage(body.payload);
-        break;
+        return handleUploadImage(body.payload);
       case 'logErrors':
-        result = handleLogErrors(body.payload);
-        break;
+        return handleLogErrors(body.payload);
       default:
-        return jsonResponse({ error: 'unknown action: ' + body.action });
+        return { error: 'unknown action: ' + body.action };
     }
-    return jsonResponse(result);
-  } catch (err) {
-    return jsonResponse({ error: String(err) });
   } finally {
     if (lock) lock.releaseLock();
   }
@@ -380,12 +376,22 @@ var ERROR_LOG_MAX_ENTRIES = 30;
 function getOrCreateErrorLogSheet() {
   var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
   var sheet = spreadsheet.getSheetByName(ERROR_LOG_SHEET_NAME);
-  if (!sheet) {
-    sheet = spreadsheet.insertSheet(ERROR_LOG_SHEET_NAME);
-    sheet.appendRow(ERROR_LOG_HEADER);
-    sheet.setFrozenRows(1);
+  if (sheet) return sheet;
+  // First use only: two devices reporting at the same moment must not both
+  // try to create the tab (SPEC.md 18.6).
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(10000)) throw new Error('server busy - another save is in progress');
+  try {
+    sheet = spreadsheet.getSheetByName(ERROR_LOG_SHEET_NAME);
+    if (!sheet) {
+      sheet = spreadsheet.insertSheet(ERROR_LOG_SHEET_NAME);
+      sheet.appendRow(ERROR_LOG_HEADER);
+      sheet.setFrozenRows(1);
+    }
+    return sheet;
+  } finally {
+    lock.releaseLock();
   }
-  return sheet;
 }
 
 function handleLogErrors(payload) {
@@ -394,7 +400,8 @@ function handleLogErrors(payload) {
   var sheet = getOrCreateErrorLogSheet();
   var now = new Date().toISOString();
   var rows = entries.slice(0, ERROR_LOG_MAX_ENTRIES).map(function (entry) { return buildErrorLogRow(entry, now); });
-  rows.forEach(function (row) { sheet.appendRow(row); });
+  // One write for the whole batch (SPEC.md 18.6), not one per row.
+  sheet.getRange(sheet.getLastRow() + 1, 1, rows.length, rows[0].length).setValues(rows);
   return { ok: true, logged: rows.length };
 }
 
@@ -404,7 +411,7 @@ function handleLogErrors(payload) {
 function buildErrorLogRow(entry, serverTime) {
   function text(value, max) {
     var s = value == null ? '' : String(value).slice(0, max);
-    return /^[=+\-@]/.test(s) ? "'" + s : s;
+    return /^[=+\-@\t\r]/.test(s) ? "'" + s : s;
   }
   var e = entry || {};
   return [
@@ -428,6 +435,9 @@ function rowToItem(headerRow, row) {
     if (key === 'is_deleted') {
       value = value === true || value === 'TRUE' || value === 'true';
     }
+    // The id is always text (SPEC.md 18.5, REG-034) - the Sheet may hold an
+    // all-digit one as a number.
+    if (key === 'row_id' && typeof value === 'number') value = String(value);
     item[key] = value === '' || value === undefined ? null : value;
   });
   return item;
@@ -463,7 +473,8 @@ function findRowIndexByRowId(sheet, rowId) {
   if (sheet.getLastRow() < 2) return -1; // only the header row exists so far
   var ids = sheet.getRange(2, 1, sheet.getLastRow() - 1, 1).getValues();
   for (var i = 0; i < ids.length; i++) {
-    if (ids[i][0] === rowId) return i + 2; // 1-indexed, +1 for header row
+    // As text (SPEC.md 18.5, REG-034): the Sheet turns an all-digit id into a number.
+    if (String(ids[i][0]) === String(rowId)) return i + 2; // 1-indexed, +1 for header row
   }
   return -1;
 }

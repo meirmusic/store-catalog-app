@@ -4,12 +4,13 @@ import { db } from '../db/db.js';
 import { syncNow, hasSyncProblem, onSyncRequested } from './syncEngine.js';
 import { useToast } from '../toast/ToastContext.jsx';
 import { useI18n } from '../i18n/I18nContext.jsx';
+import { reportError } from '../errors/errorReporting.js';
 
 const POLL_MS = 45000; // SPEC.md section 4: auto-refresh every 30-60s
 // SPEC.md section 9 (REG-030): a cycle with no progress for longer than the
-// longest allowed request (a 2-minute photo upload) is stuck - a new sync
-// request replaces it instead of waiting on it forever.
-const STUCK_MS = 150 * 1000;
+// longest allowed step - a 2-minute photo upload plus its one quick retry -
+// is stuck, and a new sync request replaces it instead of waiting forever.
+const STUCK_MS = 5 * 60 * 1000;
 
 function stuckAfterMs() {
   // Test-only override (tests/integration/request-timeout.spec.js).
@@ -77,11 +78,15 @@ export function useSyncStatus() {
           setStaleError(result.pullError || null);
         }
       } while (rerunRef.current && navigator.onLine);
+    } catch (err) {
+      // SPEC.md 18.6: e.g. the device's storage failing. Logged (repeats
+      // counted), never a new error message every 45 seconds.
+      reportError('sync', err);
     } finally {
       if (isCurrent()) {
         inFlightRef.current = false;
         setSyncing(false);
-        setSyncProblem(await hasSyncProblem());
+        setSyncProblem(await hasSyncProblem().catch(() => false));
       }
     }
   }, [showToast]);

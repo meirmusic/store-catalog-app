@@ -123,8 +123,9 @@ export async function pushPending({ shouldStop = () => false, onProgress = () =>
 // Google Sheets stores an all-digit SKU or serial number (3022, 112345) as a
 // number, so getAll returns it as one - but the app treats these fields as
 // text (REG-028: trimming a numeric SKU made every save of such an item
-// fail). Normalize text fields at the boundary, as the data arrives.
-const TEXT_FIELDS = ['name', 'size', 'sku', 'serial_number', 'type', 'location', 'physical_status', 'notes', 'image_url', 'last_modified_by'];
+// fail). Normalize text fields at the boundary, as the data arrives -
+// row_id too (SPEC.md 18.5): an all-digit id must still match its item.
+const TEXT_FIELDS = ['row_id', 'name', 'size', 'sku', 'serial_number', 'type', 'location', 'physical_status', 'notes', 'image_url', 'last_modified_by'];
 
 export function normalizeItem(item) {
   const out = { ...item };
@@ -209,9 +210,6 @@ export async function syncNow({ shouldStop = () => false, onProgress = () => {} 
     throw err;
   }
   if (shouldStop()) return { ok: false, reason: 'superseded', pushed };
-  await flushErrorLog(logErrors);
-  onProgress();
-  if (shouldStop()) return { ok: false, reason: 'superseded', pushed };
   try {
     await withQuickRetry(() => pullLatest());
   } catch (err) {
@@ -222,8 +220,12 @@ export async function syncNow({ shouldStop = () => false, onProgress = () => {} 
     // are not affected either way.
     // The "not updated since" chip shows this reason when tapped (SPEC 17).
     const pullError = reportError('sync-pull', err, { log: navigator.onLine });
+    flushErrorLog(logErrors);
     return { ok: false, reason: 'pull-failed', pushed, pullError };
   }
+  // After the pull, never awaited: the error log must never hold up fresh
+  // data (SPEC.md 18.6). flushErrorLog never rejects.
+  flushErrorLog(logErrors);
   return { ok: true, pushed };
 }
 
@@ -240,6 +242,12 @@ export async function getStuckChangeLabels() {
     if (label && !labels.includes(label)) labels.push(label);
   }
   return labels;
+}
+
+// The last error of a stuck change, for the red chip's explanation (18.2).
+export async function getStuckChangeError() {
+  const stuck = await db.pendingChanges.filter((c) => (c.attempts || 0) >= FAILURE_THRESHOLD).toArray();
+  return stuck.map((c) => c.lastError).filter(Boolean).pop() || null;
 }
 
 export async function hasSyncProblem() {

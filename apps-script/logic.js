@@ -19,7 +19,7 @@
 function findRowIndex(ids, rowId) {
   if (ids.length === 0) return -1;
   for (let i = 0; i < ids.length; i++) {
-    if (ids[i] === rowId) return i; // 0-indexed here; Code.gs adds the +2 sheet offset itself
+    if (String(ids[i]) === String(rowId)) return i; // as text (REG-034); 0-indexed here, Code.gs adds the +2 sheet offset
   }
   return -1;
 }
@@ -53,6 +53,9 @@ function rowToItem(headerRow, row) {
     if (key === 'is_deleted') {
       value = value === true || value === 'TRUE' || value === 'true';
     }
+    // The id is always text (SPEC.md 18.5, REG-034) - the Sheet may hold an
+    // all-digit one as a number.
+    if (key === 'row_id' && typeof value === 'number') value = String(value);
     item[key] = value === '' || value === undefined ? null : value;
   });
   return item;
@@ -150,7 +153,7 @@ function validatePasswordReset(payload, configuredEmail, storedCode, storedExpir
 function buildErrorLogRow(entry, serverTime) {
   const text = (value, max) => {
     const s = value == null ? '' : String(value).slice(0, max);
-    return /^[=+\-@]/.test(s) ? "'" + s : s;
+    return /^[=+\-@\t\r]/.test(s) ? "'" + s : s;
   };
   const e = entry || {};
   return [
