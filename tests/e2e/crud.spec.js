@@ -263,7 +263,7 @@ test('REG-016: a failed save shows an error toast instead of silently doing noth
   const saveBtn = page.locator('#item-overlay button:has-text("שמירה")');
   await saveBtn.click();
 
-  await expect(page.locator('.toast.error')).toContainText('השמירה במכשיר נכשלה');
+  await expect(page.locator('.toast.error')).toContainText('השמירה נכשלה');
   await expect(page.locator('#item-overlay')).toBeVisible(); // the form stays open, nothing was lost
   const items = await getItems(page);
   expect(items).toHaveLength(0); // never actually saved

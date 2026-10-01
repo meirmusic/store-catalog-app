@@ -1,5 +1,6 @@
 import { useRegisterSW } from 'virtual:pwa-register/react';
 import { useI18n } from '../i18n/I18nContext.jsx';
+import { useToast } from '../toast/ToastContext.jsx';
 
 // SPEC.md section 9: a new version is offered, never forced - a silent
 // reload could land mid-form and lose what the user typed. Also checks
@@ -8,6 +9,15 @@ const UPDATE_CHECK_MS = 60 * 60 * 1000;
 
 export default function UpdateBanner() {
   const { t } = useI18n();
+  const { showErrorToast } = useToast();
+
+  async function update() {
+    try {
+      await updateServiceWorker(true);
+    } catch (err) {
+      showErrorToast(t('errors.updateFailed'), 'app-update', err);
+    }
+  }
   const {
     needRefresh: [needRefresh],
     updateServiceWorker,
@@ -24,7 +34,7 @@ export default function UpdateBanner() {
   return (
     <div className="update-banner" role="status">
       <span>{t('update.available')}</span>
-      <button type="button" className="btn primary" onClick={() => updateServiceWorker(true)}>
+      <button type="button" className="btn primary" onClick={update}>
         {t('update.reload')}
       </button>
     </div>

@@ -1,5 +1,6 @@
 import { db } from '../db/db.js';
-import { getAll, upsertItem, softDeleteItem, addConfigOption, uploadImage, AuthError } from '../api/client.js';
+import { getAll, upsertItem, softDeleteItem, addConfigOption, uploadImage, logErrors, AuthError } from '../api/client.js';
+import { reportError, flushErrorLog } from '../errors/errorReporting.js';
 import { APPS_SCRIPT_URL } from '../api/config.js';
 
 // See SPEC.md "מדיניות כשלים": a change that keeps failing stays queued
@@ -98,7 +99,9 @@ export async function pushPending() {
       // as it is (no attempt counted, so it never trips the "sync problem"
       // indicator for the wrong reason), and let syncNow report it.
       if (err instanceof AuthError) throw err;
-      console.error('[sync] push failed for change', change, err);
+      // SPEC.md section 17: logged (repeats counted, not re-logged); a
+      // failure while simply offline isn't a malfunction, so not logged.
+      reportError(`sync-push:${change.op}`, err, { log: navigator.onLine });
       await db.pendingChanges.update(change.id, {
         attempts: (change.attempts || 0) + 1,
         lastError: String(err && err.message ? err.message : err),
@@ -196,6 +199,7 @@ export async function syncNow() {
     if (err instanceof AuthError) return { ok: false, reason: 'auth', pushed: 0 };
     throw err;
   }
+  await flushErrorLog(logErrors);
   try {
     await withQuickRetry(() => pullLatest());
   } catch (err) {
@@ -204,8 +208,9 @@ export async function syncNow() {
     // did load successfully, with a "not updated since HH:MM" indicator -
     // never a blocking error screen. Local changes already pushed above
     // are not affected either way.
-    console.error('[sync] pull failed', err);
-    return { ok: false, reason: 'pull-failed', pushed };
+    // The "not updated since" chip shows this reason when tapped (SPEC 17).
+    const pullError = reportError('sync-pull', err, { log: navigator.onLine });
+    return { ok: false, reason: 'pull-failed', pushed, pullError };
   }
   return { ok: true, pushed };
 }

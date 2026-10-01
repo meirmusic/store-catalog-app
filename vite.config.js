@@ -3,8 +3,15 @@ import { defineConfig } from 'vite'
 import { VitePWA } from 'vite-plugin-pwa'
 
 // https://vite.dev/config/
+// SPEC.md section 17: which build an error came from, in the ErrorLog -
+// the commit in CI (GitHub Actions sets GITHUB_SHA), "dev" locally.
+const APP_VERSION = process.env.GITHUB_SHA
+  ? `${new Date().toISOString().slice(0, 10)}-${process.env.GITHUB_SHA.slice(0, 7)}`
+  : 'dev';
+
 export default defineConfig({
   base: './',
+  define: { __APP_VERSION__: JSON.stringify(APP_VERSION) },
   plugins: [
     react(),
     VitePWA({

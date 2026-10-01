@@ -133,6 +133,9 @@ function doPost(e) {
       case 'uploadImage':
         result = handleUploadImage(body.payload);
         break;
+      case 'logErrors':
+        result = handleLogErrors(body.payload);
+        break;
       default:
         return jsonResponse({ error: 'unknown action: ' + body.action });
     }
@@ -365,6 +368,57 @@ function getItemsSheet() {
 
 function getConfigSheet() {
   return SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CONFIG_SHEET_NAME);
+}
+
+// SPEC.md section 17: the app's error reports, one row each, in a tab that's
+// created on first use. appendRow per row (atomic on its own), so this needs
+// no lock - and must never hold one up for a real save.
+var ERROR_LOG_SHEET_NAME = 'ErrorLog';
+var ERROR_LOG_HEADER = ['זמן (שרת)', 'קוד', 'פעולה', 'הודעה', 'פרטים', 'חבר צוות', 'מכשיר', 'גרסה', 'מתי קרה במכשיר', 'כמה פעמים'];
+var ERROR_LOG_MAX_ENTRIES = 30;
+
+function getOrCreateErrorLogSheet() {
+  var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = spreadsheet.getSheetByName(ERROR_LOG_SHEET_NAME);
+  if (!sheet) {
+    sheet = spreadsheet.insertSheet(ERROR_LOG_SHEET_NAME);
+    sheet.appendRow(ERROR_LOG_HEADER);
+    sheet.setFrozenRows(1);
+  }
+  return sheet;
+}
+
+function handleLogErrors(payload) {
+  var entries = (payload && payload.entries) || [];
+  if (!entries.length) return { ok: true, logged: 0 };
+  var sheet = getOrCreateErrorLogSheet();
+  var now = new Date().toISOString();
+  var rows = entries.slice(0, ERROR_LOG_MAX_ENTRIES).map(function (entry) { return buildErrorLogRow(entry, now); });
+  rows.forEach(function (row) { sheet.appendRow(row); });
+  return { ok: true, logged: rows.length };
+}
+
+// Keep in sync with logic.js's buildErrorLogRow. Every value is text, cut
+// to a safe length - and a leading = + - @ is defused, so a report can never
+// turn into a formula in the Sheet.
+function buildErrorLogRow(entry, serverTime) {
+  function text(value, max) {
+    var s = value == null ? '' : String(value).slice(0, max);
+    return /^[=+\-@]/.test(s) ? "'" + s : s;
+  }
+  var e = entry || {};
+  return [
+    serverTime,
+    text(e.code, 12),
+    text(e.action, 60),
+    text(e.message, 500),
+    text(e.stack, 1000),
+    text(e.member, 60),
+    text(e.device, 300),
+    text(e.app_version, 40),
+    text(e.occurred_at, 40),
+    Math.max(1, Math.min(Number(e.count) || 1, 100000)),
+  ];
 }
 
 function rowToItem(headerRow, row) {

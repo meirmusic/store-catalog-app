@@ -1,4 +1,6 @@
 import { createContext, useCallback, useContext, useRef, useState } from 'react';
+import { reportError } from '../errors/errorReporting.js';
+import ErrorDetails from '../errors/ErrorDetails.jsx';
 
 // UI_STANDARD_GAP_ANALYSIS.md ACT-03/MSG-06: a success confirmation
 // dismisses itself automatically; an error one stays until the user
@@ -27,22 +29,32 @@ export function ToastProvider({ children }) {
   // - it must never replace an error still waiting to be read, or a message
   // that offers an action (e.g. undo a delete) while it's still offered.
   // `action`: { label, onClick } - a button in the message (SPEC.md 11).
-  const showToast = useCallback((message, { type = 'success', duration = DEFAULT_DURATION, background = false, action } = {}) => {
+  const showToast = useCallback((message, { type = 'success', duration = DEFAULT_DURATION, background = false, action, code, details } = {}) => {
     if (background && (toastRef.current?.type === 'error' || toastRef.current?.action)) return;
     if (timerRef.current) clearTimeout(timerRef.current);
-    setToast({ message, type, action });
+    setToast({ message, type, action, code, details });
     if (type !== 'error') {
       timerRef.current = setTimeout(() => setToast(null), duration);
     }
   }, [setToast]);
 
+  // SPEC.md section 17: a failed action shows its message plus the error code
+  // and the exact technical error, and the error is queued for the ErrorLog.
+  const showErrorToast = useCallback((message, actionName, error, { log = true } = {}) => {
+    const { code, details } = reportError(actionName, error, { log });
+    showToast(message, { type: 'error', code, details });
+  }, [showToast]);
+
   return (
-    <ToastContext.Provider value={{ showToast, dismissToast }}>
+    <ToastContext.Provider value={{ showToast, showErrorToast, dismissToast }}>
       {children}
       {toast && (
         <div className="toast-wrap">
           <div className={`toast${toast.type === 'error' ? ' error' : ''}`} role="status">
-            <span>{toast.message}</span>
+            <div className="toast-body">
+              <span>{toast.message}</span>
+              {(toast.code || toast.details) && <ErrorDetails code={toast.code} details={toast.details} />}
+            </div>
             {toast.action && (
               <button
                 type="button"

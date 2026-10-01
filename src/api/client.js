@@ -51,6 +51,11 @@ export function softDeleteItem(rowId, lastModifiedBy) {
   return callApi('softDelete', { row_id: rowId, last_modified_by: lastModifiedBy || '' });
 }
 
+// SPEC.md section 17: queued error reports, for the Sheet's ErrorLog tab.
+export function logErrors(entries) {
+  return callApi('logErrors', { entries });
+}
+
 export function addConfigOption(listName, value) {
   return callApi('addConfigOption', { list_name: listName, value });
 }

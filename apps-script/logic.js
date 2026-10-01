@@ -144,7 +144,31 @@ function validatePasswordReset(payload, configuredEmail, storedCode, storedExpir
   return { ok: true };
 }
 
+// Mirrors Code.gs's buildErrorLogRow (SPEC.md section 17): one ErrorLog
+// row per report - every value text and length-capped, a leading = + - @
+// defused so a report can never become a formula in the Sheet.
+function buildErrorLogRow(entry, serverTime) {
+  const text = (value, max) => {
+    const s = value == null ? '' : String(value).slice(0, max);
+    return /^[=+\-@]/.test(s) ? "'" + s : s;
+  };
+  const e = entry || {};
+  return [
+    serverTime,
+    text(e.code, 12),
+    text(e.action, 60),
+    text(e.message, 500),
+    text(e.stack, 1000),
+    text(e.member, 60),
+    text(e.device, 300),
+    text(e.app_version, 40),
+    text(e.occurred_at, 40),
+    Math.max(1, Math.min(Number(e.count) || 1, 100000)),
+  ];
+}
+
 export {
+  buildErrorLogRow,
   findRowIndex,
   driveThumbnailUrl,
   configValueExists,

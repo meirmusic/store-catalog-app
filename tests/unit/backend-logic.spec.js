@@ -11,6 +11,7 @@ import {
   checkLoginCredentials,
   validatePasswordReset,
   extractDriveFileId,
+  buildErrorLogRow,
 } from '../../apps-script/logic.js';
 
 const CLIENT_ID = '123-abc.apps.googleusercontent.com';
@@ -213,5 +214,33 @@ test.describe('TC-BE: Apps Script pure logic', () => {
   test('TC-BE-012d: a non-string value (e.g. Sheets returning an empty cell as "") is handled without throwing', () => {
     expect(extractDriveFileId(null)).toBeNull();
     expect(extractDriveFileId(undefined)).toBeNull();
+  });
+  // TC-BE-013* (SPEC.md section 17): one ErrorLog row per error report.
+  test('TC-BE-013: an error report becomes one row, in the ErrorLog column order', () => {
+    const row = buildErrorLogRow({
+      code: 'E-7K2Q', action: 'save', message: 'TypeError: sku.trim is not a function', stack: 'at handleSubmit',
+      member: 'שפרה', device: 'Mozilla/5.0', app_version: '2026-10-01-abc1234', occurred_at: '2026-10-01T09:00:00.000Z', count: 3,
+    }, '2026-10-01T09:00:05.000Z');
+    expect(row).toEqual([
+      '2026-10-01T09:00:05.000Z', 'E-7K2Q', 'save', 'TypeError: sku.trim is not a function', 'at handleSubmit',
+      'שפרה', 'Mozilla/5.0', '2026-10-01-abc1234', '2026-10-01T09:00:00.000Z', 3,
+    ]);
+  });
+
+  test('TC-BE-013b: text that would start a formula in the Sheet is kept as plain text', () => {
+    const row = buildErrorLogRow({ message: '=HYPERLINK("x")', action: '+1', member: '-שרה', device: '@x' }, 'now');
+    expect(row[3]).toBe('\'=HYPERLINK("x")');
+    expect(row[2]).toBe("'+1");
+    expect(row[5]).toBe("'-שרה");
+    expect(row[6]).toBe("'@x");
+  });
+
+  test('TC-BE-013c: over-long values are cut, and a missing or silly count becomes a sane number', () => {
+    const row = buildErrorLogRow({ message: 'x'.repeat(5000), stack: 'y'.repeat(5000), count: 'lots' }, 'now');
+    expect(row[3]).toHaveLength(500);
+    expect(row[4]).toHaveLength(1000);
+    expect(row[9]).toBe(1);
+    expect(buildErrorLogRow({ count: 10 ** 9 }, 'now')[9]).toBe(100000);
+    expect(buildErrorLogRow(null, 'now')).toHaveLength(10);
   });
 });

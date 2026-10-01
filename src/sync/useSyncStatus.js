@@ -15,6 +15,7 @@ export function useSyncStatus() {
   const [lastSyncedAt, setLastSyncedAt] = useState(null);
   const [syncProblem, setSyncProblem] = useState(false);
   const [stale, setStale] = useState(false);
+  const [staleError, setStaleError] = useState(null); // { code, details } of the last failed pull
   const [authExpired, setAuthExpired] = useState(false);
   const inFlightRef = useRef(false);
   const rerunRef = useRef(false);
@@ -50,8 +51,10 @@ export function useSyncStatus() {
         if (result.ok) {
           setLastSyncedAt(new Date());
           setStale(false);
+          setStaleError(null);
         } else if (result.reason === 'pull-failed') {
           setStale(true);
+          setStaleError(result.pullError || null);
         }
       } while (rerunRef.current && navigator.onLine);
     } finally {
@@ -87,6 +90,7 @@ export function useSyncStatus() {
     pendingCount: pendingCount || 0,
     syncProblem,
     stale,
+    staleError,
     authExpired,
     refresh: runSync,
   };

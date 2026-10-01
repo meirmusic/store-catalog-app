@@ -2,6 +2,8 @@ import { useId, useState } from 'react';
 import { useI18n } from '../i18n/I18nContext.jsx';
 import ImageLightbox from './ImageLightbox.jsx';
 import { sizedImageUrl, THUMB_IMAGE_WIDTH, FULL_IMAGE_WIDTH } from './imageUrl.js';
+import { reportError } from '../errors/errorReporting.js';
+import ErrorDetails from '../errors/ErrorDetails.jsx';
 
 // A file input's `capture` attribute is what tells mobile browsers to open
 // the camera directly - but on iOS, once the app is installed to the home
@@ -56,7 +58,7 @@ export default function ImageField({ value, onChange, pending, onBusyChange }) {
   const { t } = useI18n();
   const [zoomed, setZoomed] = useState(false);
   const [processing, setProcessing] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState(null); // { code, details }
   const cameraId = useId();
   const galleryId = useId();
 
@@ -65,7 +67,7 @@ export default function ImageField({ value, onChange, pending, onBusyChange }) {
     const file = input.files[0];
     input.value = ''; // so choosing the same file again still fires onChange
     if (!file) return;
-    setError('');
+    setError(null);
     setProcessing(true);
     onBusyChange?.(true);
     try {
@@ -76,8 +78,7 @@ export default function ImageField({ value, onChange, pending, onBusyChange }) {
       }
       onChange(await resizeImageFile(file));
     } catch (err) {
-      console.error('[image] could not read the chosen file', err);
-      setError(t('image.unreadable'));
+      setError(reportError('image', err));
     } finally {
       setProcessing(false);
       onBusyChange?.(false);
@@ -136,7 +137,12 @@ export default function ImageField({ value, onChange, pending, onBusyChange }) {
             </button>
           )}
         </div>
-        {error && <p className="image-error" role="alert">{error}</p>}
+        {error && (
+          <div className="image-error inline-error" role="alert">
+            <span>{t('image.unreadable')}</span>
+            <ErrorDetails code={error.code} details={error.details} />
+          </div>
+        )}
       </div>
     </div>
   );

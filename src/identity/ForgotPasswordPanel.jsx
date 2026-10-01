@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { useI18n } from '../i18n/I18nContext.jsx';
 import { requestPasswordReset, resetPassword } from '../api/client.js';
+import { reportError } from '../errors/errorReporting.js';
+import ErrorDetails from '../errors/ErrorDetails.jsx';
 
 const inputStyle = { padding: '10px 12px', borderRadius: 10, border: '1px solid var(--line)', fontSize: '1rem' };
 const primaryButtonStyle = {
@@ -39,10 +41,12 @@ export default function ForgotPasswordPanel({ defaultEmail, onDone, onCancel }) 
   const [requesting, setRequesting] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const [errorInfo, setErrorInfo] = useState(null); // { code, details } for a real malfunction
 
   async function handleRequestCode(e) {
     e.preventDefault();
     setError('');
+    setErrorInfo(null);
     if (!email.trim()) {
       setError(t('identity.fieldsRequired'));
       return;
@@ -51,8 +55,9 @@ export default function ForgotPasswordPanel({ defaultEmail, onDone, onCancel }) 
     try {
       await requestPasswordReset(email.trim());
       setCodeRequested(true);
-    } catch {
+    } catch (err) {
       setError(t('identity.sendCodeFailed'));
+      setErrorInfo(reportError('password-reset-send', err, { log: navigator.onLine }));
     } finally {
       setRequesting(false);
     }
@@ -61,6 +66,7 @@ export default function ForgotPasswordPanel({ defaultEmail, onDone, onCancel }) 
   async function handleReset(e) {
     e.preventDefault();
     setError('');
+    setErrorInfo(null);
     if (!code.trim() || !newPassword || !confirmPassword) {
       setError(t('identity.fieldsRequired'));
       return;
@@ -82,6 +88,7 @@ export default function ForgotPasswordPanel({ defaultEmail, onDone, onCancel }) 
       // one - anything else (network, server) gets an honest generic message.
       const codeProblem = err && (err.message === 'invalid code' || err.message === 'code expired');
       setError(t(codeProblem ? 'identity.resetCodeInvalid' : 'identity.resetFailed'));
+      if (!codeProblem) setErrorInfo(reportError('password-reset', err, { log: navigator.onLine }));
     } finally {
       setSubmitting(false);
     }
@@ -160,7 +167,12 @@ export default function ForgotPasswordPanel({ defaultEmail, onDone, onCancel }) 
         </>
       )}
 
-      {error && <p style={{ color: 'var(--sold)', fontSize: '.85rem', marginTop: 10 }}>{error}</p>}
+      {error && (
+        <div className="inline-error" style={{ marginTop: 10 }} role="alert">
+          <span>{error}</span>
+          {errorInfo && <ErrorDetails code={errorInfo.code} details={errorInfo.details} />}
+        </div>
+      )}
 
       <button type="button" onClick={onCancel} style={{ ...linkButtonStyle, marginTop: 14 }}>
         {t('identity.backToLogin')}

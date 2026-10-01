@@ -1,4 +1,5 @@
 import { Component } from 'react';
+import { reportError } from './errors/errorReporting.js';
 
 // Test-only hook for tests/e2e/error-boundary.spec.js: inert for every real
 // user (nothing in the app ever sets window.__testCrash), lets that test
@@ -19,16 +20,29 @@ export function CrashTestHook() {
 export default class ErrorBoundary extends Component {
   constructor(props) {
     super(props);
-    this.state = { hasError: false };
+    this.state = { hasError: false, code: null, details: '', copied: false };
   }
 
   static getDerivedStateFromError() {
     return { hasError: true };
   }
 
+  // SPEC.md section 17: logged like any other error (sent on the next load's
+  // first sync), and the code + details are shown so they can be reported.
   componentDidCatch(error, info) {
-    console.error('[ErrorBoundary] caught a render error', error, info);
+    console.error('[ErrorBoundary] component stack', info?.componentStack);
+    const { code, details } = reportError('crash', error);
+    this.setState({ code, details });
   }
+
+  copyDetails = async () => {
+    try {
+      await navigator.clipboard.writeText(`${this.state.code} · ${this.state.details}`);
+      this.setState({ copied: true });
+    } catch {
+      // clipboard blocked - the text is on screen to copy by hand
+    }
+  };
 
   render() {
     if (!this.state.hasError) return this.props.children;
@@ -69,6 +83,19 @@ export default class ErrorBoundary extends Component {
           >
             רענון הדף
           </button>
+          {(this.state.code || this.state.details) && (
+            <div style={{ marginTop: 20, fontSize: '.78rem', color: '#666', display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'center' }}>
+              <span>קוד תקלה: <bdi>{this.state.code}</bdi></span>
+              <span>פרטים טכניים: <bdi dir="ltr" style={{ fontFamily: 'monospace', overflowWrap: 'anywhere' }}>{this.state.details}</bdi></span>
+              <button
+                type="button"
+                onClick={this.copyDetails}
+                style={{ background: 'none', border: '1px solid #999', borderRadius: 6, padding: '2px 10px', cursor: 'pointer', color: '#444' }}
+              >
+                {this.state.copied ? 'הועתק ✓' : 'העתקה'}
+              </button>
+            </div>
+          )}
         </div>
       </div>
     );

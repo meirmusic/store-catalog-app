@@ -10,15 +10,19 @@ import { useBodyScrollLock } from '../hooks/useBodyScrollLock.js';
 function ConfigListSection({ list, label }) {
   const { t } = useI18n();
   const { config, addConfigValue } = useItems();
-  const { showToast } = useToast();
+  const { showToast, showErrorToast } = useToast();
   const [draft, setDraft] = useState('');
   const values = config[list] || [];
 
   async function confirmAdd() {
-    const result = await addConfigValue(list, draft);
-    if (result) {
-      setDraft('');
-      showToast(t(result.added ? 'toast.valueAdded' : 'toast.valueExists'));
+    try {
+      const result = await addConfigValue(list, draft);
+      if (result) {
+        setDraft('');
+        showToast(t(result.added ? 'toast.valueAdded' : 'toast.valueExists'));
+      }
+    } catch (err) {
+      showErrorToast(t('errors.addValueFailed'), `add-value:${list}`, err);
     }
   }
 

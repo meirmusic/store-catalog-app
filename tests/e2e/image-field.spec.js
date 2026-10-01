@@ -66,9 +66,9 @@ test('TC-IMG-002: a file that isn\'t an openable image shows a message, and the 
   const before = await page.locator(preview).getAttribute('src');
 
   await page.setInputFiles(galleryInput, { name: 'broken.jpg', mimeType: 'image/jpeg', buffer: Buffer.from('not an image') });
-  await expect(page.locator('#item-overlay .image-error')).toHaveText(
-    'הקובץ שנבחר אינו תמונה שאפשר לפתוח. בחרו תמונה בפורמט JPG או PNG.',
-  );
+  const imageError = page.locator('#item-overlay .image-error');
+  await expect(imageError).toContainText('הקובץ שנבחר אינו תמונה שאפשר לפתוח. בחרו תמונה בפורמט JPG או PNG.');
+  await expect(imageError.locator('.error-code')).toContainText(/E-[A-Z0-9]{4}/); // SPEC.md section 17
   expect(await page.locator(preview).getAttribute('src')).toBe(before);
 });
 

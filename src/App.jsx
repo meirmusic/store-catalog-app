@@ -13,22 +13,27 @@ import ConfigManager from './config/ConfigManager.jsx'
 import { ToastProvider, useToast } from './toast/ToastContext.jsx'
 import UpdateBanner from './pwa/UpdateBanner.jsx'
 import SignOutConfirm from './identity/SignOutConfirm.jsx'
+import GlobalErrorCatcher from './errors/GlobalErrorCatcher.jsx'
 import './items/items.css'
 
 function Header() {
   const { t } = useI18n()
   const { signOut } = useIdentity()
   const { member, clearMember } = useTeamMember()
-  const { isOnline, syncing, lastSyncedAt, pendingCount, syncProblem, stale, authExpired, refresh } = useSyncStatus()
+  const { isOnline, syncing, lastSyncedAt, pendingCount, syncProblem, stale, staleError, authExpired, refresh } = useSyncStatus()
   const [managingLists, setManagingLists] = useState(false)
   const [confirmingSignOut, setConfirmingSignOut] = useState(false)
-  const { showToast } = useToast()
+  const { showToast, showErrorToast } = useToast()
 
   async function explainSyncProblem() {
-    const labels = await getStuckChangeLabels()
-    const shown = labels.slice(0, 3).join(', ')
-    const more = labels.length > 3 ? ` +${labels.length - 3}` : ''
-    showToast(`${t('sync.problemIntro')} ${shown}${more}. ${t('sync.problemHelp')}`, { type: 'error' })
+    try {
+      const labels = await getStuckChangeLabels()
+      const shown = labels.slice(0, 3).join(', ')
+      const more = labels.length > 3 ? ` +${labels.length - 3}` : ''
+      showToast(`${t('sync.problemIntro')} ${shown}${more}. ${t('sync.problemHelp')}`, { type: 'error' })
+    } catch (err) {
+      showErrorToast(t('errors.unexpected'), 'sync-problem-details', err)
+    }
   }
 
   return (
@@ -50,10 +55,17 @@ function Header() {
           {isOnline ? t('sync.online') : t('sync.offline')}
         </span>
         {stale && (
-          <span className="chip" style={{ borderColor: 'var(--sold)', color: 'var(--sold)' }}>
+          // SPEC.md section 17: tapping explains why fresh data couldn't be
+          // fetched - the exact error and its code.
+          <button
+            type="button"
+            className="chip chip-problem"
+            onClick={() => showToast(t('sync.staleExplain'), { type: 'error', code: staleError?.code, details: staleError?.details })}
+            title={t('sync.problemDetails')}
+          >
             {t('sync.staleSince')}
             {lastSyncedAt ? ` ${lastSyncedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : ''}
-          </span>
+          </button>
         )}
         {pendingCount > 0 && (syncProblem ? (
           <button
@@ -108,10 +120,11 @@ function AppShell() {
 function App() {
   return (
     <>
-      <UpdateBanner />
       <IdentityProvider>
         <TeamMemberProvider>
           <ToastProvider>
+            <GlobalErrorCatcher />
+            <UpdateBanner />
             <ItemsProvider>
               <IdentityGate />
             </ItemsProvider>

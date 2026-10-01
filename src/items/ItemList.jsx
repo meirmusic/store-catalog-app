@@ -27,7 +27,15 @@ function matchesSearch(item, q) {
 export default function ItemList() {
   const { t } = useI18n();
   const { items, config, softDeleteItem, restoreItem } = useItems();
-  const { showToast } = useToast();
+  const { showToast, showErrorToast } = useToast();
+
+  function exportList() {
+    try {
+      downloadItemsCsv(filtered, t);
+    } catch (err) {
+      showErrorToast(t('errors.exportFailed'), 'export', err);
+    }
+  }
 
   const [search, setSearch] = useState('');
   const [availability, setAvailability] = useState('all');
@@ -167,7 +175,7 @@ export default function ItemList() {
             </select>
           </div>
           <button className="btn primary" onClick={() => setEditingItem(null)}>{t('actions.newItem')}</button>
-          <button className="btn" onClick={() => downloadItemsCsv(filtered, t)}>{t('actions.exportExcel')}</button>
+          <button className="btn" onClick={exportList}>{t('actions.exportExcel')}</button>
           <div className="filters-row">
             <label className={`toggle-pill${missingSerial ? ' active' : ''}`}>
               <input type="checkbox" checked={missingSerial} onChange={(e) => setMissingSerial(e.target.checked)} />
@@ -222,8 +230,13 @@ export default function ItemList() {
           onCancel={() => setDeleteTarget(null)}
           onConfirm={async () => {
             const deleted = deleteTarget;
-            await softDeleteItem(deleted.row_id);
             setDeleteTarget(null);
+            try {
+              await softDeleteItem(deleted.row_id);
+            } catch (err) {
+              showErrorToast(t('errors.deleteFailed'), 'delete', err);
+              return; // the edit form stays open - nothing was deleted
+            }
             setEditingItem(undefined);
             // SPEC.md section 11: a mistaken delete can be undone right here.
             showToast(t('toast.itemDeleted'), {
@@ -231,8 +244,12 @@ export default function ItemList() {
               action: {
                 label: t('actions.undo'),
                 onClick: async () => {
-                  await restoreItem(deleted);
-                  showToast(t('toast.itemRestored'));
+                  try {
+                    await restoreItem(deleted);
+                    showToast(t('toast.itemRestored'));
+                  } catch (err) {
+                    showErrorToast(t('errors.restoreFailed'), 'undo-delete', err);
+                  }
                 },
               },
             });

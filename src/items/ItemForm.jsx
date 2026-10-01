@@ -8,17 +8,21 @@ import DiscardConfirm from './DiscardConfirm.jsx';
 
 function ConfigSelect({ list, value, onChange, config, addConfigValue, label }) {
   const { t } = useI18n();
-  const { showToast } = useToast();
+  const { showToast, showErrorToast } = useToast();
   const [adding, setAdding] = useState(false);
   const [draft, setDraft] = useState('');
 
   async function confirmAdd() {
-    const result = await addConfigValue(list, draft);
-    if (result) {
-      onChange(result.value);
-      setDraft('');
-      setAdding(false);
-      showToast(t(result.added ? 'toast.valueAdded' : 'toast.valueExists'));
+    try {
+      const result = await addConfigValue(list, draft);
+      if (result) {
+        onChange(result.value);
+        setDraft('');
+        setAdding(false);
+        showToast(t(result.added ? 'toast.valueAdded' : 'toast.valueExists'));
+      }
+    } catch (err) {
+      showErrorToast(t('errors.addValueFailed'), `add-value:${list}`, err);
     }
   }
 
@@ -55,7 +59,7 @@ const SAVE_DELAY_NOTICE_MS = 5000;
 export default function ItemForm({ item, onClose, onRequestDelete, onSaved }) {
   const { t } = useI18n();
   const { config, saveItem, addConfigValue, queueImageUpload } = useItems();
-  const { showToast } = useToast();
+  const { showToast, showErrorToast } = useToast();
   useBodyScrollLock();
   const isNew = !item;
   const [saving, setSaving] = useState(false);
@@ -200,8 +204,7 @@ export default function ItemForm({ item, onClose, onRequestDelete, onSaved }) {
       // that specific device) used to fail silently here - the button
       // looked like it simply did nothing, with no way to tell the local
       // save itself (not just the background sync) never happened.
-      console.error('[save] item save failed', err);
-      showToast(t('errors.saveFailed'), { type: 'error' });
+      showErrorToast(t('errors.saveFailed'), 'save', err);
     } finally {
       setSaving(false);
     }

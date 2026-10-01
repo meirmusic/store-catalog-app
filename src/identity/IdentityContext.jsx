@@ -1,6 +1,6 @@
 import { createContext, useContext, useMemo, useState } from 'react';
 import { setGoogleAuth, setPasswordAuth, clearAuth } from '../api/authToken.js';
-import { getAll } from '../api/client.js';
+import { getAll, AuthError } from '../api/client.js';
 import { decodeJwt, loadStoredIdentity, saveIdentity, clearStoredIdentity } from './googleAuth.js';
 import {
   savePasswordIdentity,
@@ -50,16 +50,19 @@ export function IdentityProvider({ children }) {
       // there's nothing to decode - so this makes a real API call to find
       // out whether the server accepts it before treating sign-in as
       // successful.
+      // Returns { ok } or { ok: false, reason: 'wrong' | 'unreachable', error } -
+      // a wrong password is the user's to fix; anything else is a
+      // malfunction worth reporting (SPEC.md section 17).
       signInWithPassword: async (email, password) => {
         setPasswordAuth(email, password);
         try {
           await getAll();
           savePasswordIdentity(email, password);
           setIdentityState({ kind: 'password', email, name: email });
-          return true;
-        } catch {
+          return { ok: true };
+        } catch (error) {
           clearAuth();
-          return false;
+          return { ok: false, reason: error instanceof AuthError ? 'wrong' : 'unreachable', error };
         }
       },
       signOut: () => {

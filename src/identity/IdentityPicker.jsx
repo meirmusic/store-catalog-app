@@ -4,12 +4,14 @@ import { useI18n } from '../i18n/I18nContext.jsx';
 import { waitForGoogleIdentityServices } from './googleAuth.js';
 import { GOOGLE_CLIENT_ID } from '../api/config.js';
 import ForgotPasswordPanel from './ForgotPasswordPanel.jsx';
+import { reportError } from '../errors/errorReporting.js';
+import ErrorDetails from '../errors/ErrorDetails.jsx';
 
 export default function IdentityPicker() {
   const { user, signInWithGoogle, signInWithPassword } = useIdentity();
   const { t } = useI18n();
   const buttonRef = useRef(null);
-  const [googleError, setGoogleError] = useState('');
+  const [googleError, setGoogleError] = useState(null); // { message, code?, details? }
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [passwordError, setPasswordError] = useState('');
@@ -20,7 +22,7 @@ export default function IdentityPicker() {
   useEffect(() => {
     if (user) return;
     if (!GOOGLE_CLIENT_ID) {
-      setGoogleError(t('identity.notConfigured'));
+      setGoogleError({ message: t('identity.notConfigured') });
       return;
     }
     let cancelled = false;
@@ -30,7 +32,12 @@ export default function IdentityPicker() {
         googleId.initialize({
           client_id: GOOGLE_CLIENT_ID,
           callback: (response) => {
-            if (!signInWithGoogle(response.credential)) setGoogleError(t('identity.signInFailed'));
+            if (!signInWithGoogle(response.credential)) {
+              setGoogleError({
+                message: t('identity.signInFailed'),
+                ...reportError('google-login', new Error('Google sign-in returned a credential that could not be read')),
+              });
+            }
           },
         });
         if (buttonRef.current) {
@@ -42,7 +49,7 @@ export default function IdentityPicker() {
           });
         }
       })
-      .catch(() => setGoogleError(t('identity.signInFailed')));
+      .catch((err) => setGoogleError({ message: t('identity.signInFailed'), ...reportError('google-login', err, { log: navigator.onLine }) }));
     return () => {
       cancelled = true;
     };
@@ -55,9 +62,14 @@ export default function IdentityPicker() {
     e.preventDefault();
     setPasswordError('');
     setSubmitting(true);
-    const ok = await signInWithPassword(email.trim(), password);
+    const result = await signInWithPassword(email.trim(), password);
     setSubmitting(false);
-    if (!ok) setPasswordError(t('identity.signInFailed'));
+    if (result.ok) return;
+    if (result.reason === 'wrong') {
+      setPasswordError({ message: t('identity.wrongCredentials') });
+    } else {
+      setPasswordError({ message: t('identity.serverUnreachable'), ...reportError('login', result.error, { log: navigator.onLine }) });
+    }
   }
 
   function handleResetDone(resetEmail) {
@@ -101,7 +113,10 @@ export default function IdentityPicker() {
 
         {GOOGLE_CLIENT_ID && <div ref={buttonRef} style={{ display: 'flex', justifyContent: 'center' }} />}
         {googleError && (
-          <p style={{ color: 'var(--sold)', fontSize: '.85rem', marginTop: 14 }}>{googleError}</p>
+          <div className="inline-error" style={{ marginTop: 14 }} role="alert">
+            <span>{googleError.message}</span>
+            <ErrorDetails code={googleError.code} details={googleError.details} />
+          </div>
         )}
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '18px 0' }}>
@@ -161,7 +176,10 @@ export default function IdentityPicker() {
               </button>
             </form>
             {passwordError && (
-              <p style={{ color: 'var(--sold)', fontSize: '.85rem', marginTop: 10 }}>{passwordError}</p>
+              <div className="inline-error" style={{ marginTop: 10 }} role="alert">
+                <span>{passwordError.message}</span>
+                <ErrorDetails code={passwordError.code} details={passwordError.details} />
+              </div>
             )}
             <button
               type="button"
