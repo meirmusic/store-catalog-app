@@ -1,5 +1,5 @@
 import { db } from '../db/db.js';
-import { getAll, upsertItem, softDeleteItem, addConfigOption, uploadImage, logErrors, AuthError } from '../api/client.js';
+import { getAll, upsertItem, softDeleteItem, addConfigOption, uploadImage, logErrors, AuthError, TimeoutError } from '../api/client.js';
 import { reportError, flushErrorLog } from '../errors/errorReporting.js';
 import { APPS_SCRIPT_URL } from '../api/config.js';
 
@@ -26,6 +26,8 @@ async function withQuickRetry(fn) {
     return await fn();
   } catch (err) {
     if (err instanceof AuthError) throw err; // retrying can't fix a rejected sign-in
+    // Another full wait right away rarely helps (REG-030) - the next cycle retries.
+    if (err instanceof TimeoutError) throw err;
     await new Promise((resolve) => setTimeout(resolve, QUICK_RETRY_DELAY_MS));
     return fn();
   }
@@ -72,13 +74,18 @@ async function pushOne(change) {
   }
 }
 
-export async function pushPending() {
+// `shouldStop`: a cycle that was declared stuck and replaced by a new one
+// stops before its next change (SPEC.md section 9). `onProgress` marks each
+// change finished, success or failure - how a stuck cycle is told apart
+// from a long but healthy one.
+export async function pushPending({ shouldStop = () => false, onProgress = () => {} } = {}) {
   // No explicit orderBy: Dexie iterates by primary key (insertion order)
   // by default, which keeps an item's 'upsert' change ahead of its
   // 'uploadImage' change even when both are queued in the same tick.
   const pending = await db.pendingChanges.toArray();
   let pushed = 0;
   for (const change of pending) {
+    if (shouldStop()) break;
     try {
       // The list above is a snapshot: a change can be cancelled while this
       // cycle runs (e.g. removing a photo cancels its queued upload), so
@@ -106,6 +113,8 @@ export async function pushPending() {
         attempts: (change.attempts || 0) + 1,
         lastError: String(err && err.message ? err.message : err),
       });
+    } finally {
+      onProgress();
     }
   }
   return pushed;
@@ -187,19 +196,22 @@ export function onSyncRequested(fn) {
 // Push-then-pull, per SPEC.md section 4: local changes go out first so
 // they "win" with the server's timestamp before a pull could overwrite
 // them with a stale snapshot from a concurrent poll.
-export async function syncNow() {
+export async function syncNow({ shouldStop = () => false, onProgress = () => {} } = {}) {
   if (!APPS_SCRIPT_URL) {
     // No backend configured yet - nothing to do but leave the queue as-is.
     return { ok: false, reason: 'not-configured', pushed: 0 };
   }
   let pushed;
   try {
-    pushed = await pushPending();
+    pushed = await pushPending({ shouldStop, onProgress });
   } catch (err) {
     if (err instanceof AuthError) return { ok: false, reason: 'auth', pushed: 0 };
     throw err;
   }
+  if (shouldStop()) return { ok: false, reason: 'superseded', pushed };
   await flushErrorLog(logErrors);
+  onProgress();
+  if (shouldStop()) return { ok: false, reason: 'superseded', pushed };
   try {
     await withQuickRetry(() => pullLatest());
   } catch (err) {

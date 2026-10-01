@@ -23,17 +23,54 @@ export class AuthError extends Error {
   }
 }
 
+// SPEC.md section 9, REG-030: every request gets a time limit. On iPhone,
+// locking the screen mid-request can leave it never settling at all - and
+// the sync cycle waited on it forever, silently freezing all syncing.
+export class TimeoutError extends Error {
+  constructor(seconds) {
+    super(`no answer from the server after ${seconds}s`);
+    this.name = 'TimeoutError';
+  }
+}
+
+const TIMEOUT_MS = 30 * 1000;
+const UPLOAD_TIMEOUT_MS = 2 * 60 * 1000; // a photo is the largest request
+
+function timeoutFor(action) {
+  // Test-only override (tests/integration/request-timeout.spec.js), like
+  // __testSlowSave: lets a test hit the limit without waiting 30 seconds.
+  if (typeof window !== 'undefined' && window.__testApiTimeoutMs) return window.__testApiTimeoutMs;
+  return action === 'uploadImage' ? UPLOAD_TIMEOUT_MS : TIMEOUT_MS;
+}
+
 async function callApi(action, payload) {
   if (!APPS_SCRIPT_URL) {
     throw new Error('APPS_SCRIPT_URL not configured yet');
   }
-  const res = await fetch(APPS_SCRIPT_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'text/plain' },
-    body: JSON.stringify({ action, ...getAuthFields(), payload }),
-  });
-  if (!res.ok) throw new Error(`API error ${res.status}`);
-  const data = await res.json();
+  const ms = timeoutFor(action);
+  const controller = new AbortController();
+  let timedOut = false;
+  const timer = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, ms);
+  let res;
+  let data;
+  try {
+    res = await fetch(APPS_SCRIPT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify({ action, ...getAuthFields(), payload }),
+      signal: controller.signal,
+    });
+    if (!res.ok) throw new Error(`API error ${res.status}`);
+    data = await res.json(); // reading the answer counts toward the limit too
+  } catch (err) {
+    if (timedOut) throw new TimeoutError(Math.round(ms / 1000));
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
   if (data && data.error === 'forbidden') throw new AuthError();
   if (data && data.error) throw new Error(data.error);
   return data;
