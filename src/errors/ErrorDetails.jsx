@@ -1,14 +1,16 @@
 import { useRef, useState } from 'react';
 import { useI18n } from '../i18n/I18nContext.jsx';
+import { APP_VERSION } from './errorReporting.js';
 
 // SPEC.md section 17: under an error message - the error code (also in the
-// Sheet's ErrorLog), the exact technical error, and a copy button.
+// Sheet's ErrorLog), the exact technical error, the app version (SPEC.md 9,
+// REG-035) and a copy button that copies all three.
 export default function ErrorDetails({ code, details }) {
   const { t } = useI18n();
   const [copied, setCopied] = useState(false);
   const textRef = useRef(null);
   if (!code && !details) return null;
-  const text = [code, details].filter(Boolean).join(' · ');
+  const text = [code, details, `${t('app.version')} ${APP_VERSION}`].filter(Boolean).join(' · ');
 
   async function copy() {
     try {
@@ -38,6 +40,9 @@ export default function ErrorDetails({ code, details }) {
             {t('errors.details')}: <bdi dir="ltr">{details}</bdi>
           </span>
         )}
+        <span className="error-version">
+          {t('app.version')} <bdi dir="ltr">{APP_VERSION}</bdi>
+        </span>
       </span>
       <button type="button" className="error-copy" onClick={copy}>
         {copied ? t('actions.copied') : t('actions.copy')}

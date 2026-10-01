@@ -9,7 +9,7 @@ import { ItemsProvider } from './items/ItemsContext.jsx'
 import ItemList from './items/ItemList.jsx'
 import { useSyncStatus } from './sync/useSyncStatus.js'
 import { getStuckChangeLabels, getStuckChangeError } from './sync/syncEngine.js'
-import { isNetworkError } from './errors/errorReporting.js'
+import { isNetworkError, APP_VERSION } from './errors/errorReporting.js'
 import ConfigManager from './config/ConfigManager.jsx'
 import { ToastProvider, useToast } from './toast/ToastContext.jsx'
 import UpdateBanner from './pwa/UpdateBanner.jsx'
@@ -132,10 +132,22 @@ function App() {
             <ItemsProvider>
               <IdentityGate />
             </ItemsProvider>
+            <VersionLine />
           </ToastProvider>
         </TeamMemberProvider>
       </IdentityProvider>
     </>
+  )
+}
+
+// SPEC.md section 9 (REG-035): which version this device runs, on every
+// screen - so any screenshot tells.
+function VersionLine() {
+  const { t } = useI18n()
+  return (
+    <div className="app-version">
+      {t('app.version')} <bdi dir="ltr">{APP_VERSION}</bdi>
+    </div>
   )
 }
 

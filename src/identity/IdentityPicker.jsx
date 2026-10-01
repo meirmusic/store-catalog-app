@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useBlocksAutoUpdate } from '../pwa/typingGuard.js';
 import { useIdentity } from './IdentityContext.jsx';
 import { useI18n } from '../i18n/I18nContext.jsx';
 import { waitForGoogleIdentityServices } from './googleAuth.js';
@@ -10,6 +11,7 @@ import ErrorDetails from '../errors/ErrorDetails.jsx';
 export default function IdentityPicker() {
   const { user, signInWithGoogle, signInWithPassword } = useIdentity();
   const { t } = useI18n();
+  useBlocksAutoUpdate(); // SPEC.md 9: no automatic app update while this is open
   const buttonRef = useRef(null);
   const [googleError, setGoogleError] = useState(null); // { message, code?, details? }
   const [email, setEmail] = useState('');

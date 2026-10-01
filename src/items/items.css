@@ -343,3 +343,7 @@ select:hover, .btn:hover { border-color: var(--accent); }
 .error-copy { background: none; border: 1px solid currentColor; color: inherit; font: inherit; border-radius: 6px; padding: 1px 8px; cursor: pointer; }
 .toast { max-width: min(460px, calc(100vw - 40px)); }
 .inline-error { color: var(--sold); font-size: .85rem; display: flex; flex-direction: column; gap: 4px; margin: 0; }
+
+/* SPEC.md section 9 (REG-035): app version, quiet, at the bottom of every screen */
+.app-version { text-align: center; font-size: .7rem; color: var(--ink-dim); padding: 18px 16px 28px; opacity: .8; }
+.error-version { font-size: .85em; opacity: .85; }

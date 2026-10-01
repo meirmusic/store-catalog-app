@@ -190,3 +190,13 @@ test('TC-LST-012b: export defuses a formula hidden behind a leading tab or line 
   expect(csv).toContain(' \t=HYPERLINK');
   expect(csv).toContain('" \n+1"');
 });
+
+test('REG-035e: the app version is shown at the bottom of the screen and inside error details', async ({ page }) => {
+  await reloadAndWait(page);
+  await expect(page.locator('.app-version')).toHaveText('גרסה dev');
+  await page.evaluate(() => { window.__testForceSaveError = true; });
+  await page.click('button:has-text("פריט חדש")');
+  await page.fill('#item-overlay input[type=text] >> nth=0', 'א');
+  await page.click('#item-overlay button[type=submit]');
+  await expect(page.locator('.toast .error-version')).toHaveText('גרסה dev');
+});

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useBlocksAutoUpdate } from '../pwa/typingGuard.js';
 import { useI18n } from '../i18n/I18nContext.jsx';
 import { useItems } from './ItemsContext.jsx';
 import { useToast } from '../toast/ToastContext.jsx';
@@ -58,6 +59,7 @@ const SAVE_DELAY_NOTICE_MS = 5000;
 
 export default function ItemForm({ item, onClose, onRequestDelete, onSaved }) {
   const { t } = useI18n();
+  useBlocksAutoUpdate(); // SPEC.md 9: no automatic app update while this is open
   const { config, saveItem, addConfigValue, queueImageUpload } = useItems();
   const { showToast, showErrorToast } = useToast();
   useBodyScrollLock();

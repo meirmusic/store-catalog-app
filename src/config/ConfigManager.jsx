@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useBlocksAutoUpdate } from '../pwa/typingGuard.js';
 import { useI18n } from '../i18n/I18nContext.jsx';
 import { useItems } from '../items/ItemsContext.jsx';
 import { useToast } from '../toast/ToastContext.jsx';
@@ -52,6 +53,7 @@ function ConfigListSection({ list, label }) {
 
 export default function ConfigManager({ onClose }) {
   const { t } = useI18n();
+  useBlocksAutoUpdate(); // SPEC.md 9: no automatic app update while this is open
   useBodyScrollLock();
 
   return (

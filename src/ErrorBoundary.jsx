@@ -1,5 +1,5 @@
 import { Component } from 'react';
-import { reportError } from './errors/errorReporting.js';
+import { reportError, APP_VERSION } from './errors/errorReporting.js';
 
 // Test-only hook for tests/e2e/error-boundary.spec.js: inert for every real
 // user (nothing in the app ever sets window.__testCrash), lets that test
@@ -37,7 +37,7 @@ export default class ErrorBoundary extends Component {
 
   copyDetails = async () => {
     try {
-      await navigator.clipboard.writeText(`${this.state.code} · ${this.state.details}`);
+      await navigator.clipboard.writeText(`${this.state.code} · ${this.state.details} · גרסה ${APP_VERSION}`);
       this.setState({ copied: true });
     } catch {
       // clipboard blocked - the text is on screen to copy by hand
@@ -87,6 +87,7 @@ export default class ErrorBoundary extends Component {
             <div style={{ marginTop: 20, fontSize: '.78rem', color: '#666', display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'center' }}>
               <span>קוד תקלה: <bdi>{this.state.code}</bdi></span>
               <span>פרטים טכניים: <bdi dir="ltr" style={{ fontFamily: 'monospace', overflowWrap: 'anywhere' }}>{this.state.details}</bdi></span>
+              <span>גרסה <bdi dir="ltr">{APP_VERSION}</bdi></span>
               <button
                 type="button"
                 onClick={this.copyDetails}

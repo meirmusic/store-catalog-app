@@ -194,7 +194,7 @@ test('TC-ERR-009: sign-in - a wrong password is not a malfunction (no code, not 
   expect(JSON.stringify(queue)).not.toContain('Secret-Pass-123'); // privacy
 });
 
-test('TC-ERR-010: "העתקה" copies the code and the details together', async ({ page, context }) => {
+test('TC-ERR-010: "העתקה" copies the code, the details and the app version together', async ({ page, context }) => {
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
   await reloadAndWait(page);
   await page.evaluate(() => { window.__testForceSaveError = true; });
@@ -204,5 +204,5 @@ test('TC-ERR-010: "העתקה" copies the code and the details together', async 
   const code = (await page.locator('.toast .error-code bdi').textContent()).trim();
   await page.click('.toast .error-copy');
   await expect(page.locator('.toast .error-copy')).toHaveText('הועתק ✓');
-  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(`${code} · Error: forced test failure`);
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(`${code} · Error: forced test failure · גרסה dev`);
 });
