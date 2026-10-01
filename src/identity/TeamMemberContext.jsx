@@ -3,6 +3,7 @@
 // this context is only for attributing changes to a real person
 // (last_modified_by) once signed in. See task #28 v2.
 import { createContext, useContext, useMemo, useState } from 'react';
+import { RENAMED_TEAM_NAMES } from '../config/seed.js';
 
 const STORAGE_KEY = 'gallery_team_member';
 
@@ -11,6 +12,11 @@ const TeamMemberContext = createContext(null);
 function readStoredMember() {
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
+    const renamed = RENAMED_TEAM_NAMES[stored];
+    if (renamed) {
+      localStorage.setItem(STORAGE_KEY, renamed);
+      return renamed;
+    }
     // Any remembered name counts - team names are no longer only the
     // built-in ones (SPEC.md section 15), and this is attribution only.
     if (stored && stored.trim()) return stored;
