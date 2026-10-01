@@ -1,6 +1,14 @@
 // TC-CFG-* from TEST_PLAN.md.
 import { test, expect } from '@playwright/test';
-import { pickIdentity, clearAllData, getPendingChanges, openNewItemForm, saveItemForm, reloadApp } from '../helpers/app.js';
+import {
+  pickIdentity,
+  clearAllData,
+  getPendingChanges,
+  openNewItemForm,
+  saveItemForm,
+  reloadApp,
+  openManageLists,
+} from '../helpers/app.js';
 
 test.beforeEach(async ({ page }) => {
   await pickIdentity(page);
@@ -62,7 +70,7 @@ test('TC-CFG-003: default seed values match SPEC.md on first load', async ({ pag
 // dedicated screen showing every existing value per list, that can also
 // add new ones - separate from the inline "+" inside an item form.
 test('TC-CFG-004: the dedicated list-management screen shows and adds values, visible from item forms too', async ({ page }) => {
-  await page.click('.icon-btn[title="ניהול רשימות"]');
+  await openManageLists(page);
   await expect(page.locator('#config-overlay')).toBeVisible();
 
   // existing seed values show up as read-only badges, not just in a select
@@ -92,7 +100,7 @@ test('REG-026: a new list value that is still waiting to be sent survives a sync
     if (body.action === 'getAll') return route.fulfill({ json: { items: [], config: { location: ['אביגדור', 'גלריה', 'חיים'] } } });
     return route.fulfill({ json: { error: 'push failed' } });
   });
-  await page.click('button[title="ניהול רשימות"]');
+  await openManageLists(page);
   const location = page.locator('#config-overlay .field', { hasText: 'מיקום' });
   await location.locator('input').fill('מחסן חדש');
   await location.locator('button').click();
@@ -100,13 +108,13 @@ test('REG-026: a new list value that is still waiting to be sent survives a sync
   await page.click('button[title="רענון ידני"]');
   await expect.poll(async () => (await getPendingChanges(page))[0]?.attempts || 0).toBeGreaterThanOrEqual(1);
 
-  await page.click('button[title="ניהול רשימות"]');
+  await openManageLists(page);
   await expect(page.locator('#config-overlay .field', { hasText: 'מיקום' }).locator('.badge', { hasText: 'מחסן חדש' })).toHaveCount(1);
 });
 
 // REG-027: adding a value that already exists said "added to the list".
 test('REG-027: adding a value that already exists says so, and the form picks the existing one', async ({ page }) => {
-  await page.click('button[title="ניהול רשימות"]');
+  await openManageLists(page);
   const location = page.locator('#config-overlay .field', { hasText: 'מיקום' });
   await location.locator('input').fill(' גלריה ');
   await location.locator('button').click();
@@ -129,7 +137,7 @@ test('REG-027: adding a value that already exists says so, and the form picks th
 });
 
 test('TC-CFG-005: the "add" buttons are unavailable while the box is empty', async ({ page }) => {
-  await page.click('button[title="ניהול רשימות"]');
+  await openManageLists(page);
   await expect(page.locator('#config-overlay .field', { hasText: 'מיקום' }).locator('button')).toBeDisabled();
   await page.click('#config-overlay button:has-text("סגירה")');
   await openNewItemForm(page);
@@ -139,7 +147,7 @@ test('TC-CFG-005: the "add" buttons are unavailable while the box is empty', asy
 });
 
 test('TC-CFG-006: list values are sorted A-Z, in the form and in "manage lists"', async ({ page }) => {
-  await page.click('button[title="ניהול רשימות"]');
+  await openManageLists(page);
   const location = page.locator('#config-overlay .field', { hasText: 'מיקום' });
   await location.locator('input').fill('אאא ראשון');
   await location.locator('button').click();
@@ -155,7 +163,7 @@ test('TC-CFG-006: list values are sorted A-Z, in the form and in "manage lists"'
 // SPEC.md section 15: a new team member is added in "manage lists" - no
 // developer needed - and joins the built-in names in "who are you".
 test('TC-CFG-007: a team member added in "manage lists" appears in "who are you" and can be picked', async ({ page }) => {
-  await page.click('button[title="ניהול רשימות"]');
+  await openManageLists(page);
   const team = page.locator('#config-overlay .field', { hasText: 'צוות' });
   await expect(team.locator('.badge', { hasText: 'שפרה' })).toHaveCount(1); // built-in names are there
   await team.locator('input').fill('רותי');

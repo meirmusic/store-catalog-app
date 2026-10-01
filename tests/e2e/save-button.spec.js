@@ -50,13 +50,14 @@ test('SAVE-05: a price of 0 is saved as 0 and shown as $0, not as "missing price
   await expect(card).not.toContainText('חסר מחיר');
 });
 
-test('SAVE-06: clearing an existing price saves it empty and shows "missing price"', async ({ page }) => {
+test('SAVE-06: clearing an existing price saves it empty and the card shows no price (SPEC.md 19.7)', async ({ page }) => {
   await seedItems(page, [{ row_id: 'PRICED', name: 'היה מחיר', price: 500 }]);
   await openFirstCard(page);
   await page.fill('#item-overlay input[type=number]', '');
   await saveItemForm(page);
   expect((await getItems(page))[0].price).toBeNull();
-  await expect(page.locator('.card', { hasText: 'היה מחיר' })).toContainText('חסר מחיר');
+  await expect(page.locator('.card', { hasText: 'היה מחיר' }).locator('.price')).toHaveCount(0);
+  await expect(page.locator('.card', { hasText: 'היה מחיר' })).not.toContainText('חסר מחיר');
 });
 
 test('SAVE-07: a serial number and SKU already used by another item are still saved (no uniqueness check)', async ({ page }) => {

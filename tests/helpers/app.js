@@ -161,11 +161,32 @@ export async function saveItemForm(page) {
 // own display name (e.g. "עברית"), so this works regardless of which
 // language is currently active.
 export async function switchLanguage(page, targetLabel) {
-  await page.click('button[aria-expanded]');
+  await page.click('button.chip[aria-expanded]');
   await page.click(`button:has-text("${targetLabel}")`);
 }
 
 export async function cancelItemForm(page) {
   await page.click('#item-overlay button:has-text("ביטול")');
   await page.waitForSelector('#item-overlay', { state: 'detached' });
+}
+
+// SPEC.md 19.10: "manage lists" and "sign out" live in the ⚙ menu.
+export async function openMenuItem(page, label) {
+  await page.click('button[title="תפריט"]');
+  await page.click(`.header-menu-list button:has-text("${label}")`);
+}
+
+export async function openManageLists(page) {
+  await openMenuItem(page, 'ניהול רשימות');
+}
+
+export async function startSignOut(page) {
+  await openMenuItem(page, 'התנתקות');
+}
+
+// SPEC.md 19.4: the filters sit behind the "סינון" button. Safe to call
+// when already open.
+export async function openFilters(page) {
+  const toggle = page.locator('.filters-toggle');
+  if ((await toggle.getAttribute('aria-expanded')) !== 'true') await toggle.click();
 }

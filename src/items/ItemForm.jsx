@@ -6,6 +6,7 @@ import { useToast } from '../toast/ToastContext.jsx';
 import { useBodyScrollLock } from '../hooks/useBodyScrollLock.js';
 import ImageField from './ImageField.jsx';
 import DiscardConfirm from './DiscardConfirm.jsx';
+import ShareDialog from './ShareDialog.jsx';
 
 function ConfigSelect({ list, value, onChange, config, addConfigValue, label }) {
   const { t } = useI18n();
@@ -57,7 +58,8 @@ function ConfigSelect({ list, value, onChange, config, addConfigValue, label }) 
 
 const SAVE_DELAY_NOTICE_MS = 5000;
 
-export default function ItemForm({ item, onClose, onRequestDelete, onSaved }) {
+// `template`: a new item's starting values when duplicating (SPEC.md 19.3).
+export default function ItemForm({ item, template = null, onClose, onRequestDelete, onSaved, onDuplicate }) {
   const { t } = useI18n();
   useBlocksAutoUpdate(); // SPEC.md 9: no automatic app update while this is open
   const { config, saveItem, addConfigValue, queueImageUpload } = useItems();
@@ -90,16 +92,17 @@ export default function ItemForm({ item, onClose, onRequestDelete, onSaved }) {
   // String(): an item stored before REG-028's fix may still hold a numeric
   // SKU/serial from the Sheet; the form treats every field as text.
   const text = (v) => (v == null ? '' : String(v));
-  const [name, setName] = useState(text(item?.name));
-  const [size, setSize] = useState(text(item?.size));
-  const [sku, setSku] = useState(text(item?.sku));
-  const [type, setType] = useState(text(item?.type));
-  const [location, setLocation] = useState(text(item?.location));
-  const [status, setStatus] = useState(text(item?.physical_status));
-  const [price, setPrice] = useState(item?.price ?? '');
-  const [serial, setSerial] = useState(text(item?.serial_number));
-  const [notes, setNotes] = useState(text(item?.notes));
-  const [availability, setAvailability] = useState(item?.availability_status || 'available');
+  const start = item || template || {};
+  const [name, setName] = useState(text(start.name));
+  const [size, setSize] = useState(text(start.size));
+  const [sku, setSku] = useState(text(start.sku));
+  const [type, setType] = useState(text(start.type));
+  const [location, setLocation] = useState(text(start.location));
+  const [status, setStatus] = useState(text(start.physical_status));
+  const [price, setPrice] = useState(start.price ?? '');
+  const [serial, setSerial] = useState(text(start.serial_number));
+  const [notes, setNotes] = useState(text(start.notes));
+  const [availability, setAvailability] = useState(start.availability_status || 'available');
   // A saved photo still waiting to upload is what the item shows (SPEC.md
   // section 10), so the form starts from it too.
   const pendingPhoto = item?.pending_image || null;
@@ -114,6 +117,26 @@ export default function ItemForm({ item, onClose, onRequestDelete, onSaved }) {
   const isDirty = currentValues.some((v, i) => String(v) !== initialValuesRef.current[i]);
 
   const [confirmingDiscard, setConfirmingDiscard] = useState(false);
+  const [sharing, setSharing] = useState(false);
+
+  // SPEC.md 19.3: a new item with this one's details - but never its name,
+  // SKU, serial number or photo (those belong to this artwork only).
+  function duplicate() {
+    setError('');
+    if (isDirty) {
+      setError(t('errors.saveBeforeDuplicate'));
+      return;
+    }
+    onDuplicate({
+      size: item.size,
+      type: item.type,
+      location: item.location,
+      physical_status: item.physical_status,
+      price: item.price,
+      notes: item.notes,
+      sourceName: item.name,
+    });
+  }
 
   function requestClose() {
     // Mid-save the edits are already on their way to being stored.
@@ -216,7 +239,9 @@ export default function ItemForm({ item, onClose, onRequestDelete, onSaved }) {
     <>
       <div className="overlay" id="item-overlay" onMouseDown={(e) => e.target === e.currentTarget && requestClose()}>
         <div className="modal">
-          <h2 className="serif">{isNew ? t('actions.newItem').replace('+ ', '') : item.name}</h2>
+          <h2 className="serif">
+            {!isNew ? item.name : template ? t('item.duplicateOf').replace('{name}', template.sourceName ?? '') : t('actions.newItem').replace('+ ', '')}
+          </h2>
           {!isNew && (
             <p className="sub">
               {item.last_modified_by} · {item.last_modified_at ? new Date(item.last_modified_at).toLocaleString() : ''}
@@ -316,14 +341,19 @@ export default function ItemForm({ item, onClose, onRequestDelete, onSaved }) {
                 </button>
               </div>
               {!isNew && (
-                <button type="button" className="danger-btn" onClick={() => onRequestDelete(item)}>
-                  {t('actions.deleteItem')}
-                </button>
+                <div className="right-actions">
+                  <button type="button" className="btn" onClick={() => setSharing(true)}>{t('actions.share')}</button>
+                  <button type="button" className="btn" onClick={duplicate}>{t('actions.duplicate')}</button>
+                  <button type="button" className="danger-btn" onClick={() => onRequestDelete(item)}>
+                    {t('actions.deleteItem')}
+                  </button>
+                </div>
               )}
             </div>
           </form>
         </div>
       </div>
+      {sharing && <ShareDialog item={item} onClose={() => setSharing(false)} />}
       {confirmingDiscard && (
         <DiscardConfirm
           onSave={saveFromDiscardConfirm}

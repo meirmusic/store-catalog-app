@@ -2,8 +2,9 @@ import { useState } from 'react';
 import { useI18n } from '../i18n/I18nContext.jsx';
 import ImageLightbox from './ImageLightbox.jsx';
 import { displayImage, sizedImageUrl, THUMB_IMAGE_WIDTH, FULL_IMAGE_WIDTH } from './imageUrl.js';
+import { formatWhen } from './formatWhen.js';
 
-export default function ItemCard({ item, onClick }) {
+export default function ItemCard({ item, onClick, showModified = false }) {
   const { t } = useI18n();
   const sold = item.availability_status === 'sold';
   const [zoomed, setZoomed] = useState(false);
@@ -55,26 +56,26 @@ export default function ItemCard({ item, onClick }) {
           {item.size}
           {item.location ? ` · ${item.location}` : ''}
         </div>
-        <div className="badges">
-          <span className={`badge ${sold ? 'sold' : 'available'}`}>
-            {sold ? t('filters.sold') : t('filters.available')}
-          </span>
-          {item.type && <span className="badge">{item.type}</span>}
-          {item.physical_status && <span className="badge">{item.physical_status}</span>}
-          {!item.serial_number && <span className="badge missing">{t('filters.missingSerial')}</span>}
-          {!item.sku && <span className="badge missing">{t('filters.missingSku')}</span>}
-        </div>
+        {/* SPEC.md 19.7/19.8: "sold" is the ribbon only; no "available" or
+            "missing" labels - missing details are found through the filter. */}
+        {(item.type || item.physical_status) && (
+          <div className="badges">
+            {item.type && <span className="badge">{item.type}</span>}
+            {item.physical_status && <span className="badge">{item.physical_status}</span>}
+          </div>
+        )}
         <div className="idline">
           <span>
             {item.sku ? `${t('fields.sku')} ${item.sku}` : ''}
             {item.serial_number ? ` #${item.serial_number}` : ''}
           </span>
-          {item.price != null && item.price !== '' ? (
+          {item.price != null && item.price !== '' && (
             <span className="price">${Number(item.price).toLocaleString()}</span>
-          ) : (
-            <span className="badge missing">{t('filters.missingPrice')}</span>
           )}
         </div>
+        {showModified && item.last_modified_at && (
+          <div className="modified-line">{item.last_modified_by ? `${item.last_modified_by} · ` : ''}{formatWhen(item.last_modified_at, t)}</div>
+        )}
       </div>
     </article>
   );

@@ -8,6 +8,8 @@ import {
   clickRefresh,
   openNewItemForm,
   fillItemForm,
+  openManageLists,
+  startSignOut,
 } from '../helpers/app.js';
 
 const MOCK_URL = 'https://mock-apps-script.test/exec';
@@ -143,7 +145,7 @@ test('TC-ERR-006: a failed delete says so with code and details, and the item an
 test('TC-ERR-007: a failed "add to list" says so with code and details', async ({ page }) => {
   await reloadAndWait(page);
   await breakDb(page, 'config', 'put');
-  await page.click('button[title="ניהול רשימות"]');
+  await openManageLists(page);
   const location = page.locator('#config-overlay .field', { hasText: 'מיקום' });
   await location.locator('input').fill('מחסן חדש');
   await location.locator('button').click();
@@ -173,7 +175,7 @@ test('TC-ERR-009: sign-in - a wrong password is not a malfunction (no code, not 
     if (mode === 'wrong') return route.fulfill({ json: { error: 'forbidden' } });
     return route.fulfill({ status: 500, body: 'Internal Server Error' });
   });
-  await page.click('button[title="התנתקות מחשבון הגלריה"]');
+  await startSignOut(page);
   await page.click('.signout-confirm button:has-text("התנתקות")');
   await page.evaluate(() => localStorage.removeItem('gallery_error_log_queue'));
   const message = page.locator('form ~ .inline-error');

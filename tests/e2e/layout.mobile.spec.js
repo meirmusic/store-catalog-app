@@ -14,7 +14,7 @@ test.beforeEach(async ({ page }) => {
 
 test('TC-MOBILE-001 (REG-001 regression): the search box takes its own row, never squeezed alongside the filters', async ({ page }) => {
   const searchBox = await page.locator('.search-box').boundingBox();
-  const controls = await page.locator('.toolbar-controls').boundingBox();
+  const controls = await page.locator('.toolbar-row').boundingBox(); // SPEC.md 19.4: the row under the search
   expect(searchBox).toBeTruthy();
   expect(controls).toBeTruthy();
   // Stacked, not side-by-side: the controls row starts at or after the

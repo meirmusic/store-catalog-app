@@ -14,6 +14,7 @@ import ConfigManager from './config/ConfigManager.jsx'
 import { ToastProvider, useToast } from './toast/ToastContext.jsx'
 import UpdateBanner from './pwa/UpdateBanner.jsx'
 import SignOutConfirm from './identity/SignOutConfirm.jsx'
+import HeaderMenu from './HeaderMenu.jsx'
 import GlobalErrorCatcher from './errors/GlobalErrorCatcher.jsx'
 import './items/items.css'
 
@@ -54,10 +55,13 @@ function Header() {
         </span>
       </div>
       <div className="status-cluster">
-        <span className="chip">
-          <span className={`dot ${isOnline ? 'on' : 'off'}`} />
-          {isOnline ? t('sync.online') : t('sync.offline')}
-        </span>
+        {/* SPEC.md 19.9: only the unusual state is shown. */}
+        {!isOnline && (
+          <span className="chip">
+            <span className="dot off" />
+            {t('sync.offline')}
+          </span>
+        )}
         {stale && (
           // SPEC.md section 17: tapping explains why fresh data couldn't be
           // fetched - the exact error and its code.
@@ -87,8 +91,7 @@ function Header() {
           </span>
         ))}
         <button className={`icon-btn${syncing ? ' spin' : ''}`} onClick={refresh} title={t('actions.refresh')}>⟳</button>
-        <button className="icon-btn" onClick={() => setManagingLists(true)} title={t('config.manageLists')}>⚙</button>
-        <button className="icon-btn" onClick={() => setConfirmingSignOut(true)} title={t('actions.signOutGoogle')}>🔐</button>
+        <HeaderMenu onManageLists={() => setManagingLists(true)} onSignOut={() => setConfirmingSignOut(true)} />
         <LanguageSwitcher />
         {member && (
           <span className="chip user" onClick={clearMember} title={t('actions.switchUser')}>

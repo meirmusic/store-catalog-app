@@ -2,7 +2,13 @@
 // filtered/displayed list, not the whole unfiltered catalog.
 import { test, expect } from '@playwright/test';
 import fs from 'node:fs';
-import { pickIdentity, clearAllData, seedItems, reloadApp } from '../helpers/app.js';
+import {
+  pickIdentity,
+  clearAllData,
+  seedItems,
+  reloadApp,
+  openFilters,
+} from '../helpers/app.js';
 
 test.beforeEach(async ({ page }) => {
   await pickIdentity(page);
@@ -17,6 +23,7 @@ test('TC-LST-010: export downloads a CSV of only the currently filtered items', 
   await reloadApp(page);
   await page.waitForSelector('text=קטלוג הגלריה');
 
+  await openFilters(page);
   await page.selectOption('.filter-group:has-text("מיקום") select', { label: 'גלריה' });
   await expect(page.locator('.card')).toHaveCount(1);
 

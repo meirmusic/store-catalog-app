@@ -11,6 +11,7 @@ import {
   fillItemForm,
   saveItemForm,
   getPendingChanges,
+  startSignOut,
 } from '../helpers/app.js';
 
 const MOCK_URL = 'https://mock-apps-script.test/exec';
@@ -118,7 +119,7 @@ test('REG-030c: coming back to the app (screen unlocked, switched back) syncs ri
 test('REG-030d: signing in when the server never answers ends with a clear message, not "signing in..." forever', async ({ page }) => {
   await mockServer(page, () => true);
   await reloadAndWait(page);
-  await page.click('button[title="התנתקות מחשבון הגלריה"]');
+  await startSignOut(page);
   await page.click('.signout-confirm button:has-text("התנתקות")');
   await page.evaluate(() => { window.__testApiTimeoutMs = 1000; });
   await page.fill('input[type=email]', 'office@example.com');

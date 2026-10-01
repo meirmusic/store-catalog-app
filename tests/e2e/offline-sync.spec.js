@@ -17,11 +17,15 @@ test.beforeEach(async ({ page }) => {
   await page.waitForSelector('text=קטלוג הגלריה');
 });
 
-test('TC-OFF-001: going offline flips the status dot and label', async ({ page, context }) => {
-  await expect(page.locator('.dot.on')).toBeVisible();
+test('TC-OFF-001: going offline shows "מנותק"; online shows nothing (SPEC.md 19.9)', async ({ page, context }) => {
+  await expect(page.locator('.chip', { hasText: 'מחובר' })).toHaveCount(0);
+  await expect(page.locator('.dot')).toHaveCount(0);
   await context.setOffline(true);
   await page.evaluate(() => window.dispatchEvent(new Event('offline')));
-  await expect(page.locator('.dot.off')).toBeVisible();
+  await expect(page.locator('.chip', { hasText: 'מנותק' })).toBeVisible();
+  await context.setOffline(false);
+  await page.evaluate(() => window.dispatchEvent(new Event('online')));
+  await expect(page.locator('.chip', { hasText: 'מנותק' })).toHaveCount(0);
 });
 
 test('TC-OFF-002: adding an item while offline queues it with a correct pending count', async ({ page, context }) => {

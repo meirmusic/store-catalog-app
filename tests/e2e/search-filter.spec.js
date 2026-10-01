@@ -1,6 +1,12 @@
 // TC-SRCH-* from TEST_PLAN.md.
 import { test, expect } from '@playwright/test';
-import { pickIdentity, clearAllData, seedItems, reloadApp } from '../helpers/app.js';
+import {
+  pickIdentity,
+  clearAllData,
+  seedItems,
+  reloadApp,
+  openFilters,
+} from '../helpers/app.js';
 
 const SEED = [
   { row_id: 'A1', name: 'אור בין החומות', sku: '3022', serial_number: '111', location: 'גלריה', type: 'מקורי', physical_status: 'מתוח', availability_status: 'available', price: 4200 },
@@ -34,31 +40,38 @@ test('TC-SRCH-002: serial number search should be exact-match only', async ({ pa
 });
 
 test('TC-SRCH-003: "missing price" filter shows only items without a price', async ({ page }) => {
+  await openFilters(page);
   await page.click('label:has-text("חסר מחיר")');
   await expect(page.locator('.card')).toHaveCount(2); // A2, A3
 });
 
 test('TC-SRCH-004: "missing sku" filter shows only items without a sku', async ({ page }) => {
+  await openFilters(page);
   await page.click('label:has-text("חסר מק")');
   await expect(page.locator('.card')).toHaveCount(1); // A4
 });
 
 test('TC-SRCH-005: availability filter narrows to sold/available correctly', async ({ page }) => {
+  await openFilters(page);
   await page.selectOption('.filter-group:has-text("זמינות") select', { label: 'נמכר' });
   await expect(page.locator('.card')).toHaveCount(1); // A2
   await expect(page.locator('.card')).toContainText('שביל תפילה');
 });
 
 test('TC-SRCH-006: combining location + type filters intersects (AND), not union', async ({ page }) => {
+  await openFilters(page);
   await page.selectOption('.filter-group:has-text("מיקום") select', { label: 'גלריה' }); // A1, A4
+  await openFilters(page);
   await page.selectOption('.filter-group:has-text("סוג") select', { label: 'מקורי' }); // A1, A4 (both already 'מקורי')
   await expect(page.locator('.card')).toHaveCount(2);
 
+  await openFilters(page);
   await page.selectOption('.filter-group:has-text("סוג") select', { label: 'מיקס מדיה' }); // now: גלריה AND מיקס מדיה = none
   await expect(page.locator('.card')).toHaveCount(0);
 });
 
 test('TC-SRCH-007 (documents existing UX gap): a new item outside the active filter saves but silently disappears', async ({ page }) => {
+  await openFilters(page);
   await page.selectOption('.filter-group:has-text("מיקום") select', { label: 'חיים' }); // only A3 visible
   await expect(page.locator('.card')).toHaveCount(1);
 
@@ -73,6 +86,7 @@ test('TC-SRCH-007 (documents existing UX gap): a new item outside the active fil
   // Saved successfully but not visible under the current filter, and with
   // no message explaining why - see TEST_PLAN.md SRCH-07 note.
   await expect(page.locator('.card')).toHaveCount(1);
+  await openFilters(page);
   await page.selectOption('.filter-group:has-text("מיקום") select', { label: 'הכל' });
   await expect(page.locator('.card')).toHaveCount(5);
 });
@@ -99,13 +113,16 @@ test('TC-SRCH-006: the search also finds words in the notes', async ({ page }) =
 
 test('TC-SRCH-007: with a search or filter on, "מוצגים X מתוך Y" shows; none when nothing is filtered', async ({ page }) => {
   await expect(page.locator('.results-line')).toHaveCount(0);
+  await openFilters(page);
   await page.locator('.filter-group:has-text("מיקום") select').selectOption({ label: 'גלריה' });
   await expect(page.locator('.results-line')).toContainText('מוצגים 2 מתוך 4');
 });
 
 test('TC-SRCH-008: "ניקוי סינון" resets every search and filter at once, from the results line and from "no results"', async ({ page }) => {
   await page.fill('.search-box input', 'אין כזה פריט');
+  await openFilters(page);
   await page.locator('.filter-group:has-text("זמינות") select').selectOption('sold');
+  await openFilters(page);
   await page.click('label:has-text("חסר מחיר")');
   await expect(page.locator('.card')).toHaveCount(0);
 
@@ -115,6 +132,7 @@ test('TC-SRCH-008: "ניקוי סינון" resets every search and filter at onc
   await expect(page.locator('.filter-group:has-text("זמינות") select')).toHaveValue('all');
   await expect(page.locator('.results-line')).toHaveCount(0);
 
+  await openFilters(page);
   await page.locator('.filter-group:has-text("סוג") select').selectOption({ label: 'מקורי' });
   await page.click('.results-line button:has-text("ניקוי סינון")');
   await expect(page.locator('.card')).toHaveCount(4);
