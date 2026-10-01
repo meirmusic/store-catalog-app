@@ -157,7 +157,7 @@
 | API-05 | `addConfigOption` - בודק כפילות case-insensitive | ✅ תואם | TC-BE-005 | 🟢 |
 | TECH-01 | גוף בקשה כ-`text/plain`, לא `application/json` (עוקף CORS preflight) | ✅ תואם | TC-BE-006 | 🟢 |
 | TECH-02 | `LockService.getScriptLock()` על כל endpoint שכותב | ✅ תואם (בקוד, נבדק בעין - Apps Script לא ניתן להרצה מקומית) | - | 🔴 |
-| TECH-03 | **עודכן (task #28, v3)**: כל בקשה מאומתת בצד שרת מול אחת משתי דרכים - Google (tokeninfo) + רשימת אימיילים מורשים ב-Config, או אימייל+סיסמה מול hash ב-Script Properties - לא סוד משותף | ✅ תואם | TC-BE-009/009b/009c/009d, TC-BE-010..010f | 🟢 |
+| TECH-03 | **עודכן (REG-036)**: כל בקשה מאומתת בצד שרת מול מייל המשרד + סיסמה (hash ב-Script Properties) - הדרך היחידה; הכניסה עם גוגל הוסרה | ✅ תואם | TC-BE-010..010f, REG-036 | 🟢 |
 
 ---
 
