@@ -1,62 +1,21 @@
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { useBlocksAutoUpdate } from '../pwa/typingGuard.js';
 import { useIdentity } from './IdentityContext.jsx';
 import { useI18n } from '../i18n/I18nContext.jsx';
-import { waitForGoogleIdentityServices } from './googleAuth.js';
-import { GOOGLE_CLIENT_ID } from '../api/config.js';
 import ForgotPasswordPanel from './ForgotPasswordPanel.jsx';
 import { reportError } from '../errors/errorReporting.js';
 import ErrorDetails from '../errors/ErrorDetails.jsx';
 
 export default function IdentityPicker() {
-  const { user, signInWithGoogle, signInWithPassword } = useIdentity();
+  const { user, signInWithPassword } = useIdentity();
   const { t } = useI18n();
   useBlocksAutoUpdate(); // SPEC.md 9: no automatic app update while this is open
-  const buttonRef = useRef(null);
-  const [googleError, setGoogleError] = useState(null); // { message, code?, details? }
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [passwordError, setPasswordError] = useState('');
   const [passwordInfo, setPasswordInfo] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [view, setView] = useState('login'); // 'login' | 'forgot'
-
-  useEffect(() => {
-    if (user) return;
-    if (!GOOGLE_CLIENT_ID) {
-      setGoogleError({ message: t('identity.notConfigured') });
-      return;
-    }
-    let cancelled = false;
-    waitForGoogleIdentityServices()
-      .then((googleId) => {
-        if (cancelled) return;
-        googleId.initialize({
-          client_id: GOOGLE_CLIENT_ID,
-          callback: (response) => {
-            if (!signInWithGoogle(response.credential)) {
-              setGoogleError({
-                message: t('identity.signInFailed'),
-                ...reportError('google-login', new Error('Google sign-in returned a credential that could not be read')),
-              });
-            }
-          },
-        });
-        if (buttonRef.current) {
-          googleId.renderButton(buttonRef.current, {
-            type: 'standard',
-            theme: 'outline',
-            size: 'large',
-            shape: 'pill',
-          });
-        }
-      })
-      .catch((err) => setGoogleError({ message: t('identity.signInFailed'), ...reportError('google-login', err, { log: navigator.onLine }) }));
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user]);
 
   if (user) return null;
 
@@ -112,20 +71,6 @@ export default function IdentityPicker() {
         <p style={{ color: 'var(--ink-dim)', fontSize: '.88rem', margin: '0 0 18px' }}>
           {t('identity.subtitle')}
         </p>
-
-        {GOOGLE_CLIENT_ID && <div ref={buttonRef} style={{ display: 'flex', justifyContent: 'center' }} />}
-        {googleError && (
-          <div className="inline-error" style={{ marginTop: 14 }} role="alert">
-            <span>{googleError.message}</span>
-            <ErrorDetails code={googleError.code} details={googleError.details} />
-          </div>
-        )}
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '18px 0' }}>
-          <span style={{ flex: 1, height: 1, background: 'var(--line)' }} />
-          <span style={{ color: 'var(--ink-dim)', fontSize: '.8rem' }}>{t('identity.or')}</span>
-          <span style={{ flex: 1, height: 1, background: 'var(--line)' }} />
-        </div>
 
         {view === 'forgot' ? (
           <ForgotPasswordPanel defaultEmail={email} onDone={handleResetDone} onCancel={() => setView('login')} />

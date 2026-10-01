@@ -151,9 +151,9 @@ function VersionLine() {
   )
 }
 
-// Two gates: first the shared office Google account (real access control -
-// verified server-side against the Config sheet's allowlist), then "who are
-// you" (attribution only, no security weight of its own - see task #28 v2).
+// Two gates: first the office email + password (real access control -
+// verified server-side on every request), then "who are you" (attribution
+// only, no security weight of its own - see task #28 v2).
 function IdentityGate() {
   const { user } = useIdentity()
   const { member } = useTeamMember()

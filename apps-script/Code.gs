@@ -4,13 +4,9 @@
  * How to install (see SPEC.md tasks #1-#3):
  * 1. Open the Google Sheet, then Extensions > Apps Script.
  * 2. Delete whatever is in the default Code.gs and paste this whole file in.
- * 3. Change GOOGLE_CLIENT_ID below to the OAuth Client ID from Google Cloud
- *    Console (Credentials > OAuth client ID > Web application) - the same
- *    value the app's VITE_GOOGLE_CLIENT_ID must be set to.
+ * 3. (Removed - Google Sign-In was dropped, SPEC.md section 15 / REG-036.)
  * 4. Change LOGIN_EMAIL below to the office email staff will type into the
- *    app's own password login form (task #28 v3 - not every phone has the
- *    shared Google account signed in, so a plain email+password form is a
- *    second, independent way in, alongside Google Sign-In).
+ *    app's password login form - the app's only way in.
  * 5. Deploy > New deployment > type "Web app" > Execute as "Me",
  *    Who has access "Anyone" > Deploy. Copy the Web App URL.
  * 6. Put that URL into the app's environment as VITE_APPS_SCRIPT_URL.
@@ -21,14 +17,6 @@
  *    the Sheet or in this file. (Running promptSetLoginPassword directly
  *    from this editor's own Run button does NOT work - SpreadsheetApp.getUi()
  *    only works when genuinely triggered from the Sheet's own UI.)
- * 8. In the Config sheet tab, add a row for the shared gallery Google
- *    account everyone signs in with: list_name "allowed_emails", value
- *    that account's email address. Each staff member then picks their own
- *    name from a second, in-app "who are you" screen for attribution only
- *    (last_modified_by) - that name list carries no access-control weight
- *    and lives in src/config/seed.js, not here. Rotating or adding another
- *    shared account later is just editing these allowed_emails rows - no
- *    code change needed.
  *
  * Self-service password reset (task #28 v4): the app's own "שכחתי סיסמה"
  * (forgot password) link emails a one-time code to LOGIN_EMAIL via
@@ -46,27 +34,18 @@
  * (no SpreadsheetApp/DriveApp calls) is mirrored in apps-script/logic.js
  * and unit-tested there - see TEST_PLAN.md section 3. If you change
  * findRowIndexByRowId, driveThumbnailUrl, the config dedup check,
- * rowToItem, extractVerifiedEmail, or checkLoginCredentials here, update
+ * rowToItem or checkLoginCredentials here, update
  * the matching function in logic.js too.
  */
 
-// Real end-to-end protection (task #28), with two independent ways in -
-// every request must satisfy ONE of them, checked here server-side on
-// every single request, not just gating the website's own login screen:
-//
-// (a) a current Google ID token (see src/identity - "Sign In With
-//     Google") whose email is on the Config sheet's "allowed_emails"
-//     list; or
-// (b) the fixed office email plus the shared password, hashed and
-//     compared against Script Properties (see checkLoginCredentials).
-//
-// (b) exists because Google Sign-In alone assumes the shared Google
-// account is already signed into whatever device someone opens the app
-// on - not true for personal phones - so a plain password form is a
-// fallback that works from any device. A request with neither a valid
-// token nor valid password credentials is rejected regardless of what
-// the client does.
-var GOOGLE_CLIENT_ID = '111985169748-27d9hepcn8p7k1g9fjh5rjrbhr91adm4.apps.googleusercontent.com';
+// Real end-to-end protection (task #28): every request must carry the
+// fixed office email plus the shared password, hashed and compared against
+// Script Properties (see checkLoginCredentials) - checked here server-side
+// on every single request, not just gating the website's login screen.
+// Google Sign-In used to be a second way in; it was removed (SPEC.md
+// section 15, REG-036): for the one person using it every request failed,
+// it needed an extra call to Google per request and lasted only an hour.
+// A request carrying only a Google token is now rejected as 'forbidden'.
 var LOGIN_EMAIL = 'office@yossibittonart.com';
 // Not a secret by itself (it only widens the search space for anyone who
 // already has the password) - just mixed into the hash so the stored
@@ -148,21 +127,10 @@ function jsonResponse(obj) {
     .setMimeType(ContentService.MimeType.JSON);
 }
 
-// Tries Google Sign-In first (if the request carries an id_token), then
-// falls back to the office password login (if it carries `auth`) - see the
-// task #28 v3 comment above GOOGLE_CLIENT_ID for why both exist. Returns
-// the authenticated email on success, null otherwise; the caller only
-// cares whether this is truthy.
+// The office password login - the only way in (SPEC.md section 15).
+// Returns the authenticated email on success, null otherwise; the caller
+// only cares whether this is truthy.
 function resolveAuthenticatedEmail(body) {
-  if (body.id_token) {
-    var tokenInfo = fetchGoogleTokenInfo(body.id_token);
-    var googleEmail = extractVerifiedEmail(tokenInfo, GOOGLE_CLIENT_ID);
-    if (!googleEmail) return null;
-    var configSheet = getConfigSheet();
-    var configValues = configSheet.getDataRange().getValues();
-    if (!configValueExists(configValues, 'allowed_emails', googleEmail)) return null;
-    return googleEmail;
-  }
   if (body.auth) {
     if (checkLoginCredentials(body.auth, LOGIN_EMAIL, getStoredPasswordHash(), hashPassword)) {
       return LOGIN_EMAIL;
@@ -170,36 +138,6 @@ function resolveAuthenticatedEmail(body) {
     return null;
   }
   return null;
-}
-
-// Calls Google's own tokeninfo endpoint to verify the ID token is real and
-// current - this is what makes the check trustworthy; anyone can send an
-// arbitrary string as `id_token`, but only a genuine, unexpired Google
-// token gets a 200 response back with matching claims. Returns null for
-// anything else (missing, expired, malformed, or rejected by Google).
-function fetchGoogleTokenInfo(idToken) {
-  if (!idToken) return null;
-  var resp = UrlFetchApp.fetch(
-    'https://oauth2.googleapis.com/tokeninfo?id_token=' + encodeURIComponent(idToken),
-    { muteHttpExceptions: true },
-  );
-  if (resp.getResponseCode() !== 200) return null;
-  try {
-    return JSON.parse(resp.getContentText());
-  } catch (err) {
-    return null;
-  }
-}
-
-// Pure decision logic given an already-fetched tokeninfo response -
-// mirrored in logic.js for unit testing. `aud` must match this specific
-// app's OAuth Client ID (otherwise a token meant for some other Google
-// app would pass), and Google must have verified the email itself.
-function extractVerifiedEmail(tokenInfo, expectedAud) {
-  if (!tokenInfo) return null;
-  if (tokenInfo.aud !== expectedAud) return null;
-  if (tokenInfo.email_verified !== 'true' && tokenInfo.email_verified !== true) return null;
-  return tokenInfo.email || null;
 }
 
 // Pure decision logic for the office password login - mirrored in logic.js
@@ -349,9 +287,8 @@ function validatePasswordReset(payload, configuredEmail, storedCode, storedExpir
   return { ok: true };
 }
 
-// Shared by the sign-in allowlist check (Config list "allowed_emails") and
-// handleAddConfigOption's own dedup check - same case-insensitive
-// (list_name, value) membership test either way.
+// handleAddConfigOption's dedup check - a case-insensitive
+// (list_name, value) membership test.
 function configValueExists(existingRows, listName, value) {
   return existingRows.some(function (row) {
     return row[0] === listName && String(row[1]).toLowerCase() === String(value).toLowerCase();

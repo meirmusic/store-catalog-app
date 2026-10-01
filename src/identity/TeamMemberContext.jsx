@@ -1,7 +1,7 @@
-// "Who are you" - separate from the Google sign-in gate (IdentityContext).
-// The gallery's whole staff shares one Google account for access control;
+// "Who are you" - separate from the sign-in gate (IdentityContext).
+// The gallery's whole staff shares one office login for access control;
 // this context is only for attributing changes to a real person
-// (last_modified_by) once that shared account is signed in. See task #28 v2.
+// (last_modified_by) once signed in. See task #28 v2.
 import { createContext, useContext, useMemo, useState } from 'react';
 
 const STORAGE_KEY = 'gallery_team_member';

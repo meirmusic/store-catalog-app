@@ -1,8 +1,7 @@
-// The office email+password fallback login (task #28 v3) - a second,
-// independent way in alongside Google Sign-In, for devices that don't
-// already have the shared Google account signed in. Unlike a Google ID
-// token, this credential doesn't expire on its own; signing out is the
-// only way to clear it. See src/identity/IdentityContext.jsx for how this
+// The office email+password login (task #28 v3) - the app's only way in
+// since Google Sign-In was removed (SPEC.md section 15, REG-036). The
+// credential doesn't expire on its own; signing out is the only way to
+// clear it. See src/identity/IdentityContext.jsx for how this
 // is verified (a live API call, since there's nothing to decode locally).
 
 const STORAGE_KEY = 'gallery_password_identity';

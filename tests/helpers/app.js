@@ -33,35 +33,22 @@ export async function clickRefresh(page) {
   await page.click('button[title="רענון ידני"]');
 }
 
-// Two gates now stand before the main app (task #28 v2): the shared office
-// Google account (real access control) and the "who are you" team-member
-// picker (attribution only). Neither can be driven for real here - Google's
-// actual OAuth consent flow can't be automated from Playwright, and the
-// team-member picker is just UI, so both are seeded straight into
-// localStorage via addInitScript, so it's in place before the app's first
-// script runs and the two contexts' lazy useState initializers read it
-// (see src/identity/googleAuth.js's saveIdentity/loadStoredIdentity and
-// src/identity/TeamMemberContext.jsx). `name` doubles as the team member
-// (attribution) and the Google identity's display name; `email` only
-// matters for tests that assert on the signed-in Google account itself.
-// `googleName` lets a test give the shared Google account a different name
-// from the team member, to tell the two apart.
-export async function pickIdentity(page, name = DEFAULT_USER, email = DEFAULT_EMAIL, googleName = name) {
+// Two gates stand before the main app: the office email + password (real
+// access control) and the "who are you" team-member picker (attribution
+// only). Both are seeded straight into localStorage via addInitScript, so
+// they're in place before the app's first script runs and the two
+// contexts' lazy useState initializers read them (see
+// src/identity/passwordAuth.js and src/identity/TeamMemberContext.jsx).
+// `name` is the team member (attribution); `email` is the signed-in
+// office login. Google Sign-In was removed (SPEC.md section 15, REG-036).
+export async function pickIdentity(page, name = DEFAULT_USER, email = DEFAULT_EMAIL) {
   await blockGoogleFonts(page);
   await page.addInitScript(
-    ({ name, email, googleName }) => {
-      localStorage.setItem(
-        'gallery_google_identity',
-        JSON.stringify({
-          idToken: 'test-id-token',
-          email,
-          name: googleName,
-          exp: Math.floor(Date.now() / 1000) + 3600,
-        }),
-      );
+    ({ name, email }) => {
+      localStorage.setItem('gallery_password_identity', JSON.stringify({ email, password: 'test-password' }));
       localStorage.setItem('gallery_team_member', name);
     },
-    { name, email, googleName },
+    { name, email },
   );
   await page.goto('/', NAV_OPTS);
   await page.waitForSelector('text=קטלוג הגלריה');

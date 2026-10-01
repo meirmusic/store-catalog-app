@@ -7,13 +7,13 @@ import { getAuthFields } from './authToken.js';
 // The Apps Script side does JSON.parse(e.postData.contents) itself.
 //
 // A real credential (not a static shared secret) is what actually protects
-// this endpoint now - see task #28. getAuthFields() supplies either a
-// Google id_token or an { auth: {email, password} } pair, whichever the
-// signed-in identity currently is; Code.gs verifies either one server-side
-// on every request, so a request with neither is rejected regardless of
-// what the website does.
+// this endpoint now - see task #28. getAuthFields() supplies the office
+// { auth: {email, password} } pair (the only way in since Google Sign-In
+// was removed - SPEC.md section 15); Code.gs verifies it server-side on
+// every request, so a request without it is rejected regardless of what
+// the website does.
 // Code.gs answers 'forbidden' only when the credential itself is rejected
-// (expired Google token, or an office password changed elsewhere) - kept
+// (the office password changed elsewhere) - kept
 // distinct so the sync engine can ask the user to sign in again instead
 // of counting it as an ordinary push failure (SPEC.md section 9).
 export class AuthError extends Error {

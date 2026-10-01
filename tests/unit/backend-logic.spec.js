@@ -7,7 +7,6 @@ import {
   rowToItem,
   planImageUrlFixes,
   planUploadImageResult,
-  extractVerifiedEmail,
   checkLoginCredentials,
   validatePasswordReset,
   extractDriveFileId,
@@ -98,30 +97,10 @@ test.describe('TC-BE: Apps Script pure logic', () => {
     expect(planUploadImageResult(5)).toEqual({ ok: true });
   });
 
-  // TC-BE-009* (task #28): real Google Sign-In - the email is trusted only
-  // once every check on the token passes.
-  test('TC-BE-009: a genuine, verified token for the right app yields the email', () => {
-    const tokenInfo = { aud: CLIENT_ID, email_verified: 'true', email: 'dov881@gmail.com' };
-    expect(extractVerifiedEmail(tokenInfo, CLIENT_ID)).toBe('dov881@gmail.com');
-  });
+  // TC-BE-009* removed with Google Sign-In (SPEC.md section 15, REG-036).
 
-  test('TC-BE-009b: no token at all is rejected', () => {
-    expect(extractVerifiedEmail(null, CLIENT_ID)).toBeNull();
-  });
-
-  test('TC-BE-009c: a token issued for a different OAuth client is rejected', () => {
-    const tokenInfo = { aud: 'someone-elses-client-id', email_verified: 'true', email: 'dov881@gmail.com' };
-    expect(extractVerifiedEmail(tokenInfo, CLIENT_ID)).toBeNull();
-  });
-
-  test('TC-BE-009d: an unverified email is rejected even with the right aud', () => {
-    const tokenInfo = { aud: CLIENT_ID, email_verified: 'false', email: 'dov881@gmail.com' };
-    expect(extractVerifiedEmail(tokenInfo, CLIENT_ID)).toBeNull();
-  });
-
-  // TC-BE-010* (task #28 v3): the office email+password fallback login -
-  // not every phone has the shared Google account signed in, so this is a
-  // second, independent way in, checked with the same server-side rigor.
+  // TC-BE-010* (task #28 v3): the office email+password login - the app's
+  // only way in.
   test('TC-BE-010: matching email and password (by hash) is accepted', () => {
     const auth = { email: 'office@yossibittonart.com', password: 'correct-horse' };
     expect(checkLoginCredentials(auth, 'office@yossibittonart.com', FAKE_HASH('correct-horse'), FAKE_HASH)).toBe(true);

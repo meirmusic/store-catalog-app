@@ -200,3 +200,41 @@ test('REG-035e: the app version is shown at the bottom of the screen and inside 
   await page.click('#item-overlay button[type=submit]');
   await expect(page.locator('.toast .error-version')).toHaveText('גרסה dev');
 });
+
+// SPEC.md section 15 (REG-036): Google Sign-In removed - password only.
+test('REG-036: a device still signed in with Google gets the password login, keeps its queued changes, and sends them after signing in', async ({ page }) => {
+  const seen = [];
+  await page.route(MOCK_URL, async (route) => {
+    const body = JSON.parse(route.request().postData());
+    seen.push(body);
+    if (!body.auth) return route.fulfill({ json: { error: 'forbidden' } });
+    if (body.action === 'getAll') return route.fulfill({ json: { items: [], config: {} } });
+    return route.fulfill({ json: { ...body.payload } });
+  });
+  // Like Dov's phone: signed in with Google, one change waiting to go out.
+  await seedItems(page, [{ row_id: 'G1', name: 'שינוי שממתין' }]);
+  await page.evaluate(async () => {
+    const { db } = await import('/src/db/db.js');
+    await db.pendingChanges.add({ row_id: 'G1', op: 'upsert', payload: null, createdAt: Date.now(), attempts: 0 });
+    localStorage.removeItem('gallery_password_identity');
+    localStorage.setItem('gallery_google_identity', JSON.stringify({ idToken: 'old', email: 'x@gmail.com', name: 'x', exp: Math.floor(Date.now() / 1000) + 3600 }));
+  });
+  await page.addInitScript(() => {
+    if (sessionStorage.getItem('reg036')) return;
+    sessionStorage.setItem('reg036', '1');
+    localStorage.removeItem('gallery_password_identity'); // pickIdentity's seed - this device only had Google
+  });
+  await page.reload({ waitUntil: 'domcontentloaded' });
+
+  await expect(page.locator('input[type=password]')).toBeVisible();
+  await expect(page.locator('text=או')).toHaveCount(0); // no "or" - a single way in
+  expect(await page.evaluate(() => localStorage.getItem('gallery_google_identity'))).toBeNull();
+  expect(await getPendingChanges(page)).toHaveLength(1); // kept
+
+  await page.fill('input[type=email]', 'office@example.com');
+  await page.fill('input[type=password]', 'correct-password');
+  await page.press('input[type=password]', 'Enter');
+  await page.waitForSelector('text=קטלוג הגלריה');
+  await expect.poll(async () => (await getPendingChanges(page)).length).toBe(0);
+  expect(seen.some((b) => 'id_token' in b)).toBe(false); // never sends a Google token
+});

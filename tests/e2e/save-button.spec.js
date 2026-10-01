@@ -163,8 +163,8 @@ test('SAVE-24: opening an item and saving with no change saves normally, without
   expect((await getPendingChanges(page)).filter((c) => c.op === 'upsert')).toHaveLength(1);
 });
 
-test('SAVE-25: a save is attributed to the picked team member, not the shared Google account', async ({ page }) => {
-  await pickIdentity(page, 'תמר', 'office@example.com', 'חשבון המשרד');
+test('SAVE-25: a save is attributed to the picked team member, not the shared office login', async ({ page }) => {
+  await pickIdentity(page, 'תמר', 'office@example.com');
   await openNewItemForm(page);
   await fillItemForm(page, { name: 'מי שמר' });
   await saveItemForm(page);
@@ -173,7 +173,7 @@ test('SAVE-25: a save is attributed to the picked team member, not the shared Go
   await page.click('.card');
   await page.waitForSelector('#item-overlay');
   await expect(page.locator('#item-overlay .sub')).toContainText('תמר');
-  await expect(page.locator('#item-overlay .sub')).not.toContainText('חשבון המשרד');
+  await expect(page.locator('#item-overlay .sub')).not.toContainText('office@example.com');
 });
 
 test('SAVE-27: a serial number made with the "generate" button is saved', async ({ page }) => {
