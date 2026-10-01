@@ -15,7 +15,7 @@ function matchesSearch(item, q) {
   const needle = q.trim().toLowerCase();
   if (!needle) return true;
   return (
-    (item.name && item.name.toLowerCase().includes(needle)) ||
+    (item.name != null && String(item.name).toLowerCase().includes(needle)) ||
     (item.sku && String(item.sku).toLowerCase().includes(needle)) ||
     (item.notes && String(item.notes).toLowerCase().includes(needle)) ||
     // SPEC.md section 1: serial-number search is exact-match only (unlike
@@ -66,7 +66,7 @@ export default function ItemList() {
       .filter((it) => !missingSerial || !it.serial_number)
       .filter((it) => !missingSku || !it.sku)
       .filter((it) => !missingPrice || it.price == null || it.price === '')
-      .sort((a, b) => (a.name || '').localeCompare(b.name || '', 'he'));
+      .sort((a, b) => String(a.name ?? '').localeCompare(String(b.name ?? ''), 'he'));
   }, [items, search, availability, locationFilter, typeFilter, statusFilter, missingSerial, missingSku, missingPrice]);
 
   const filtersActive =

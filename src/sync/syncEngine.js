@@ -108,10 +108,25 @@ export async function pushPending() {
   return pushed;
 }
 
+// Google Sheets stores an all-digit SKU or serial number (3022, 112345) as a
+// number, so getAll returns it as one - but the app treats these fields as
+// text (REG-028: trimming a numeric SKU made every save of such an item
+// fail). Normalize text fields at the boundary, as the data arrives.
+const TEXT_FIELDS = ['name', 'size', 'sku', 'serial_number', 'type', 'location', 'physical_status', 'notes', 'image_url', 'last_modified_by'];
+
+export function normalizeItem(item) {
+  const out = { ...item };
+  TEXT_FIELDS.forEach((field) => {
+    if (out[field] != null && typeof out[field] !== 'string') out[field] = String(out[field]);
+  });
+  return out;
+}
+
 export async function pullLatest() {
   const data = await getAll();
   if (!data) return;
   if (Array.isArray(data.items)) {
+    data.items = data.items.map(normalizeItem);
     // REG-017: never overwrite an item that still has a queued change -
     // if its push just failed, the server's copy is the older version,
     // and adopting it would make the next push send that older version

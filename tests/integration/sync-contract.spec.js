@@ -346,3 +346,48 @@ test('REG-019: an expired sign-in shows a "sign in again" banner, and queued cha
   const items = await getItems(page);
   expect(items.map((it) => it.name)).toContain('נשמר בזמן שההתחברות פגה');
 });
+
+// REG-028 (real user report - the long-running "save doesn't work"): Google
+// Sheets stores an all-digit SKU or serial number as a number, so the app
+// received e.g. sku: 3022 (a number). The form trimmed it as text, which
+// threw - every save of such an existing item failed (silently at first,
+// then with "השמירה במכשיר נכשלה" once REG-016 surfaced the error).
+test('REG-028: an existing item whose SKU / serial arrived as numbers saves normally', async ({ page }) => {
+  // As stored on a device before the fix.
+  await seedItems(page, [{ row_id: 'NUM', name: 'פריט מהגיליון', sku: 3022, serial_number: 112345 }]);
+  await reloadApp(page);
+  await page.waitForSelector('text=קטלוג הגלריה');
+  await page.click('.card');
+  await page.waitForSelector('#item-overlay');
+  await fillItemForm(page, { notes: 'שינוי קטן' });
+  await saveItemForm(page);
+
+  await expect(page.locator('.toast')).toContainText('נשמר מקומית');
+  const item = (await getItems(page))[0];
+  expect(item).toMatchObject({ sku: '3022', serial_number: '112345', notes: 'שינוי קטן' });
+});
+
+test('REG-028b: numbers arriving from the Sheet are stored as text - search, list and editing all work', async ({ page }) => {
+  await page.route(MOCK_URL, async (route) => {
+    const body = JSON.parse(route.request().postData());
+    if (body.action === 'getAll') {
+      return route.fulfill({ json: { items: [
+        { row_id: 'N1', name: 1948, sku: 3022, serial_number: 112345, size: 50, is_deleted: false, availability_status: 'available' },
+        { row_id: 'N2', name: 'אחר', sku: 'X-1', is_deleted: false, availability_status: 'available' },
+      ], config: {} } });
+    }
+    return route.fulfill({ json: { ...body.payload } });
+  });
+  await reloadApp(page);
+  await page.waitForSelector('text=קטלוג הגלריה');
+  await expect(page.locator('.card')).toHaveCount(2); // a numeric name doesn't break the list
+  expect((await getItems(page)).find((it) => it.row_id === 'N1')).toMatchObject({ name: '1948', sku: '3022', serial_number: '112345', size: '50' });
+
+  await page.fill('.search-box input', '112345');
+  await expect(page.locator('.card')).toHaveCount(1);
+  await page.click('.card');
+  await page.waitForSelector('#item-overlay');
+  await fillItemForm(page, { notes: 'עובד' });
+  await saveItemForm(page);
+  await expect(page.locator('.toast')).toContainText(/נשמר מקומית|סונכרן/);
+});

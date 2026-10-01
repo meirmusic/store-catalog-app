@@ -81,15 +81,18 @@ export default function ItemForm({ item, onClose, onRequestDelete, onSaved }) {
     return () => clearTimeout(id);
   }, [saving]);
 
-  const [name, setName] = useState(item?.name || '');
-  const [size, setSize] = useState(item?.size || '');
-  const [sku, setSku] = useState(item?.sku || '');
-  const [type, setType] = useState(item?.type || '');
-  const [location, setLocation] = useState(item?.location || '');
-  const [status, setStatus] = useState(item?.physical_status || '');
+  // String(): an item stored before REG-028's fix may still hold a numeric
+  // SKU/serial from the Sheet; the form treats every field as text.
+  const text = (v) => (v == null ? '' : String(v));
+  const [name, setName] = useState(text(item?.name));
+  const [size, setSize] = useState(text(item?.size));
+  const [sku, setSku] = useState(text(item?.sku));
+  const [type, setType] = useState(text(item?.type));
+  const [location, setLocation] = useState(text(item?.location));
+  const [status, setStatus] = useState(text(item?.physical_status));
   const [price, setPrice] = useState(item?.price ?? '');
-  const [serial, setSerial] = useState(item?.serial_number || '');
-  const [notes, setNotes] = useState(item?.notes || '');
+  const [serial, setSerial] = useState(text(item?.serial_number));
+  const [notes, setNotes] = useState(text(item?.notes));
   const [availability, setAvailability] = useState(item?.availability_status || 'available');
   // A saved photo still waiting to upload is what the item shows (SPEC.md
   // section 10), so the form starts from it too.
