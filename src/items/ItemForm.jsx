@@ -7,6 +7,8 @@ import { useBodyScrollLock } from '../hooks/useBodyScrollLock.js';
 import ImageField from './ImageField.jsx';
 import DiscardConfirm from './DiscardConfirm.jsx';
 import ShareDialog from './ShareDialog.jsx';
+import DuplicateConfirm from './DuplicateConfirm.jsx';
+import { findDuplicates } from './duplicateCheck.js';
 
 function ConfigSelect({ list, value, onChange, config, addConfigValue, label }) {
   const { t } = useI18n();
@@ -62,7 +64,7 @@ const SAVE_DELAY_NOTICE_MS = 5000;
 export default function ItemForm({ item, template = null, onClose, onRequestDelete, onSaved, onDuplicate }) {
   const { t } = useI18n();
   useBlocksAutoUpdate(); // SPEC.md 9: no automatic app update while this is open
-  const { config, saveItem, addConfigValue, queueImageUpload } = useItems();
+  const { items, config, saveItem, addConfigValue, queueImageUpload } = useItems();
   const { showToast, showErrorToast } = useToast();
   useBodyScrollLock();
   const isNew = !item;
@@ -118,6 +120,7 @@ export default function ItemForm({ item, template = null, onClose, onRequestDele
 
   const [confirmingDiscard, setConfirmingDiscard] = useState(false);
   const [sharing, setSharing] = useState(false);
+  const [duplicates, setDuplicates] = useState(null); // SPEC.md 20.1
 
   // SPEC.md 19.3: a new item with this one's details - but never its name,
   // SKU, serial number or photo (those belong to this artwork only).
@@ -158,7 +161,7 @@ export default function ItemForm({ item, template = null, onClose, onRequestDele
     setSerial(code);
   }
 
-  async function handleSubmit(e) {
+  async function handleSubmit(e, { skipDuplicateCheck = false } = {}) {
     e.preventDefault();
     setError('');
     if (!name.trim()) {
@@ -168,6 +171,19 @@ export default function ItemForm({ item, template = null, onClose, onRequestDele
     if (price !== '' && !(Number(price) >= 0)) {
       setError(t('errors.priceInvalid'));
       return;
+    }
+    if (!skipDuplicateCheck) {
+      const found = findDuplicates(items, {
+        rowId: item?.row_id,
+        serial,
+        sku,
+        serialChanged: String(serial) !== initialValuesRef.current[7],
+        skuChanged: String(sku) !== initialValuesRef.current[2],
+      });
+      if (found.length) {
+        setDuplicates(found);
+        return;
+      }
     }
     // ACT-04 (UI_STANDARD_GAP_ANALYSIS.md): lock the button for the
     // duration of the save so a fast double-click/double-tap can't queue
@@ -354,6 +370,16 @@ export default function ItemForm({ item, template = null, onClose, onRequestDele
         </div>
       </div>
       {sharing && <ShareDialog item={item} onClose={() => setSharing(false)} />}
+      {duplicates && (
+        <DuplicateConfirm
+          duplicates={duplicates}
+          onBack={() => setDuplicates(null)}
+          onSaveAnyway={() => {
+            setDuplicates(null);
+            handleSubmit({ preventDefault: () => {} }, { skipDuplicateCheck: true });
+          }}
+        />
+      )}
       {confirmingDiscard && (
         <DiscardConfirm
           onSave={saveFromDiscardConfirm}

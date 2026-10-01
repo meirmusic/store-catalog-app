@@ -392,3 +392,13 @@ select:hover, .btn:hover { border-color: var(--accent); }
   .toolbar-spacer { display: none; }
   .modal-actions { flex-wrap: wrap; }
 }
+
+/* ---- SPEC.md section 20: inventory value, duplicate warning ---- */
+.stats-value { font-weight: 600; color: var(--ink-dim); }
+.value-breakdown { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-top: 10px; }
+.value-group { border: 1px solid var(--line); border-radius: 12px; background: var(--wall); padding: 10px 12px; }
+.value-title { font-size: .72rem; font-weight: 700; color: var(--ink-dim); margin-bottom: 6px; }
+.value-row { display: flex; justify-content: space-between; gap: 10px; font-size: .86rem; padding: 3px 0; }
+.value-count { color: var(--ink-dim); font-size: .78rem; }
+.value-note { grid-column: 1 / -1; font-size: .78rem; color: var(--ink-dim); margin: 0; }
+.duplicate-confirm .confirm-actions button.primary { background: var(--accent); border-color: var(--accent); color: var(--wall); }

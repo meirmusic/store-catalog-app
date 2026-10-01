@@ -6,6 +6,7 @@ import ItemCard from './ItemCard.jsx';
 import ItemRow from './ItemRow.jsx';
 import { SORT_OPTIONS, sortItems } from './sortItems.js';
 import { useDevicePreference } from '../hooks/useDevicePreference.js';
+import { inventoryValue, availableValue, formatMoney } from './inventoryValue.js';
 import ItemForm from './ItemForm.jsx';
 import DeleteConfirm from './DeleteConfirm.jsx';
 import { downloadItemsCsv } from './exportCsv.js';
@@ -118,6 +119,7 @@ export default function ItemList() {
     });
     return tiles;
   }, [items, config, t]);
+  const value = useMemo(() => inventoryValue(items), [items]); // SPEC.md 20.2
 
   return (
     <div>
@@ -130,6 +132,7 @@ export default function ItemList() {
         >
           <span className="chevron">▾</span>
           {stats[0][0]}: {stats[0][1]}
+          <span className="stats-value"> · {t('stats.availableValue')}: {formatMoney(value.total)}</span>
         </button>
 
         {/* SPEC.md 19.11: collapsed = the total only; details on demand. */}
@@ -141,6 +144,24 @@ export default function ItemList() {
                 <span>{label}</span>
               </div>
             ))}
+          </div>
+        )}
+        {statsExpanded && (
+          <div className="value-breakdown">
+            {[['stats.valueByType', value.byType], ['stats.valueByLocation', value.byLocation]].map(([title, rows]) => (
+              <div className="value-group" key={title}>
+                <div className="value-title">{t(title)}</div>
+                {rows.map(([name, entry]) => (
+                  <div className="value-row" key={name}>
+                    <span>{name} <span className="value-count">({entry.count})</span></span>
+                    <b>{formatMoney(entry.value)}</b>
+                  </div>
+                ))}
+              </div>
+            ))}
+            {value.unpriced > 0 && (
+              <p className="value-note">{t('stats.unpricedNote').replace('{n}', value.unpriced)}</p>
+            )}
           </div>
         )}
       </div>
@@ -233,7 +254,10 @@ export default function ItemList() {
 
       {filtersActive && (
         <div className="results-line" role="status">
-          <span>{t('list.showing')} {filtered.length} {t('list.of')} {items.length}</span>
+          <span>
+            {t('list.showing')} {filtered.length} {t('list.of')} {items.length}
+            {' · '}{t('stats.availableValue')}: {formatMoney(availableValue(filtered))}
+          </span>
           <button type="button" className="btn clear-filters" onClick={clearFilters}>{t('filters.clear')}</button>
         </div>
       )}
