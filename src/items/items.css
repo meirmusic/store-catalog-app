@@ -436,3 +436,22 @@ select:hover, .btn:hover { border-color: var(--accent); }
 /* ---- SPEC.md section 22 ---- */
 .loading-state { text-align: center; color: var(--ink-dim); font-size: .9rem; padding: 40px 16px; }
 .support-not-logged { color: var(--sold); }
+
+/* ---- SPEC.md section 23: sharing ---- */
+.idline-end { display: inline-flex; align-items: center; gap: 8px; }
+.share-icon-btn { border: 1px solid var(--line); background: var(--wall); color: var(--ink); border-radius: 999px; width: 30px; height: 30px; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; font-size: .95rem; padding: 0; }
+.share-icon-btn:hover { border-color: var(--accent); }
+.row-end { display: flex; align-items: center; gap: 8px; }
+.share-dialog { max-width: 420px; text-align: start; }
+.share-preview-card { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; margin: 12px 0 8px; background: var(--wall-2); }
+.share-preview-img { display: block; width: 100%; max-height: 260px; object-fit: contain; background: var(--wall); }
+.share-preview-card .share-preview { margin: 0; border-radius: 0; }
+.share-note { font-size: .82rem; color: var(--ink-dim); margin: 4px 0 8px; }
+.share-failed { color: var(--sold); }
+.link-btn { background: none; border: none; padding: 0; color: inherit; text-decoration: underline; cursor: pointer; font: inherit; }
+.share-options { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; margin-top: 6px; }
+.share-lang { display: inline-flex; align-items: center; gap: 6px; font-size: .88rem; }
+.share-lang button { border: 1px solid var(--line); background: var(--wall); border-radius: 999px; padding: 4px 12px; cursor: pointer; font: inherit; color: var(--ink); }
+.share-lang button.on { border-color: var(--accent); background: var(--wall-2); font-weight: 700; }
+.share-copy { display: block; margin: 12px auto 0; font-size: .86rem; color: var(--ink-dim); }
+.share-dialog .confirm-actions button:disabled { opacity: .6; cursor: default; }

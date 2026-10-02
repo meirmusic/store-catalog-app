@@ -4,7 +4,7 @@ import ImageLightbox from './ImageLightbox.jsx';
 import { displayImage, sizedImageUrl, THUMB_IMAGE_WIDTH, FULL_IMAGE_WIDTH } from './imageUrl.js';
 import { formatWhen } from './formatWhen.js';
 
-export default function ItemCard({ item, onClick, showModified = false }) {
+export default function ItemCard({ item, onClick, onShare, showModified = false }) {
   const { t } = useI18n();
   const sold = item.availability_status === 'sold';
   const [zoomed, setZoomed] = useState(false);
@@ -69,9 +69,23 @@ export default function ItemCard({ item, onClick, showModified = false }) {
             {item.sku ? `${t('fields.sku')} ${item.sku}` : ''}
             {item.serial_number ? ` #${item.serial_number}` : ''}
           </span>
-          {item.price != null && item.price !== '' && (
-            <span className="price">${Number(item.price).toLocaleString()}</span>
-          )}
+          <span className="idline-end">
+            {item.price != null && item.price !== '' && (
+              <span className="price">${Number(item.price).toLocaleString()}</span>
+            )}
+            {/* SPEC.md 23.2: share straight from the list. */}
+            {onShare && (
+              <button
+                type="button"
+                className="share-icon-btn"
+                onClick={(e) => { e.stopPropagation(); onShare(item); }}
+                aria-label={t('share.shareArtwork')}
+                title={t('share.shareArtwork')}
+              >
+                ⤴
+              </button>
+            )}
+          </span>
         </div>
         {showModified && item.last_modified_at && (
           <div className="modified-line">{item.last_modified_by ? `${item.last_modified_by} · ` : ''}{formatWhen(item.last_modified_at, t)}</div>

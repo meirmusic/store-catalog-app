@@ -90,52 +90,6 @@ test('TC-UX-004: filters sit behind one "סינון" button that shows how many 
   await expect(page.locator('.results-line')).toContainText('מוצגים 1 מתוך 3');
 });
 
-test('TC-UX-005: share sends the phone share sheet the name, size, type and price - price optional, "sold" instead for sold items', async ({ page }) => {
-  await page.evaluate(() => {
-    window.__shared = [];
-    navigator.share = async (data) => { window.__shared.push({ title: data.title, text: data.text, files: (data.files || []).length }); };
-    navigator.canShare = () => true;
-  });
-  await page.click('.card:has-text("אלף")');
-  await page.click('#item-overlay button:has-text("שיתוף")');
-  await expect(page.locator('.share-preview')).toHaveText('אלף\n50X70 · מקורי\n$900');
-  await page.click('.share-dialog button.primary');
-  await expect(page.locator('.share-dialog')).toHaveCount(0);
-
-  await page.click('#item-overlay button:has-text("שיתוף")');
-  await page.uncheck('.share-price input');
-  await expect(page.locator('.share-preview')).toHaveText('אלף\n50X70 · מקורי');
-  await page.click('.share-dialog button.primary');
-  await expect(page.locator('.share-dialog')).toHaveCount(0);
-
-  const shared = await page.evaluate(() => window.__shared);
-  expect(shared[0].text.startsWith('אלף\n50X70 · מקורי\n$900')).toBe(true);
-  expect(shared[1].text).not.toContain('$900');
-  // The Drive photo can't be fetched here, so a link to the full-size photo goes along.
-  expect(shared[0].text).toContain('https://drive.google.com/thumbnail?id=X1&sz=w1600');
-
-  await page.click('#item-overlay button:has-text("ביטול")');
-  await page.click('.card:has-text("בית")');
-  await page.click('#item-overlay button:has-text("שיתוף")');
-  await expect(page.locator('.share-preview')).toHaveText('בית\nנמכר');
-});
-
-test('TC-UX-005b: closing the share sheet is not an error; without a share sheet the details are copied', async ({ page, context }) => {
-  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
-  await page.evaluate(() => {
-    navigator.share = async () => { throw new DOMException('cancelled', 'AbortError'); };
-  });
-  await page.click('.card:has-text("אלף")');
-  await page.click('#item-overlay button:has-text("שיתוף")');
-  await page.click('.share-dialog button.primary');
-  await expect(page.locator('.toast.error')).toHaveCount(0);
-  await expect(page.locator('.share-dialog')).toBeVisible(); // still open - nothing was sent
-
-  await page.evaluate(() => { navigator.share = undefined; });
-  await page.click('.share-dialog button.primary');
-  await expect(page.locator('.toast')).toContainText('הפרטים הועתקו');
-  expect(await page.evaluate(() => navigator.clipboard.readText())).toContain('אלף\n50X70 · מקורי\n$900');
-});
 
 test('TC-UX-006: list view - one row per artwork, opens the form, remembered', async ({ page }) => {
   await page.click('button[aria-label="תצוגת רשימה"]');

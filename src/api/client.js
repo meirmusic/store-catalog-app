@@ -41,7 +41,7 @@ function timeoutFor(action) {
   // Test-only override (tests/integration/request-timeout.spec.js), like
   // __testSlowSave: lets a test hit the limit without waiting 30 seconds.
   if (typeof window !== 'undefined' && window.__testApiTimeoutMs) return window.__testApiTimeoutMs;
-  return action === 'uploadImage' ? UPLOAD_TIMEOUT_MS : TIMEOUT_MS;
+  return action === 'uploadImage' || action === 'getImage' ? UPLOAD_TIMEOUT_MS : TIMEOUT_MS;
 }
 
 async function callApi(action, payload) {
@@ -102,6 +102,11 @@ export function logErrors(entries) {
 
 export function addConfigOption(listName, value) {
   return callApi('addConfigOption', { list_name: listName, value });
+}
+
+// SPEC.md 23.3: the photo file itself ({ mime, data: base64 }), for sharing.
+export function getImage(rowId) {
+  return callApi('getImage', { row_id: rowId });
 }
 
 export function uploadImage(rowId, dataUrl) {

@@ -6,7 +6,7 @@ import { formatWhen } from './formatWhen.js';
 // many quickly. Tapping it opens the form, like a card.
 const ROW_IMAGE_WIDTH = 160;
 
-export default function ItemRow({ item, onClick, showModified = false }) {
+export default function ItemRow({ item, onClick, onShare, showModified = false }) {
   const { t } = useI18n();
   const sold = item.availability_status === 'sold';
   const photo = displayImage(item);
@@ -38,6 +38,17 @@ export default function ItemRow({ item, onClick, showModified = false }) {
           <span className="row-sold">{t('filters.sold')}</span>
         ) : (
           item.price != null && item.price !== '' && <span className="price">${Number(item.price).toLocaleString()}</span>
+        )}
+        {onShare && (
+          <button
+            type="button"
+            className="share-icon-btn"
+            onClick={(e) => { e.stopPropagation(); onShare(item); }}
+            aria-label={t('share.shareArtwork')}
+            title={t('share.shareArtwork')}
+          >
+            ⤴
+          </button>
         )}
       </div>
     </article>

@@ -1,6 +1,7 @@
 // TC-BE-001..008 from TEST_PLAN.md. Pure Node - no browser needed.
 import { test, expect } from '@playwright/test';
 import {
+  anyDriveFileId,
   findRowIndex,
   driveThumbnailUrl,
   configValueExists,
@@ -233,5 +234,16 @@ test.describe('TC-BE: Apps Script pure logic', () => {
   test('TC-BE-013d: a report starting with a tab or line break is kept as plain text', () => {
     expect(buildErrorLogRow({ message: '\t=HYPERLINK("x")' }, 'now')[3]).toBe('\'\t=HYPERLINK("x")');
     expect(buildErrorLogRow({ message: '\r=1' }, 'now')[3]).toBe('\'\r=1');
+  });
+
+  // SPEC.md 23.3: the photo's Drive id, from every link format in the Sheet.
+  test('TC-BE-015: getImage finds the Drive file id in every photo link format', () => {
+    expect(anyDriveFileId('https://drive.google.com/thumbnail?id=AbC_12-x&sz=w1000')).toBe('AbC_12-x');
+    expect(anyDriveFileId('https://drive.google.com/uc?export=view&id=XYZ987')).toBe('XYZ987');
+    expect(anyDriveFileId('https://lh3.googleusercontent.com/d/FILE123=w400?authuser=0')).toBe('FILE123');
+    expect(anyDriveFileId('https://drive.google.com/file/d/FILE456/view')).toBe('FILE456');
+    expect(anyDriveFileId('')).toBeNull();
+    expect(anyDriveFileId(null)).toBeNull();
+    expect(anyDriveFileId('https://example.com/photo.jpg')).toBeNull();
   });
 });

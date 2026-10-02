@@ -42,13 +42,15 @@ test('TC-SYNC-002: push happens before pull (upsert reaches the mock before getA
   await fillItemForm(page, { name: 'סדר קריאות' });
   await saveItemForm(page);
 
-  await page.click('.icon-btn[title]'); // manual refresh button, triggers syncNow()
+  await page.click('button[title="רענון ידני"]'); // triggers syncNow()
   await page.waitForTimeout(500);
 
+  // The opening cycle's getAll can still land after the list was cleared
+  // when the machine is busy - so check this cycle itself: the upsert is
+  // followed by a getAll (push first, then pull).
   const upsertIndex = callOrder.indexOf('upsert');
-  const getAllIndex = callOrder.indexOf('getAll');
   expect(upsertIndex).toBeGreaterThanOrEqual(0);
-  expect(getAllIndex).toBeGreaterThan(upsertIndex);
+  expect(callOrder.indexOf('getAll', upsertIndex)).toBeGreaterThan(upsertIndex);
 });
 
 test('TC-SYNC-004: 5 consecutive failures on the same change trip the visible sync-problem indicator', async ({ page }) => {

@@ -112,6 +112,8 @@ function handleRequest(e) {
         return handleAddConfigOption(body.payload);
       case 'uploadImage':
         return handleUploadImage(body.payload);
+      case 'getImage':
+        return handleGetImage(body.payload);
       case 'logErrors':
         return handleLogErrors(body.payload);
       default:
@@ -462,6 +464,35 @@ function getOrCreateImageFolder() {
   var folders = DriveApp.getFoldersByName(DRIVE_FOLDER_NAME);
   if (folders.hasNext()) return folders.next();
   return DriveApp.createFolder(DRIVE_FOLDER_NAME);
+}
+
+// SPEC.md 23.3: the photo file itself, for sharing with a client - the app
+// can't read it from Drive directly (Drive doesn't allow it from a web
+// page), so it would otherwise only be able to send a link. Read-only, so
+// no lock. A very large original (old migrated photos) is refused, and the
+// app then sends a link instead.
+var MAX_SHARE_IMAGE_BYTES = 8 * 1024 * 1024;
+
+function handleGetImage(payload) {
+  var sheet = getItemsSheet();
+  var rowIndex = findRowIndexByRowId(sheet, payload && payload.row_id);
+  if (rowIndex === -1) return { error: 'row not found' };
+  var imageUrl = sheet.getRange(rowIndex, ITEM_COLUMNS.indexOf('image_url') + 1).getValue();
+  var fileId = anyDriveFileId(imageUrl);
+  if (!fileId) return { error: 'this item has no Drive photo' };
+  var blob = DriveApp.getFileById(fileId).getBlob();
+  var bytes = blob.getBytes();
+  if (bytes.length > MAX_SHARE_IMAGE_BYTES) return { error: 'photo too large to share as a file' };
+  return { mime: blob.getContentType() || 'image/jpeg', data: Utilities.base64Encode(bytes) };
+}
+
+// Keep in sync with logic.js's anyDriveFileId: the Drive file id in any of
+// the photo link formats the Sheet holds (thumbnail, old uc?export=view,
+// lh3.googleusercontent.com/d/, /file/d/).
+function anyDriveFileId(url) {
+  if (typeof url !== 'string') return null;
+  var match = /[?&]id=([\w-]+)/.exec(url) || /\/d\/([\w-]+)/.exec(url);
+  return match ? match[1] : null;
 }
 
 function handleUploadImage(payload) {

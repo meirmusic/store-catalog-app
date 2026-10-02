@@ -157,7 +157,15 @@ function buildErrorLogRow(entry, serverTime) {
   ];
 }
 
+// Mirrors Code.gs's anyDriveFileId (SPEC.md 23.3).
+function anyDriveFileId(url) {
+  if (typeof url !== 'string') return null;
+  const match = /[?&]id=([\w-]+)/.exec(url) || /\/d\/([\w-]+)/.exec(url);
+  return match ? match[1] : null;
+}
+
 export {
+  anyDriveFileId,
   buildErrorLogRow,
   findRowIndex,
   driveThumbnailUrl,

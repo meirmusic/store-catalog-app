@@ -9,6 +9,7 @@ import { useDevicePreference } from '../hooks/useDevicePreference.js';
 import { inventoryValue, availableValue, formatMoney } from './inventoryValue.js';
 import ItemForm from './ItemForm.jsx';
 import DeleteConfirm from './DeleteConfirm.jsx';
+import ShareDialog from './ShareDialog.jsx';
 import { downloadItemsCsv } from './exportCsv.js';
 
 const UNDO_WINDOW_MS = 8000;
@@ -54,6 +55,7 @@ export default function ItemList() {
   const [template, setTemplate] = useState(null); // SPEC.md 19.3: values for a duplicated new item
   const [formKey, setFormKey] = useState(0); // a fresh form each time one opens
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [shareTarget, setShareTarget] = useState(null); // SPEC.md 23.2
 
   // SPEC.md 19.1/19.4/19.6
   const [sortBy, setSortBy] = useDevicePreference('gallery_sort', 'name', SORT_OPTIONS);
@@ -277,13 +279,13 @@ export default function ItemList() {
         view === 'list' ? (
           <div className="item-rows">
             {filtered.map((item) => (
-              <ItemRow key={item.row_id} item={item} showModified={sortBy === 'recent'} onClick={() => openForm(item)} />
+              <ItemRow key={item.row_id} item={item} showModified={sortBy === 'recent'} onClick={() => openForm(item)} onShare={setShareTarget} />
             ))}
           </div>
         ) : (
           <div className="grid">
             {filtered.map((item) => (
-              <ItemCard key={item.row_id} item={item} showModified={sortBy === 'recent'} onClick={() => openForm(item)} />
+              <ItemCard key={item.row_id} item={item} showModified={sortBy === 'recent'} onClick={() => openForm(item)} onShare={setShareTarget} />
             ))}
           </div>
         )
@@ -300,6 +302,8 @@ export default function ItemList() {
           onSaved={() => setEditingItem(undefined)}
         />
       )}
+
+      {shareTarget && <ShareDialog item={shareTarget} onClose={() => setShareTarget(null)} />}
 
       {deleteTarget && (
         <DeleteConfirm
