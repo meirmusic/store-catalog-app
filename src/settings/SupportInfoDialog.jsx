@@ -7,7 +7,7 @@ import { db } from '../db/db.js';
 import { FAILURE_THRESHOLD } from '../sync/syncEngine.js';
 import { useSyncRecord } from '../sync/syncRecord.js';
 import { APP_VERSION, getRecentErrors } from '../errors/errorReporting.js';
-import { formatWhen } from '../items/formatWhen.js';
+import { formatWhen, formatDateTime } from '../items/formatWhen.js';
 import { currentDevice } from './deviceInfo.js';
 import Dialog from './Dialog.jsx';
 
@@ -17,7 +17,8 @@ export default function SupportInfoDialog({ isOnline, onClose }) {
   const { t } = useI18n();
   const { user } = useIdentity();
   const { member } = useTeamMember();
-  const { lastPullAt, lastPushAt, server } = useSyncRecord();
+  const { lastPullAt, lastPushAt, server, since } = useSyncRecord();
+  const sinceDate = formatDateTime(since).split(' ')[0];
   // Both live (a stuck count that only refreshed on open was stale).
   const pending = useLiveQuery(() => db.pendingChanges.count(), [], null);
   const stuck = useLiveQuery(() => db.pendingChanges.filter((c) => (c.attempts || 0) >= FAILURE_THRESHOLD).count(), [], null);
@@ -42,8 +43,8 @@ export default function SupportInfoDialog({ isOnline, onClose }) {
     [t('support.member'), member || '—'],
     [t('support.internet'), isOnline ? t('sync.online') : t('sync.offline')],
     [t('support.server'), serverText],
-    [t('support.lastPull'), lastPullAt ? when(lastPullAt) : t('support.neverPulled')],
-    [t('support.lastPush'), lastPushAt ? when(lastPushAt) : t('support.neverPushed')],
+    [t('support.lastPull'), lastPullAt ? when(lastPullAt) : t('support.noPullSince').replace('{date}', sinceDate)],
+    [t('support.lastPush'), lastPushAt ? when(lastPushAt) : t('support.noPushSince').replace('{date}', sinceDate)],
     [t('support.pending'), pendingText],
     [t('support.device'), `${deviceText} ${t('support.asReported')}`],
   ];

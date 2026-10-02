@@ -38,7 +38,7 @@ async function closeSupport(page) {
 test.beforeEach(async ({ page }) => {
   await pickIdentity(page);
   await clearAllData(page);
-  await page.evaluate(() => ['gallery_last_pull_ok', 'gallery_last_push_ok', 'gallery_server_status', 'gallery_recent_errors'].forEach((k) => localStorage.removeItem(k)));
+  await page.evaluate(() => ['gallery_last_pull_ok', 'gallery_last_push_ok', 'gallery_server_status', 'gallery_recent_errors', 'gallery_tracking_since'].forEach((k) => localStorage.removeItem(k)));
 });
 
 test('TC-TRUTH-001: all fine - server answering, last data received now, nothing pending', async ({ page }) => {
@@ -49,7 +49,7 @@ test('TC-TRUTH-001: all fine - server answering, last data received now, nothing
   await expect(row(page, 'אינטרנט')).toHaveText('מחובר');
   await expect(row(page, 'שרת')).toContainText('עונה · נבדק היום');
   await expect(row(page, 'קבלת נתונים אחרונה')).toContainText('היום');
-  await expect(row(page, 'שליחת שינויים אחרונה')).toHaveText('עוד לא נשלחו שינויים מהמכשיר הזה');
+  await expect(row(page, 'שליחת שינויים אחרונה')).toHaveText(/^לא נרשמה שליחה מאז \d{2}\/\d{2}\/\d{4}$/);
   await expect(row(page, 'ממתינים לסנכרון')).toHaveText('0');
 });
 
@@ -78,7 +78,7 @@ test('TC-TRUTH-003: the server answers with an error - "answered with an error",
   await openSupport(page);
   await expect(row(page, 'שרת')).toContainText('לא עונה'); // HTTP 500: no usable answer
   await expect(row(page, 'שרת')).toContainText('API error 500');
-  await expect(row(page, 'קבלת נתונים אחרונה')).toHaveText('אף פעם במכשיר הזה');
+  await expect(row(page, 'קבלת נתונים אחרונה')).toHaveText(/^לא נרשמה קבלת נתונים מאז \d{2}\/\d{2}\/\d{4}$/);
 });
 
 test('TC-TRUTH-004: never received data - the header says so in full, not a dangling "since"', async ({ page }) => {
@@ -97,7 +97,7 @@ test('TC-TRUTH-005: sending fails while receiving works - last send is not claim
   });
   await reloadAndWait(page);
   await openSupport(page);
-  await expect(row(page, 'שליחת שינויים אחרונה')).toHaveText('עוד לא נשלחו שינויים מהמכשיר הזה');
+  await expect(row(page, 'שליחת שינויים אחרונה')).toHaveText(/^לא נרשמה שליחה מאז \d{2}\/\d{2}\/\d{4}$/);
   await expect(row(page, 'קבלת נתונים אחרונה')).toContainText('היום');
   // A 5th failure while the window is open - the stuck count follows live.
   await closeSupport(page);
@@ -153,4 +153,37 @@ test('TC-TRUTH-008: the device line is readable and says it is as reported; the 
   const copied = await page.evaluate(() => navigator.clipboard.readText());
   expect(copied).toContain('User agent: Mozilla/5.0');
   expect(copied).toContain('שרת:');
+});
+
+test('TC-TRUTH-009: "none recorded since <date>" uses the date this device started recording', async ({ page }) => {
+  await server(page);
+  await page.evaluate(() => localStorage.setItem('gallery_tracking_since', JSON.stringify('2026-09-28T08:00:00.000Z')));
+  await reloadAndWait(page);
+  await openSupport(page);
+  await expect(row(page, 'שליחת שינויים אחרונה')).toHaveText('לא נרשמה שליחה מאז 28/09/2026');
+});
+
+// SPEC.md 22.8א (REG-039): no syncing while the app is off screen.
+test('TC-TRUTH-010: while the app is in the background nothing is sent to the server; coming back syncs at once', async ({ page }) => {
+  const requests = [];
+  await page.route(MOCK_URL, async (route) => {
+    requests.push(JSON.parse(route.request().postData()).action);
+    return route.fulfill({ json: { items: [], config: {} } });
+  });
+  await reloadAndWait(page);
+  await expect.poll(() => requests.length).toBeGreaterThan(0);
+  await page.waitForTimeout(300);
+  const before = requests.length;
+  await page.evaluate(() => {
+    Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'hidden' });
+    document.dispatchEvent(new Event('visibilitychange'));
+    window.dispatchEvent(new Event('online')); // would normally start a cycle
+  });
+  await page.waitForTimeout(800);
+  expect(requests.length).toBe(before);
+  await page.evaluate(() => {
+    Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'visible' });
+    document.dispatchEvent(new Event('visibilitychange'));
+  });
+  await expect.poll(() => requests.length).toBeGreaterThan(before);
 });

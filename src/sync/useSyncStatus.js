@@ -42,6 +42,9 @@ export function useSyncStatus() {
   // so the new change still goes out immediately rather than next poll.
   const runSync = useCallback(async () => {
     if (!navigator.onLine) return;
+    // SPEC.md 22.8א: nothing while the app isn't on screen - coming back
+    // starts a cycle right away (the visibilitychange listener below).
+    if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
     if (inFlightRef.current) {
       if (Date.now() - progressAtRef.current < stuckAfterMs()) {
         rerunRef.current = true;

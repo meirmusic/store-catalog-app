@@ -4,7 +4,7 @@ import { useSyncExternalStore } from 'react';
 // kept on the device (it survives closing the app) - when fresh data last
 // arrived, when a change last reached the server, and how the server
 // answered the most recent request.
-const KEYS = { pull: 'gallery_last_pull_ok', push: 'gallery_last_push_ok', server: 'gallery_server_status' };
+const KEYS = { pull: 'gallery_last_pull_ok', push: 'gallery_last_push_ok', server: 'gallery_server_status', since: 'gallery_tracking_since' };
 const listeners = new Set();
 
 function read(key) {
@@ -16,7 +16,21 @@ function read(key) {
   }
 }
 
-let snapshot = { lastPullAt: read(KEYS.pull), lastPushAt: read(KEYS.push), server: read(KEYS.server) };
+// When this device started keeping these times (SPEC.md 22.7 *): with no
+// time recorded, the app says "none since <date>", never a false "never".
+function trackingSince() {
+  const existing = read(KEYS.since);
+  if (existing) return existing;
+  const now = new Date().toISOString();
+  try {
+    localStorage.setItem(KEYS.since, JSON.stringify(now));
+  } catch {
+    // storage unavailable
+  }
+  return now;
+}
+
+let snapshot = { lastPullAt: read(KEYS.pull), lastPushAt: read(KEYS.push), server: read(KEYS.server), since: trackingSince() };
 
 function write(key, value, field) {
   try {
