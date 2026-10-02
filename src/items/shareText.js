@@ -6,8 +6,8 @@ export const ARTIST_NAME = 'Yossi Bitton';
 export const INSTAGRAM_URL = 'https://instagram.com/yossibittonfineart';
 
 const WORDS = {
-  he: { cm: 'ס"מ', sold: 'נמכר' },
-  en: { cm: 'cm', sold: 'Sold' },
+  he: { cm: 'ס"מ' },
+  en: { cm: 'cm' },
 };
 // Types in English (SPEC.md 23.1); a type added to the list later stays as is.
 const TYPE_EN = { 'מקורי': 'Original', 'מיקס מדיה': 'Mixed media' };
@@ -32,18 +32,24 @@ export function withoutMarks(text) {
   return String(text).replace(/[\u200E\u200F]/g, '');
 }
 
-export function buildShareText(item, { lang = 'he', includePrice = true } = {}) {
-  const w = WORDS[lang] || WORDS.he;
+// The parts of the share, in the chosen language - the caption (below) and
+// the designed card (shareCard.js) are both built from these.
+// Whether the artwork was sold is never shown (SPEC.md 23.2); a sold
+// artwork is shared without its price.
+export function shareDetails(item, { lang = 'he', includePrice = true } = {}) {
   const sold = item.availability_status === 'sold';
   const type = item.type ? (lang === 'en' ? TYPE_EN[item.type] || item.type : item.type) : '';
   const details = [formatSize(item.size, lang), type].filter(Boolean).join(' · ');
   const hasPrice = item.price != null && item.price !== '' && !Number.isNaN(Number(item.price));
-  let priceLine = '';
-  if (sold) priceLine = w.sold;
-  else if (includePrice && hasPrice) priceLine = `$${Number(item.price).toLocaleString('en-US')}`;
-  const title = item.name ? `${ARTIST_NAME} - ${item.name}` : ARTIST_NAME;
+  const price = !sold && includePrice && hasPrice ? `$${Number(item.price).toLocaleString('en-US')}` : '';
+  return { name: item.name ? String(item.name).trim() : '', details, price };
+}
+
+export function buildShareText(item, { lang = 'he', includePrice = true } = {}) {
+  const { name, details, price } = shareDetails(item, { lang, includePrice });
+  const title = name ? `${ARTIST_NAME} - ${name}` : ARTIST_NAME;
   // Hebrew: every line right-to-left (but not the link - nothing may stick to it).
   const rtl = (line) => (lang === 'he' ? `${RLM}${line}` : line);
-  const body = [title, details, priceLine].filter(Boolean).map(rtl).join('\n');
+  const body = [title, details, price].filter(Boolean).map(rtl).join('\n');
   return `${body}\n\n${rtl(GALLERY_NAME)}\n${INSTAGRAM_URL}`;
 }

@@ -34,7 +34,8 @@ export default defineConfig({
         ],
       },
       workbox: {
-        globPatterns: ['**/*.{js,css,html,png,svg,ico}'],
+        // woff2: the share card's fonts, so it's drawn offline too (SPEC.md 23.5)
+        globPatterns: ['**/*.{js,css,html,png,svg,ico,woff2}'],
       },
     }),
   ],

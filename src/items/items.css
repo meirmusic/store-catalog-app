@@ -451,7 +451,10 @@ select:hover, .btn:hover { border-color: var(--accent); }
 .link-btn { background: none; border: none; padding: 0; color: inherit; text-decoration: underline; cursor: pointer; font: inherit; }
 .share-options { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; margin-top: 6px; }
 .share-lang { display: inline-flex; align-items: center; gap: 6px; font-size: .88rem; }
-.share-lang button { border: 1px solid var(--line); background: var(--wall); border-radius: 999px; padding: 4px 12px; cursor: pointer; font: inherit; color: var(--ink); }
-.share-lang button.on { border-color: var(--accent); background: var(--wall-2); font-weight: 700; }
+.share-lang button, .share-format button { border: 1px solid var(--line); background: var(--wall); border-radius: 999px; padding: 4px 12px; cursor: pointer; font: inherit; color: var(--ink); }
+.share-lang button.on, .share-format button.on { border-color: var(--accent); background: var(--wall-2); font-weight: 700; }
+.share-format { display: flex; gap: 6px; margin: 10px 0 0; font-size: .88rem; }
+.share-preview-img.share-card-img { max-height: 340px; background: var(--wall-2); }
+.share-card-placeholder { height: 340px; max-width: 272px; margin: 0 auto; background: #F3F2F0; }
 .share-copy { display: block; margin: 12px auto 0; font-size: .86rem; color: var(--ink-dim); }
 .share-dialog .confirm-actions button:disabled { opacity: .6; cursor: default; }

@@ -52,10 +52,10 @@ const shared = (page) => page.evaluate(() => window.__shared);
 test.beforeEach(async ({ page }) => {
   await pickIdentity(page);
   await clearAllData(page);
-  await page.evaluate(() => { localStorage.removeItem('gallery_share_lang'); localStorage.removeItem('gallery_share_price'); });
+  await page.evaluate(() => { for (const k of ['gallery_share_lang', 'gallery_share_price', 'gallery_share_format']) localStorage.removeItem(k); });
 });
 
-test('TC-SHARE-001: from the card - the client gets the photo itself and a clean Hebrew caption; nothing internal', async ({ page }) => {
+test('TC-SHARE-001: from the card - the client gets the designed card and a clean Hebrew caption; nothing internal', async ({ page }) => {
   await server(page);
   await seedItems(page, [ARTWORK]);
   await reloadAndWait(page);
@@ -66,7 +66,7 @@ test('TC-SHARE-001: from the card - the client gets the photo itself and a clean
   await dialog.locator('button.primary').click();
   await expect(dialog).toHaveCount(0);
   const [s] = await shared(page);
-  expect(s.files).toEqual([{ name: 'Yossi-Bitton-Fine-Art.jpg', type: 'image/png', size: expect.any(Number) }]);
+  expect(s.files).toEqual([{ name: 'Yossi-Bitton-Fine-Art.jpg', type: 'image/jpeg', size: expect.any(Number) }]); // the card
   expect(strip(s.text)).toBe('Yossi Bitton - זריחה בגליל\n91×132 ס"מ · מקורי\n$2,500\n\nYossi Bitton Fine Art\nhttps://instagram.com/yossibittonfineart');
   for (const internal of ['SKU-9', '112345', 'מחסן', 'פנימי', 'ממוסגר']) expect(s.text).not.toContain(internal);
   expect(s.fromTap).toBe(true); // opened straight from the tap - works on iPhone
@@ -88,16 +88,16 @@ test('TC-SHARE-002: English, without price - and the choices are remembered next
   await expect(page.locator('.share-price input')).not.toBeChecked();
 });
 
-test('TC-SHARE-003: a sold artwork - "sold" instead of a price, and no price option', async ({ page }) => {
+test('TC-SHARE-003: a sold artwork - no price, no price option, and nothing says it was sold', async ({ page }) => {
   await server(page);
   await seedItems(page, [{ ...ARTWORK, availability_status: 'sold' }]);
   await reloadAndWait(page);
   await page.click('.card .share-icon-btn');
   await expect(page.locator('.share-price')).toHaveCount(0);
-  await expect(page.locator('.share-preview')).toContainText('נמכר');
-  await expect(page.locator('.share-preview')).not.toContainText('$');
+  await expect.poll(async () => strip(await page.locator('.share-preview').textContent())).toBe('Yossi Bitton - זריחה בגליל\n91×132 ס"מ · מקורי\n\nYossi Bitton Fine Art\nhttps://instagram.com/yossibittonfineart');
   await page.click('.share-lang button:has-text("English")');
-  await expect(page.locator('.share-preview')).toContainText('Sold');
+  await expect(page.locator('.share-preview')).not.toContainText('Sold');
+  await expect(page.locator('.share-preview')).not.toContainText('$');
 });
 
 test('TC-SHARE-004: the Hebrew size reads 91×132 on screen - not flipped to 132×91', async ({ page }) => {
@@ -184,8 +184,12 @@ test('TC-SHARE-010: a computer with no share sheet - "copy the caption" and "dow
   await page.evaluate(() => { navigator.share = undefined; });
   await page.click('.card .share-icon-btn');
   const download = page.waitForEvent('download');
-  await page.click('.share-dialog button:has-text("הורדת התמונה")');
+  await page.click('.share-dialog button:has-text("הורדת הכרטיס")');
   expect((await download).suggestedFilename()).toBe('Yossi-Bitton-Fine-Art.jpg'); // never "download" with no extension
+  await page.click('.share-format button:has-text("תמונה בלבד")');
+  const photo = page.waitForEvent('download');
+  await page.click('.share-dialog button:has-text("הורדת התמונה")');
+  expect((await photo).suggestedFilename()).toBe('Yossi-Bitton-Fine-Art.jpg');
   await page.click('.share-copy');
   await expect(page.locator('.toast')).toContainText('הכיתוב הועתק');
   expect(strip(await page.evaluate(() => navigator.clipboard.readText()))).toContain('Yossi Bitton - זריחה בגליל');
@@ -220,4 +224,96 @@ test.describe('on an iPhone', () => {
     await expect(page.locator('.toast')).toContainText('אם הכיתוב לא הופיע בהודעה - הדביקו אותו');
     expect(strip(await page.evaluate(() => navigator.clipboard.readText()))).toContain('Yossi Bitton Fine Art');
   });
+});
+
+// SPEC.md 23.5 - the designed card.
+const cardSize = (page) => page.locator('.share-card-img').evaluate(async (img) => {
+  await img.decode();
+  return [img.naturalWidth, img.naturalHeight];
+});
+
+test('TC-SHARE-014: the designed card is ready before "share" - 1080×1350, shown in the preview as the client will see it', async ({ page }) => {
+  await server(page);
+  await seedItems(page, [ARTWORK]);
+  await reloadAndWait(page);
+  await fakeShareSheet(page);
+  await page.click('.card .share-icon-btn');
+  await expect(page.locator('.share-format button.on')).toHaveText('כרטיס מעוצב'); // the default
+  await expect(page.locator('.share-dialog button.primary')).toHaveText('שיתוף');
+  expect(await cardSize(page)).toEqual([1080, 1350]);
+  await page.click('.share-dialog button.primary');
+  const [s] = await shared(page);
+  expect(s.files[0].type).toBe('image/jpeg');
+  expect(s.fromTap).toBe(true);
+});
+
+test('TC-SHARE-015: "photo only" sends the original photo - and the choice is remembered', async ({ page }) => {
+  await server(page);
+  await seedItems(page, [ARTWORK]);
+  await reloadAndWait(page);
+  await fakeShareSheet(page);
+  await page.click('.card .share-icon-btn');
+  await page.click('.share-format button:has-text("תמונה בלבד")');
+  await expect(page.locator('.share-card-img')).toHaveCount(0);
+  await page.click('.share-dialog button.primary');
+  const [s] = await shared(page);
+  expect(s.files).toEqual([{ name: 'Yossi-Bitton-Fine-Art.jpg', type: 'image/png', size: expect.any(Number) }]); // the server's photo, as is
+  await page.click('.card .share-icon-btn');
+  await expect(page.locator('.share-format button.on')).toHaveText('תמונה בלבד');
+});
+
+test('TC-SHARE-016: changing the language or the price builds the card again - a different image each time', async ({ page }) => {
+  await server(page);
+  await seedItems(page, [ARTWORK]);
+  await reloadAndWait(page);
+  await fakeShareSheet(page);
+  await page.click('.card .share-icon-btn');
+  const src = () => page.locator('.share-card-img').getAttribute('src');
+  await expect(page.locator('.share-card-img')).toBeVisible();
+  const hebrew = await src();
+  await page.click('.share-lang button:has-text("English")');
+  await expect.poll(src).not.toBe(hebrew);
+  await expect(page.locator('.share-card-img')).toBeVisible();
+  const english = await src();
+  await page.uncheck('.share-price input');
+  await expect.poll(src).not.toBe(english);
+  await expect(page.locator('.share-dialog button.primary')).toHaveText('שיתוף');
+});
+
+test('TC-SHARE-017: no photo - no card and no "card / photo" choice; the caption is shared', async ({ page }) => {
+  await server(page);
+  await seedItems(page, [{ ...ARTWORK, image_url: null }]);
+  await reloadAndWait(page);
+  await page.click('.card .share-icon-btn');
+  await expect(page.locator('.share-note')).toBeVisible();
+  await expect(page.locator('.share-format')).toHaveCount(0);
+  await expect(page.locator('.share-card-img')).toHaveCount(0);
+});
+
+test('TC-SHARE-018: the card can\'t be built - says so, logs it, and the photo alone is shared', async ({ page }) => {
+  await server(page);
+  await seedItems(page, [ARTWORK]);
+  await reloadAndWait(page);
+  await fakeShareSheet(page);
+  await page.route('**/logo-header.png', (route) => route.abort()); // e.g. a broken install
+  await page.click('.card .share-icon-btn');
+  await expect(page.locator('.share-failed')).toHaveText('לא הצלחנו לבנות את הכרטיס - תישלח התמונה בלבד.');
+  await expect(page.locator('.share-dialog button.primary')).toHaveText('שיתוף');
+  await page.click('.share-dialog button.primary');
+  const [s] = await shared(page);
+  expect(s.files[0].type).toBe('image/png'); // the photo itself
+  const queued = await page.evaluate(() => JSON.parse(localStorage.getItem('gallery_error_log_queue') || '[]'));
+  expect(queued.map((e) => e.action)).toContain('shareCard');
+});
+
+test('TC-SHARE-019: the card is built offline too - fonts and logo are part of the app', async ({ page, context }) => {
+  await server(page);
+  await seedItems(page, [{ ...ARTWORK, image_url: null, pending_image: `data:image/png;base64,${PNG_B64}` }]);
+  await reloadAndWait(page);
+  // Nothing from outside the app may be needed: fonts and the logo come from the app itself.
+  const outside = [];
+  page.on('request', (req) => { const u = new URL(req.url()); if (u.origin !== new URL(page.url()).origin && !req.url().startsWith('data:') && !req.url().startsWith('blob:')) outside.push(req.url()); });
+  await page.click('.card .share-icon-btn');
+  await expect(page.locator('.share-card-img')).toBeVisible();
+  expect(outside.filter((u) => !u.startsWith(MOCK_URL))).toEqual([]);
 });

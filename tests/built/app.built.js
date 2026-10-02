@@ -30,6 +30,26 @@ test('TC-BUILT-001: opening the app with no internet shows the catalog from the 
   await context.setOffline(false);
 });
 
+test('TC-BUILT-003: the designed share card is built with no internet - its fonts and logo are inside the app', async ({ page, context }) => {
+  const PNG_B64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+  await context.route(MOCK_URL, (route) => {
+    const body = JSON.parse(route.request().postData());
+    if (body.action === 'getImage') return route.fulfill({ json: { mime: 'image/png', data: PNG_B64 } });
+    return route.fulfill({ json: { items: [{ row_id: 'C1', name: 'כרטיס בלי אינטרנט', availability_status: 'available', image_url: 'https://drive.google.com/thumbnail?id=C1&sz=w1000' }], config: {} } });
+  });
+  await pickIdentity(page);
+  await waitUntilControlled(page);
+  // Shared once with internet - the photo is now kept on the device (SPEC.md 23.3).
+  await page.click('.card .share-icon-btn', { timeout: 15_000 });
+  await expect(page.locator('.share-card-img')).toBeVisible();
+  await context.setOffline(true);
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await page.click('.card .share-icon-btn', { timeout: 15_000 });
+  await expect(page.locator('.share-card-img')).toBeVisible();
+  await expect(page.locator('.share-failed')).toHaveCount(0);
+  await context.setOffline(false);
+});
+
 test('TC-BUILT-002: a new version installs by itself on returning to the app - no "update" button flashes', async ({ page }) => {
   // Everything that ever appears in the update banner, kept across the
   // reload the update causes.

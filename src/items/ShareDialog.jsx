@@ -5,10 +5,12 @@ import { useDevicePreference } from '../hooks/useDevicePreference.js';
 import { displayImage, sizedImageUrl, FULL_IMAGE_WIDTH, THUMB_IMAGE_WIDTH } from './imageUrl.js';
 import { buildShareText } from './shareText.js';
 import { prepareShareImage } from './shareImage.js';
+import { buildShareCard } from './shareCard.js';
+import { reportError } from '../errors/errorReporting.js';
 import { currentDevice } from '../settings/deviceInfo.js';
 
-// SPEC.md section 23: share an artwork with a client - the photo itself and
-// a clean caption, in two taps.
+// SPEC.md section 23: share an artwork with a client - the designed card
+// (23.5) or the photo itself, and a clean caption, in two taps.
 //
 // iPhone only opens the share sheet straight from the tap, so the photo is
 // prepared as soon as this window opens - never after "share" is pressed.
@@ -19,6 +21,7 @@ export default function ShareDialog({ item, onClose }) {
   const { showToast, showErrorToast } = useToast();
   const [lang, setLang] = useDevicePreference('gallery_share_lang', 'he', ['he', 'en']);
   const [priceChoice, setPriceChoice] = useDevicePreference('gallery_share_price', '1', ['1', '0']);
+  const [format, setFormat] = useDevicePreference('gallery_share_format', 'card', ['card', 'photo']);
   const sold = item.availability_status === 'sold';
   const includePrice = priceChoice === '1';
   const caption = buildShareText(item, { lang, includePrice });
@@ -45,13 +48,39 @@ export default function ShareDialog({ item, onClose }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [item.row_id, item.image_url, item.pending_image, attempt]);
 
+  // The card is built as soon as the photo is ready, and again when the
+  // language or price changes - always before "share" is pressed (23.3).
+  const [card, setCard] = useState({ state: 'idle', file: null });
+  const wantCard = format === 'card' && Boolean(image.file);
+  useEffect(() => {
+    if (!wantCard) {
+      setCard({ state: 'idle', file: null });
+      return undefined;
+    }
+    let cancelled = false;
+    setCard({ state: 'loading', file: null });
+    buildShareCard(image.file, item, { lang, includePrice })
+      .then((file) => !cancelled && setCard({ state: 'ready', file }))
+      .catch((error) => {
+        if (cancelled) return;
+        reportError('shareCard', error);
+        setCard({ state: 'failed', file: null });
+      });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [wantCard, image.file, lang, includePrice, item.name, item.size, item.type, item.price, item.availability_status]);
+
+  const useCard = wantCard && card.state !== 'failed';
+  const shareFile = useCard ? card.file : image.file;
+  const shownFile = useCard ? card.file : image.file;
   const previewSrc = useMemo(() => {
-    if (image.file) return URL.createObjectURL(image.file);
+    if (shownFile) return URL.createObjectURL(shownFile);
+    if (useCard) return null; // the card is on its way
     const photo = displayImage(item);
     if (!photo) return null;
     return photo.startsWith('data:') ? photo : sizedImageUrl(photo, THUMB_IMAGE_WIDTH);
-  }, [image.file, item]);
-  useEffect(() => () => { if (image.file && previewSrc) URL.revokeObjectURL(previewSrc); }, [image.file, previewSrc]);
+  }, [shownFile, useCard, item]);
+  useEffect(() => () => { if (shownFile && previewSrc) URL.revokeObjectURL(previewSrc); }, [shownFile, previewSrc]);
 
   useEffect(() => {
     function onKeyDown(e) {
@@ -74,7 +103,7 @@ export default function ShareDialog({ item, onClose }) {
   // Everything up to navigator.share() is synchronous: no waiting between
   // the tap and the share sheet (iPhone requirement, SPEC.md 23.3).
   function share() {
-    const withFile = image.file && navigator.canShare?.({ files: [image.file] });
+    const withFile = shareFile && navigator.canShare?.({ files: [shareFile] });
     const text = !withFile && photoLink ? `${caption}\n${photoLink}` : caption;
     if (!canShareSheet) {
       copy(text, t('share.copied'));
@@ -83,7 +112,7 @@ export default function ShareDialog({ item, onClose }) {
     // WhatsApp on iPhone sometimes drops the caption next to a photo - it's
     // on the clipboard too, ready to paste.
     if (withFile) navigator.clipboard?.writeText(caption).catch(() => {});
-    navigator.share(withFile ? { files: [image.file], text } : { text })
+    navigator.share(withFile ? { files: [shareFile], text } : { text })
       .then(() => {
         onClose();
         if (withFile && isApple) showToast(t('share.iosHint'));
@@ -95,10 +124,10 @@ export default function ShareDialog({ item, onClose }) {
   }
 
   function download() {
-    const url = URL.createObjectURL(image.file);
+    const url = URL.createObjectURL(shareFile);
     const a = document.createElement('a');
     a.href = url;
-    a.download = image.file.name;
+    a.download = shareFile.name;
     document.body.appendChild(a);
     a.click();
     a.remove();
@@ -106,9 +135,12 @@ export default function ShareDialog({ item, onClose }) {
   }
 
   const loading = image.state === 'loading';
+  const cardPending = useCard && card.state !== 'ready';
   let status = null;
   if (image.state === 'none') status = <p className="share-note">{t('share.noPhoto')}</p>;
   if (loading) status = <p className="share-note" role="status">{t('share.preparing')}</p>;
+  if (cardPending) status = <p className="share-note" role="status">{t('share.preparingCard')}</p>;
+  if (wantCard && card.state === 'failed') status = <p className="share-note share-failed" role="status">{t('share.cardFailed')}</p>;
   if (image.state === 'failed') {
     status = (
       <p className="share-note share-failed" role="status">
@@ -123,8 +155,16 @@ export default function ShareDialog({ item, onClose }) {
       <div className="modal confirm-modal share-dialog" role="dialog" aria-labelledby="share-title">
         <h2 className="serif" id="share-title">{t('share.title')}</h2>
 
+        {(image.state === 'loading' || image.state === 'ready') && (
+          <div className="share-format" role="group" aria-label={t('share.format')}>
+            <button type="button" className={format === 'card' ? 'on' : ''} aria-pressed={format === 'card'} onClick={() => setFormat('card')}>{t('share.formatCard')}</button>
+            <button type="button" className={format === 'photo' ? 'on' : ''} aria-pressed={format === 'photo'} onClick={() => setFormat('photo')}>{t('share.formatPhoto')}</button>
+          </div>
+        )}
+
         <div className="share-preview-card">
-          {previewSrc && <img src={previewSrc} alt="" className="share-preview-img" referrerPolicy="no-referrer" />}
+          {previewSrc && <img src={previewSrc} alt="" className={useCard ? 'share-preview-img share-card-img' : 'share-preview-img'} referrerPolicy="no-referrer" />}
+          {useCard && !previewSrc && <div className="share-card-placeholder" aria-hidden="true" />}
           <pre className="share-preview" dir={lang === 'he' ? 'rtl' : 'ltr'}>{caption}</pre>
         </div>
         {status}
@@ -146,14 +186,14 @@ export default function ShareDialog({ item, onClose }) {
         <div className="confirm-actions">
           <button type="button" onClick={onClose}>{t('actions.cancel')}</button>
           {canShareSheet ? (
-            <button type="button" className="primary" onClick={share} disabled={loading && !slow} autoFocus>
-              {loading && !slow ? t('share.preparing') : loading ? t('share.withoutWaiting') : t('actions.share')}
+            <button type="button" className="primary" onClick={share} disabled={(loading && !slow) || (!loading && cardPending)} autoFocus>
+              {loading && !slow ? t('share.preparing') : loading ? t('share.withoutWaiting') : cardPending ? t('share.preparingCard') : t('actions.share')}
             </button>
           ) : (
-            image.file && <button type="button" className="primary" onClick={download}>{t('share.download')}</button>
+            shareFile && <button type="button" className="primary" onClick={download}>{useCard ? t('share.downloadCard') : t('share.download')}</button>
           )}
         </div>
-        <button type="button" className="link-btn share-copy" onClick={() => copy(!image.file && photoLink ? `${caption}\n${photoLink}` : caption, t('share.captionCopied'))}>
+        <button type="button" className="link-btn share-copy" onClick={() => copy(!shareFile && photoLink ? `${caption}\n${photoLink}` : caption, t('share.captionCopied'))}>
           {t('share.copyCaption')}
         </button>
       </div>
