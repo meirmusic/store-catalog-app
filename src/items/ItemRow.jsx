@@ -1,28 +1,48 @@
+import { useState } from 'react';
 import { useI18n } from '../i18n/I18nContext.jsx';
-import { displayImage, sizedImageUrl } from './imageUrl.js';
+import ImageLightbox from './ImageLightbox.jsx';
+import { displayImage, sizedImageUrl, FULL_IMAGE_WIDTH } from './imageUrl.js';
 import { formatWhen } from './formatWhen.js';
 
 // SPEC.md 19.6: the list view - one compact row per artwork, for scanning
-// many quickly. Tapping it opens the form, like a card.
+// many quickly. Tapping it opens the form, like a card; tapping the photo
+// enlarges it (SPEC.md 24.1) - the whole photo, as a 🔍 inside a 56px
+// thumbnail would be too small for a finger.
 const ROW_IMAGE_WIDTH = 160;
 
 export default function ItemRow({ item, onClick, onShare, showModified = false }) {
   const { t } = useI18n();
   const sold = item.availability_status === 'sold';
   const photo = displayImage(item);
+  const isPending = Boolean(item.pending_image);
+  const [zoomed, setZoomed] = useState(false);
   const ids = [item.sku ? `${t('fields.sku')} ${item.sku}` : '', item.serial_number ? `#${item.serial_number}` : '']
     .filter(Boolean)
     .join(' ');
 
   return (
     <article className={`item-row${sold ? ' sold' : ''}`} onClick={onClick}>
-      <div className="row-thumb">
-        {photo ? (
-          <img src={item.pending_image ? photo : sizedImageUrl(photo, ROW_IMAGE_WIDTH)} alt="" loading="lazy" referrerPolicy="no-referrer" />
-        ) : (
-          <span>🖼️</span>
-        )}
-      </div>
+      {photo ? (
+        <button
+          type="button"
+          className="row-thumb row-zoom"
+          onClick={(e) => { e.stopPropagation(); setZoomed(true); }}
+          aria-label={t('actions.zoomImage')}
+          title={t('actions.zoomImage')}
+        >
+          <img src={isPending ? photo : sizedImageUrl(photo, ROW_IMAGE_WIDTH)} alt="" loading="lazy" referrerPolicy="no-referrer" />
+          <span className="row-zoom-mark" aria-hidden="true">🔍</span>
+        </button>
+      ) : (
+        <div className="row-thumb"><span>🖼️</span></div>
+      )}
+      {zoomed && (
+        <ImageLightbox
+          src={isPending ? photo : sizedImageUrl(photo, FULL_IMAGE_WIDTH)}
+          alt={item.name}
+          onClose={() => setZoomed(false)}
+        />
+      )}
       <div className="row-main">
         <div className="name">{item.name}</div>
         <div className="meta">

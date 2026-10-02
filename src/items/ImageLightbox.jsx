@@ -4,9 +4,13 @@ import { useBodyScrollLock } from '../hooks/useBodyScrollLock.js';
 
 // Full-size view of an item's photo - staff need to actually inspect an
 // artwork's condition/detail, not just recognize it from a small card
-// thumbnail. Opened from ItemCard's thumbnail and from ImageField's
-// preview in the edit form; closes on backdrop click, the close button,
-// or Escape.
+// thumbnail. Opened from ItemCard's and ItemRow's thumbnail and from
+// ImageField's preview in the edit form; closes on backdrop click, the
+// close button, or Escape.
+//
+// Its clicks stop here: it's drawn inside a card / row, and a click that
+// went on to the card would open the edit form as the zoom closes
+// (SPEC.md 24.2 - found by the view parity test).
 export default function ImageLightbox({ src, alt, onClose }) {
   const { t } = useI18n();
   useBodyScrollLock();
@@ -20,7 +24,7 @@ export default function ImageLightbox({ src, alt, onClose }) {
   }, [onClose]);
 
   return (
-    <div className="lightbox-overlay" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+    <div className="lightbox-overlay" onMouseDown={(e) => e.target === e.currentTarget && onClose()} onClick={(e) => e.stopPropagation()}>
       <button type="button" className="lightbox-close" onClick={onClose} aria-label={t('actions.close')} title={t('actions.close')}>
         ×
       </button>
