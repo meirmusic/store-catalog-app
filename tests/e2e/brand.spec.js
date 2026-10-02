@@ -108,3 +108,65 @@ test('TC-BRAND-006: the ⚙ menu opens fully above the catalog - not cut by the 
     await page.keyboard.press('Escape');
   }
 });
+
+// Contrast of a text element against what is drawn behind it (WCAG ratio).
+async function contrast(locator) {
+  return locator.evaluate((el) => {
+    const parse = (c) => c.match(/[\d.]+/g).map(Number);
+    const lum = ([r, g, b]) => { const f = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }; return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b); };
+    let bg = null;
+    for (let e = el; e && !bg; e = e.parentElement) { const c = parse(getComputedStyle(e).backgroundColor); if ((c[3] ?? 1) > 0.5) bg = c; }
+    const fg = parse(getComputedStyle(el).color);
+    const a = lum(fg), b = lum(bg || [255, 255, 255]);
+    return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+  });
+}
+
+test('TC-BRAND-007: the dialogs opened from ⚙ have readable text - not the black band\'s light color (REG-045)', async ({ page }) => {
+  await openCatalog(page, 390);
+  const labels = await (async () => { await page.click('.header-menu > button'); const l = await page.locator('.header-menu-list > button').allTextContents(); await page.keyboard.press('Escape'); return l; })();
+  let opened = 0;
+  for (const [i, label] of labels.entries()) {
+    if (/שפה|החלפת/.test(label)) continue;
+    await page.click('.header-menu > button');
+    await page.locator('.header-menu-list > button').nth(i).click();
+    const title = page.locator('.overlay h2').first();
+    await expect(title).toBeVisible();
+    expect(await contrast(title), `"${label}" title`).toBeGreaterThan(4.5);
+    opened += 1;
+    await page.keyboard.press('Escape');
+    await expect(page.locator('.overlay')).toHaveCount(0);
+  }
+  expect(opened).toBeGreaterThanOrEqual(4);
+});
+
+test.describe('in dark mode', () => {
+  test.use({ colorScheme: 'dark' });
+
+  test('TC-BRAND-008: buttons without their own color are readable - team names, "back to editing" (REG-046)', async ({ page }) => {
+    await page.goto('/');
+    await page.evaluate(() => { localStorage.setItem('gallery_password_identity', JSON.stringify({ email: 'office@test', password: 'x' })); localStorage.removeItem('gallery_team_member'); });
+    await page.reload();
+    const name = page.locator('.brand-cover-panel button').first();
+    await expect(name).toBeVisible();
+    expect(await contrast(name)).toBeGreaterThan(4.5);
+    await openCatalog(page, 390);
+    await page.locator('.card .name').first().click();
+    await page.locator('#item-overlay textarea').fill('שינוי');
+    await page.locator('#item-overlay button.btn', { hasText: 'ביטול' }).click();
+    const keep = page.locator('.discard-confirm button', { hasText: 'חזרה לעריכה' });
+    await expect(keep).toBeVisible();
+    expect(await contrast(keep)).toBeGreaterThan(4.5);
+    // the red button too ("leave without saving")
+    expect(await contrast(page.locator('.discard-confirm button.danger'))).toBeGreaterThan(4.5);
+  });
+});
+
+test('TC-BRAND-009: on a computer the ⚙ menu opens inside the screen - nothing past the edge (REG-047)', async ({ page }) => {
+  await openCatalog(page, 1280);
+  await page.click('.header-menu > button');
+  const box = await page.locator('.header-menu-list').boundingBox();
+  expect(box.x).toBeGreaterThanOrEqual(0);
+  expect(box.x + box.width).toBeLessThanOrEqual(1280);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+});

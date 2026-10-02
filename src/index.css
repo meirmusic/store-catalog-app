@@ -1,6 +1,7 @@
 :root {
   --brand-black: #0E0E0D;
   --art-wall: #EBEAE7;
+  --danger: #96685C;
   --stone: #FAFAF9;
   --wall: #FFFFFF;
   --wall-2: #F2F1EE;
@@ -21,6 +22,7 @@
   :root:not([data-theme="light"]) {
     --stone: #141412;
     --art-wall: #2A2925;
+    --danger: #8A5A4E;
     --wall: #1E1E1B;
     --wall-2: #262622;
     --ink: #F3F1EA;
@@ -39,6 +41,7 @@
 :root[data-theme="dark"] {
   --stone: #141412;
     --art-wall: #2A2925;
+    --danger: #8A5A4E;
   --wall: #1E1E1B;
   --wall-2: #262622;
   --ink: #F3F1EA;
@@ -69,6 +72,10 @@ body {
   font-variant-numeric: tabular-nums;
   line-height: 1.45;
 }
+
+/* Buttons take the text color around them, not the browser's fixed black -
+   which is unreadable on dark backgrounds in dark mode (REG-046). */
+button { color: inherit; }
 
 h1, h2, h3, .serif {
   font-family: "Frank Ruhl Libre", "Times New Roman", serif;

@@ -6,7 +6,10 @@
 
 /* SPEC.md 25.1: a black band across the whole screen, as the catalog's
    cover (App.jsx's AppShell). */
-.top-band { background: var(--brand-black); color: #F3F1EA; margin-bottom: 18px; }
+/* No text color here: the header's dialogs (manage lists, support info...)
+   are rendered inside it and would inherit it (REG-045). The band's own
+   buttons get their light color below. */
+.top-band { background: var(--brand-black); margin-bottom: 18px; }
 .top-band .page-wrap { padding-bottom: 0; }
 header.top {
   display: flex;
@@ -259,7 +262,8 @@ select:hover, .btn:hover { border-color: var(--accent); }
 .confirm-modal { max-width: 380px; text-align: center; }
 .confirm-modal .confirm-actions { display: flex; gap: 10px; margin-top: 20px; }
 .confirm-modal .confirm-actions button { flex: 1; padding: 10px; border-radius: 9px; border: 1px solid var(--line); background: var(--stone); cursor: pointer; font-weight: 600; }
-.confirm-modal .confirm-actions button.danger { background: var(--sold); border-color: var(--sold); color: #fff; }
+/* var(--danger), not var(--sold): white on the dark-mode --sold was too faint (contrast 2.9). */
+.confirm-modal .confirm-actions button.danger { background: var(--danger); border-color: var(--danger); color: #fff; }
 
 .toast-wrap { position: fixed; bottom: 20px; inset-inline-end: 20px; z-index: 200; display: flex; flex-direction: column; gap: 8px; }
 .toast { display: flex; align-items: center; gap: 10px; background: var(--ink); color: var(--wall); padding: 10px 16px; border-radius: 10px; font-size: .86rem; box-shadow: 0 8px 24px rgba(0,0,0,.3); }
@@ -409,6 +413,10 @@ button.row-thumb:focus-visible { outline: 2px solid var(--accent); outline-offse
 
 .header-menu { position: relative; }
 .header-menu-list { position: absolute; top: calc(100% + 6px); inset-inline-start: 0; z-index: 40; min-width: 170px; background: var(--wall); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow); padding: 6px; display: flex; flex-direction: column; }
+/* A computer: the ⚙ button sits near the left edge, so the menu opens
+   toward the page, not past the screen's edge (REG-047). The phone layout
+   below anchors it to the header instead. */
+@media (min-width: 641px) { .header-menu-list { inset-inline-start: auto; inset-inline-end: 0; } }
 .header-menu-list button { background: none; border: none; text-align: start; padding: 10px 12px; border-radius: 8px; color: var(--ink); font-family: inherit; font-size: .92rem; cursor: pointer; }
 .header-menu-list button:hover, .header-menu-list button:focus-visible { background: var(--wall-2); }
 

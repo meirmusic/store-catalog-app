@@ -103,9 +103,10 @@ test('TC-ERR-003: the same failure repeating is one entry with a count, and keep
   await save.click();
   await save.click();
   await expect(page.locator('.toast .error-code bdi')).toHaveText(first);
-  const queue = await errorQueue(page);
-  expect(queue).toHaveLength(1);
-  expect(queue[0].count).toBe(3);
+  // wait for the third failure to be recorded - reading at once raced it
+  // when the machine was busy (seen once in a full run, count was 2)
+  await expect.poll(async () => (await errorQueue(page))[0]?.count).toBe(3);
+  expect(await errorQueue(page)).toHaveLength(1);
 });
 
 test('TC-ERR-004: an unexpected error anywhere gets a message with code and details, and is logged', async ({ page }) => {

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useBlocksAutoUpdate } from '../pwa/typingGuard.js';
 import { useI18n } from '../i18n/I18nContext.jsx';
 import { useItems } from '../items/ItemsContext.jsx';
@@ -55,6 +55,14 @@ export default function ConfigManager({ onClose }) {
   const { t } = useI18n();
   useBlocksAutoUpdate(); // SPEC.md 9: no automatic app update while this is open
   useBodyScrollLock();
+  // Esc closes it, like every other window of the ⚙ menu (REG-048).
+  useEffect(() => {
+    function onKeyDown(e) {
+      if (e.key === 'Escape') onClose();
+    }
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [onClose]);
 
   return (
     <div className="overlay" id="config-overlay" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
