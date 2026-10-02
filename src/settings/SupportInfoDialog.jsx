@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useRef, useState, useSyncExternalStore } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useI18n } from '../i18n/I18nContext.jsx';
 import { useIdentity } from '../identity/IdentityContext.jsx';
@@ -6,7 +6,7 @@ import { useTeamMember } from '../identity/TeamMemberContext.jsx';
 import { db } from '../db/db.js';
 import { FAILURE_THRESHOLD } from '../sync/syncEngine.js';
 import { useSyncRecord } from '../sync/syncRecord.js';
-import { APP_VERSION, getRecentErrors } from '../errors/errorReporting.js';
+import { APP_VERSION, getRecentErrors, subscribeRecentErrors, getRecentErrorsVersion } from '../errors/errorReporting.js';
 import { formatWhen, formatDateTime } from '../items/formatWhen.js';
 import { currentDevice } from './deviceInfo.js';
 import Dialog from './Dialog.jsx';
@@ -24,6 +24,7 @@ export default function SupportInfoDialog({ isOnline, onClose }) {
   const stuck = useLiveQuery(() => db.pendingChanges.filter((c) => (c.attempts || 0) >= FAILURE_THRESHOLD).count(), [], null);
   const [copied, setCopied] = useState(false);
   const textRef = useRef(null);
+  useSyncExternalStore(subscribeRecentErrors, getRecentErrorsVersion); // re-read when one is added
   const errors = getRecentErrors();
   const device = currentDevice();
   const when = (iso) => formatWhen(iso, t);

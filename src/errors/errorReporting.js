@@ -12,6 +12,20 @@ const MAX_RECENT = 10;
 
 // Every failure the user was shown (SPEC.md 22.7) - also those not sent to
 // the ErrorLog (e.g. while offline), marked logged: false.
+// Live for "info & support" (REG-040): the list used to be read once, so an
+// error that happened while the window was open was missing from it.
+const recentListeners = new Set();
+let recentVersion = 0;
+
+export function subscribeRecentErrors(fn) {
+  recentListeners.add(fn);
+  return () => recentListeners.delete(fn);
+}
+
+export function getRecentErrorsVersion() {
+  return recentVersion;
+}
+
 function rememberRecent(code, action, message, logged = true) {
   try {
     const raw = localStorage.getItem(RECENT_KEY);
@@ -22,6 +36,8 @@ function rememberRecent(code, action, message, logged = true) {
   } catch {
     // storage unavailable - the on-screen report still works
   }
+  recentVersion += 1;
+  recentListeners.forEach((fn) => fn());
 }
 
 export function getRecentErrors() {

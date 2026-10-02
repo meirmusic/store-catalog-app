@@ -187,3 +187,18 @@ test('TC-TRUTH-010: while the app is in the background nothing is sent to the se
   });
   await expect.poll(() => requests.length).toBeGreaterThan(before);
 });
+
+// REG-040 (real report from the product manager's device): the server row
+// showed an 11:09 failure that the "recent errors" list didn't - the list
+// was read only when the window opened.
+test('TC-TRUTH-011: an error that happens while "info & support" is open appears in its list right away', async ({ page }) => {
+  await server(page);
+  await reloadAndWait(page);
+  await openSupport(page);
+  await expect(page.locator('.support-errors')).toContainText('אין תקלות');
+  await page.evaluate(async () => {
+    const { reportError } = await import('/src/errors/errorReporting.js');
+    reportError('sync-pull', new TypeError('Failed to fetch'));
+  });
+  await expect(page.locator('.support-errors li')).toContainText('Failed to fetch');
+});
