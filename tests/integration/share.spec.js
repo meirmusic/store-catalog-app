@@ -10,12 +10,13 @@ const strip = (s) => s.replace(/[‎‏]/g, '');
 
 const ARTWORK = { row_id: 'S1', name: 'זריחה בגליל', size: '91X132', type: 'מקורי', location: 'מחסן', sku: 'SKU-9', serial_number: '112345', notes: 'פנימי', physical_status: 'ממוסגר', price: 2500, availability_status: 'available', image_url: 'https://drive.google.com/thumbnail?id=F1&sz=w1000' };
 
-async function server(page, { image = 'ok' } = {}) {
+async function server(page, { image = 'ok', delayMs = 0 } = {}) {
   const seen = [];
   await page.route(MOCK_URL, async (route) => {
     const body = JSON.parse(route.request().postData());
     seen.push(body.action);
     if (body.action === 'getImage') {
+      if (delayMs) await new Promise((r) => setTimeout(r, delayMs));
       if (image === 'ok') return route.fulfill({ json: { mime: 'image/png', data: PNG_B64 } });
       return route.fulfill({ json: { error: 'unknown action: getImage' } });
     }
@@ -290,20 +291,41 @@ test('TC-SHARE-017: no photo - no card and no "card / photo" choice; the caption
   await expect(page.locator('.share-card-img')).toHaveCount(0);
 });
 
-test('TC-SHARE-018: the card can\'t be built - says so, logs it, and the photo alone is shared', async ({ page }) => {
+test('TC-SHARE-018: the card can\'t be built - an error with a code, nothing is sent instead; "try again" or "photo only"', async ({ page }) => {
   await server(page);
   await seedItems(page, [ARTWORK]);
   await reloadAndWait(page);
   await fakeShareSheet(page);
-  await page.route('**/logo-header.png', (route) => route.abort()); // e.g. a broken install
+  let logoBroken = true; // e.g. a broken install
+  await page.route('**/logo-header.png', (route) => (logoBroken ? route.abort() : route.fallback()));
   await page.click('.card .share-icon-btn');
-  await expect(page.locator('.share-failed')).toHaveText('לא הצלחנו לבנות את הכרטיס - תישלח התמונה בלבד.');
-  await expect(page.locator('.share-dialog button.primary')).toHaveText('שיתוף');
-  await page.click('.share-dialog button.primary');
-  const [s] = await shared(page);
-  expect(s.files[0].type).toBe('image/png'); // the photo itself
+  await expect(page.locator('.toast.error')).toContainText('לא הצלחנו לבנות את כרטיס השיתוף');
+  await expect(page.locator('.toast.error')).toContainText(/E-[A-Z0-9]{4}/); // the error code
+  await expect(page.locator('.share-failed')).toContainText('לא הצלחנו לבנות את הכרטיס');
+  await expect(page.locator('.share-dialog button.primary')).toBeDisabled(); // never the photo instead
   const queued = await page.evaluate(() => JSON.parse(localStorage.getItem('gallery_error_log_queue') || '[]'));
   expect(queued.map((e) => e.action)).toContain('shareCard');
+
+  logoBroken = false;
+  await page.click('.share-failed button:has-text("לנסות שוב")');
+  await expect(page.locator('.share-card-img')).toBeVisible();
+  await expect(page.locator('.share-dialog button.primary')).toBeEnabled();
+  expect(await shared(page)).toEqual([]); // nothing was sent while it failed
+});
+
+test('TC-SHARE-018b: after the card failed, choosing "photo only" shares the photo', async ({ page }) => {
+  await server(page);
+  await seedItems(page, [ARTWORK]);
+  await reloadAndWait(page);
+  await fakeShareSheet(page);
+  await page.route('**/logo-header.png', (route) => route.abort());
+  await page.click('.card .share-icon-btn');
+  await expect(page.locator('.share-failed')).toBeVisible();
+  await page.click('.share-format button:has-text("תמונה בלבד")');
+  await expect(page.locator('.share-failed')).toHaveCount(0);
+  await page.click('.share-dialog button.primary');
+  const [s] = await shared(page);
+  expect(s.files[0].type).toBe('image/png');
 });
 
 test('TC-SHARE-019: the card is built offline too - fonts and logo are part of the app', async ({ page, context }) => {
@@ -316,4 +338,23 @@ test('TC-SHARE-019: the card is built offline too - fonts and logo are part of t
   await page.click('.card .share-icon-btn');
   await expect(page.locator('.share-card-img')).toBeVisible();
   expect(outside.filter((u) => !u.startsWith(MOCK_URL))).toEqual([]);
+});
+
+test('TC-SHARE-021: in card mode the preview never shows the plain photo first - only the card\'s frame, then the card', async ({ page }) => {
+  await server(page, { delayMs: 800 });
+  await seedItems(page, [ARTWORK]);
+  await reloadAndWait(page);
+  await page.evaluate(() => {
+    window.__previews = [];
+    new MutationObserver(() => {
+      const box = document.querySelector('.share-preview-card');
+      if (!box) return;
+      const img = box.querySelector('img');
+      const seen = img ? (img.src.startsWith('blob:') ? 'card' : 'photo') : (box.querySelector('.share-card-placeholder') ? 'frame' : 'nothing');
+      if (window.__previews.at(-1) !== seen) window.__previews.push(seen);
+    }).observe(document.body, { childList: true, subtree: true, attributes: true });
+  });
+  await page.click('.card .share-icon-btn');
+  await expect(page.locator('.share-card-img')).toBeVisible();
+  expect(await page.evaluate(() => window.__previews)).toEqual(['frame', 'card']);
 });

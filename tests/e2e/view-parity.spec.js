@@ -29,9 +29,9 @@ const PARITY = {
   sold: { cards: true, list: true },
   price: { cards: true, list: true },
   modified: { cards: true, list: true },
-  pendingUpload: { cards: true, list: 'waiting for a decision (SPEC.md 24.2)' },
+  pendingUpload: { cards: true, list: true },
   ids: { cards: true, list: true },
-  typeAndCondition: { cards: true, list: 'waiting for a decision (SPEC.md 24.2)' },
+  typeAndCondition: { cards: true, list: 'by design - the row is for quick scanning (SPEC.md 24.2)' },
 };
 
 const at = (page, view, name) => page.locator(VIEWS[view].item, { hasText: name });

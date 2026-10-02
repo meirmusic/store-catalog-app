@@ -6,7 +6,6 @@ import { displayImage, sizedImageUrl, FULL_IMAGE_WIDTH, THUMB_IMAGE_WIDTH } from
 import { buildShareText } from './shareText.js';
 import { prepareShareImage } from './shareImage.js';
 import { buildShareCard } from './shareCard.js';
-import { reportError } from '../errors/errorReporting.js';
 import { currentDevice } from '../settings/deviceInfo.js';
 
 // SPEC.md section 23: share an artwork with a client - the designed card
@@ -50,8 +49,15 @@ export default function ShareDialog({ item, onClose }) {
 
   // The card is built as soon as the photo is ready, and again when the
   // language or price changes - always before "share" is pressed (23.3).
+  // A card that can't be built is an error, never silently swapped for the
+  // photo (SPEC.md 23.5): the client gets what the user saw and chose.
   const [card, setCard] = useState({ state: 'idle', file: null });
-  const wantCard = format === 'card' && Boolean(image.file);
+  const [cardAttempt, setCardAttempt] = useState(0);
+  // Card mode from the first moment: while the photo is still coming, the
+  // card's frame is shown - not the plain photo, which would then be
+  // replaced by the card (a flash of something that won't be sent).
+  const cardMode = format === 'card' && (image.state === 'loading' || image.state === 'ready');
+  const wantCard = cardMode && Boolean(image.file);
   useEffect(() => {
     if (!wantCard) {
       setCard({ state: 'idle', file: null });
@@ -63,14 +69,15 @@ export default function ShareDialog({ item, onClose }) {
       .then((file) => !cancelled && setCard({ state: 'ready', file }))
       .catch((error) => {
         if (cancelled) return;
-        reportError('shareCard', error);
+        showErrorToast(t('errors.cardFailed'), 'shareCard', error);
         setCard({ state: 'failed', file: null });
       });
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [wantCard, image.file, lang, includePrice, item.name, item.size, item.type, item.price, item.availability_status]);
+  }, [wantCard, image.file, lang, includePrice, item.name, item.size, item.type, item.price, item.availability_status, cardAttempt]);
 
-  const useCard = wantCard && card.state !== 'failed';
+  const useCard = cardMode;
+  const cardFailed = useCard && card.state === 'failed';
   const shareFile = useCard ? card.file : image.file;
   const shownFile = useCard ? card.file : image.file;
   const previewSrc = useMemo(() => {
@@ -135,12 +142,19 @@ export default function ShareDialog({ item, onClose }) {
   }
 
   const loading = image.state === 'loading';
-  const cardPending = useCard && card.state !== 'ready';
+  const cardPending = useCard && !cardFailed && card.state !== 'ready';
   let status = null;
   if (image.state === 'none') status = <p className="share-note">{t('share.noPhoto')}</p>;
   if (loading) status = <p className="share-note" role="status">{t('share.preparing')}</p>;
   if (cardPending) status = <p className="share-note" role="status">{t('share.preparingCard')}</p>;
-  if (wantCard && card.state === 'failed') status = <p className="share-note share-failed" role="status">{t('share.cardFailed')}</p>;
+  if (cardFailed) {
+    status = (
+      <p className="share-note share-failed" role="status">
+        {t('share.cardFailed')}{' '}
+        <button type="button" className="link-btn" onClick={() => setCardAttempt((a) => a + 1)}>{t('share.retry')}</button>
+      </p>
+    );
+  }
   if (image.state === 'failed') {
     status = (
       <p className="share-note share-failed" role="status">
@@ -186,14 +200,14 @@ export default function ShareDialog({ item, onClose }) {
         <div className="confirm-actions">
           <button type="button" onClick={onClose}>{t('actions.cancel')}</button>
           {canShareSheet ? (
-            <button type="button" className="primary" onClick={share} disabled={(loading && !slow) || (!loading && cardPending)} autoFocus>
+            <button type="button" className="primary" onClick={share} disabled={(loading && !slow) || (!loading && (cardPending || cardFailed))} autoFocus>
               {loading && !slow ? t('share.preparing') : loading ? t('share.withoutWaiting') : cardPending ? t('share.preparingCard') : t('actions.share')}
             </button>
           ) : (
             shareFile && <button type="button" className="primary" onClick={download}>{useCard ? t('share.downloadCard') : t('share.download')}</button>
           )}
         </div>
-        <button type="button" className="link-btn share-copy" onClick={() => copy(!shareFile && photoLink ? `${caption}\n${photoLink}` : caption, t('share.captionCopied'))}>
+        <button type="button" className="link-btn share-copy" onClick={() => copy(!image.file && photoLink ? `${caption}\n${photoLink}` : caption, t('share.captionCopied'))}>
           {t('share.copyCaption')}
         </button>
       </div>

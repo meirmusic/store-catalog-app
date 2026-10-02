@@ -45,6 +45,9 @@ export default function ItemRow({ item, onClick, onShare, showModified = false }
       )}
       <div className="row-main">
         <div className="name">{item.name}</div>
+        {/* SPEC.md 24.2: as on the card - the photo isn't on the server yet.
+            Next to the name, not on the photo: the photo is too small for it. */}
+        {isPending && <span className="pending-badge">{t('image.pendingUpload')}</span>}
         <div className="meta">
           {[item.size, item.location].filter(Boolean).join(' · ')}
           {ids ? <span className="row-ids">{ids}</span> : null}
