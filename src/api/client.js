@@ -1,5 +1,6 @@
 import { APPS_SCRIPT_URL } from './config';
 import { getAuthFields } from './authToken.js';
+import { recordServerAnswer } from '../sync/syncRecord.js';
 
 // See SPEC.md "דרישות טכניות קריטיות למימוש ה-API": Apps Script can't
 // handle a CORS preflight, so the request body must be sent as
@@ -54,6 +55,10 @@ async function callApi(action, payload) {
     timedOut = true;
     controller.abort();
   }, ms);
+  // SPEC.md 22.7: how the server answered, for "info & support". The error
+  // log's own sends don't count (before Apps Script knows logErrors, they
+  // would make a healthy server look broken).
+  const record = action === 'logErrors' ? () => {} : recordServerAnswer;
   let res;
   let data;
   try {
@@ -66,11 +71,13 @@ async function callApi(action, payload) {
     if (!res.ok) throw new Error(`API error ${res.status}`);
     data = await res.json(); // reading the answer counts toward the limit too
   } catch (err) {
-    if (timedOut) throw new TimeoutError(Math.round(ms / 1000));
-    throw err;
+    const failure = timedOut ? new TimeoutError(Math.round(ms / 1000)) : err;
+    record('unreachable', failure && failure.message ? `${failure.name}: ${failure.message}` : String(failure));
+    throw failure;
   } finally {
     clearTimeout(timer);
   }
+  record(data && data.error && data.error !== 'forbidden' ? 'error' : 'ok', data && data.error ? data.error : '');
   if (data && data.error === 'forbidden') throw new AuthError();
   if (data && data.error) throw new Error(data.error);
   return data;

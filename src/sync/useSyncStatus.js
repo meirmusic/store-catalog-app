@@ -5,6 +5,7 @@ import { syncNow, hasSyncProblem, onSyncRequested } from './syncEngine.js';
 import { useToast } from '../toast/ToastContext.jsx';
 import { useI18n } from '../i18n/I18nContext.jsx';
 import { reportError } from '../errors/errorReporting.js';
+import { useSyncRecord } from './syncRecord.js';
 
 const POLL_MS = 45000; // SPEC.md section 4: auto-refresh every 30-60s
 // SPEC.md section 9 (REG-030): a cycle with no progress for longer than the
@@ -22,7 +23,6 @@ export function useSyncStatus() {
   const { t } = useI18n();
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [syncing, setSyncing] = useState(false);
-  const [lastSyncedAt, setLastSyncedAt] = useState(null);
   const [syncProblem, setSyncProblem] = useState(false);
   const [stale, setStale] = useState(false);
   const [staleError, setStaleError] = useState(null); // { code, details } of the last failed pull
@@ -59,18 +59,18 @@ export function useSyncStatus() {
     try {
       do {
         rerunRef.current = false;
-        const result = await syncNow({ shouldStop: () => !isCurrent(), onProgress: markProgress });
+        const result = await syncNow({
+          shouldStop: () => !isCurrent(),
+          onProgress: markProgress,
+          onPushed: () => showToast(tRef.current('sync.synced'), { background: true }),
+        });
         if (!isCurrent()) return;
-        if (result.pushed > 0) {
-          showToast(tRef.current('sync.synced'), { background: true });
-        }
         if (result.reason === 'auth') {
           setAuthExpired(true);
           break; // every further attempt would be rejected too, until the user signs in again
         }
         setAuthExpired(false);
         if (result.ok) {
-          setLastSyncedAt(new Date());
           setStale(false);
           setStaleError(null);
         } else if (result.reason === 'pull-failed') {
@@ -114,6 +114,10 @@ export function useSyncStatus() {
     const id = setInterval(runSync, POLL_MS);
     return () => clearInterval(id);
   }, [runSync]);
+
+  // SPEC.md 22.6: when fresh data last arrived - kept on the device.
+  const { lastPullAt } = useSyncRecord();
+  const lastSyncedAt = lastPullAt ? new Date(lastPullAt) : null;
 
   return {
     isOnline,

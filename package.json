@@ -13,7 +13,8 @@
     "test:e2e": "playwright test tests/e2e --project=desktop",
     "test:mobile": "playwright test tests/e2e --project=mobile-iphone --project=mobile-android",
     "test:integration": "playwright test tests/integration --project=desktop",
-    "test:report": "node tests/report-summary.js"
+    "test:report": "node tests/report-summary.js",
+    "test:built": "playwright test -c playwright.built.config.js"
   },
   "dependencies": {
     "dexie": "^4.4.5",

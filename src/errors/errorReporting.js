@@ -10,11 +10,14 @@ const QUEUE_KEY = 'gallery_error_log_queue';
 const RECENT_KEY = 'gallery_recent_errors';
 const MAX_RECENT = 10;
 
-function rememberRecent(code, action, message) {
+// Every failure the user was shown (SPEC.md 22.7) - also those not sent to
+// the ErrorLog (e.g. while offline), marked logged: false.
+function rememberRecent(code, action, message, logged = true) {
   try {
     const raw = localStorage.getItem(RECENT_KEY);
-    const list = (raw ? JSON.parse(raw) : []).filter((e) => e && e.code !== code);
-    list.unshift({ code, action, message: String(message).slice(0, 300), at: new Date().toISOString() });
+    const text = String(message).slice(0, 300);
+    const list = (raw ? JSON.parse(raw) : []).filter((e) => e && !(e.action === action && e.message === text));
+    list.unshift({ code: code || '', action, message: text, at: new Date().toISOString(), logged });
     localStorage.setItem(RECENT_KEY, JSON.stringify(list.slice(0, MAX_RECENT)));
   } catch {
     // storage unavailable - the on-screen report still works
@@ -79,7 +82,10 @@ function currentMember() {
 export function reportError(action, error, { log = true } = {}) {
   const details = describeError(error);
   console.error(`[${action}]`, error);
-  if (!log) return { code: null, details };
+  if (!log) {
+    rememberRecent(null, action, details, false);
+    return { code: null, details };
+  }
 
   const queue = loadQueue();
   const now = Date.now();

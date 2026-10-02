@@ -30,7 +30,7 @@ function matchesSearch(item, q) {
 
 export default function ItemList() {
   const { t } = useI18n();
-  const { items, config, softDeleteItem, restoreItem } = useItems();
+  const { items, itemsLoaded, config, softDeleteItem, restoreItem } = useItems();
   const { showToast, showErrorToast } = useToast();
 
   function exportList() {
@@ -123,7 +123,8 @@ export default function ItemList() {
 
   return (
     <div>
-      <div className="stats-bar">
+      {/* SPEC.md 22.2: no totals until the catalog has loaded from the device. */}
+      {itemsLoaded && <div className="stats-bar">
         <button
           type="button"
           className={`stats-toggle${statsExpanded ? ' expanded' : ''}`}
@@ -164,7 +165,7 @@ export default function ItemList() {
             )}
           </div>
         )}
-      </div>
+      </div>}
 
       <div className="toolbar">
         <div className="search-box">
@@ -262,7 +263,9 @@ export default function ItemList() {
         </div>
       )}
 
-      {filtered.length === 0 ? (
+      {!itemsLoaded ? (
+        <div className="loading-state" role="status">{t('list.loading')}</div>
+      ) : filtered.length === 0 ? (
         <div className="empty-state">
           <p>{t('list.empty')}</p>
           {filtersActive && (

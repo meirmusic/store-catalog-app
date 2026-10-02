@@ -432,3 +432,7 @@ select:hover, .btn:hover { border-color: var(--accent); }
   .header-menu { position: static; }
   .header-menu-list { inset-inline: 0; top: calc(100% + 4px); min-width: 0; max-width: none; }
 }
+
+/* ---- SPEC.md section 22 ---- */
+.loading-state { text-align: center; color: var(--ink-dim); font-size: .9rem; padding: 40px 16px; }
+.support-not-logged { color: var(--sold); }

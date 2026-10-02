@@ -161,7 +161,7 @@ test('TC-ERR-008: "not updated since" explains, when tapped, why fresh data coul
   });
   await reloadAndWait(page);
   await clickRefresh(page);
-  const chip = page.locator('.chip-problem', { hasText: 'לא עודכן מאז' });
+  const chip = page.locator('.chip-problem', { hasText: 'לא התקבלו נתונים מהשרת' });
   await chip.click();
   const toast = page.locator('.toast.error');
   await expect(toast).toContainText('לא הצלחנו לקבל נתונים עדכניים מהשרת');

@@ -94,7 +94,7 @@ test('TC-SYNC-004: 5 consecutive failures on the same change trip the visible sy
 // Fixed per task #15 (was SYNC-05): when a pull fails, syncNow() reports
 // it instead of throwing, useSyncStatus.js tracks a `stale` flag, and the
 // Header renders a "not updated since" chip per SPEC.md section 4.
-test('TC-SYNC-005: a failed pull should show a stale-data timestamp', async ({ page }) => {
+test('TC-SYNC-005: a failed pull on a device that never received data says so in full (SPEC.md 22.6)', async ({ page }) => {
   await page.route(MOCK_URL, async (route) => {
     const body = await readAction(route);
     if (body.action === 'getAll') {
@@ -106,10 +106,8 @@ test('TC-SYNC-005: a failed pull should show a stale-data timestamp', async ({ p
 
   await reloadApp(page);
   await page.waitForSelector('text=קטלוג הגלריה');
-  await page.click('.icon-btn[title]');
-  await page.waitForTimeout(500);
-
-  await expect(page.locator('text=לא עודכן מאז')).toBeVisible();
+  await page.click('button[title="רענון ידני"]');
+  await expect(page.locator('.chip-problem')).toHaveText('לא התקבלו נתונים מהשרת');
 });
 
 // Fixed per task #15: pushOne()'s 'upsert' branch now merges the server's

@@ -2,6 +2,7 @@ import { db } from '../db/db.js';
 import { getAll, upsertItem, softDeleteItem, addConfigOption, uploadImage, logErrors, AuthError, TimeoutError } from '../api/client.js';
 import { reportError, flushErrorLog } from '../errors/errorReporting.js';
 import { APPS_SCRIPT_URL } from '../api/config.js';
+import { recordPushOk, recordPullOk } from './syncRecord.js';
 
 // See SPEC.md "מדיניות כשלים": a change that keeps failing stays queued
 // and retried, but after enough failures the UI should show a visible
@@ -100,6 +101,7 @@ export async function pushPending({ shouldStop = () => false, onProgress = () =>
       if (!sent) continue;
       await db.pendingChanges.delete(change.id);
       pushed++;
+      recordPushOk(); // SPEC.md 22.7
     } catch (err) {
       // A rejected sign-in isn't this change's fault, and every other
       // change would be rejected too - stop here, leave the queue exactly
@@ -197,7 +199,9 @@ export function onSyncRequested(fn) {
 // Push-then-pull, per SPEC.md section 4: local changes go out first so
 // they "win" with the server's timestamp before a pull could overwrite
 // them with a stale snapshot from a concurrent poll.
-export async function syncNow({ shouldStop = () => false, onProgress = () => {} } = {}) {
+// `onPushed(n)`: called as soon as changes reached the server - before the
+// pull - so "synced" shows right then (SPEC.md 22.4).
+export async function syncNow({ shouldStop = () => false, onProgress = () => {}, onPushed = () => {} } = {}) {
   if (!APPS_SCRIPT_URL) {
     // No backend configured yet - nothing to do but leave the queue as-is.
     return { ok: false, reason: 'not-configured', pushed: 0 };
@@ -209,6 +213,7 @@ export async function syncNow({ shouldStop = () => false, onProgress = () => {} 
     if (err instanceof AuthError) return { ok: false, reason: 'auth', pushed: 0 };
     throw err;
   }
+  if (pushed > 0 && !shouldStop()) onPushed(pushed);
   if (shouldStop()) return { ok: false, reason: 'superseded', pushed };
   try {
     await withQuickRetry(() => pullLatest());
@@ -223,6 +228,7 @@ export async function syncNow({ shouldStop = () => false, onProgress = () => {} 
     flushErrorLog(logErrors);
     return { ok: false, reason: 'pull-failed', pushed, pullError };
   }
+  recordPullOk(); // SPEC.md 22.6: kept on the device, survives closing the app
   // After the pull, never awaited: the error log must never hold up fresh
   // data (SPEC.md 18.6). flushErrorLog never rejects.
   flushErrorLog(logErrors);

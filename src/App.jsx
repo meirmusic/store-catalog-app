@@ -14,6 +14,7 @@ import { ToastProvider, useToast } from './toast/ToastContext.jsx'
 import UpdateBanner from './pwa/UpdateBanner.jsx'
 import SignOutConfirm from './identity/SignOutConfirm.jsx'
 import HeaderMenu from './HeaderMenu.jsx'
+import { formatWhen } from './items/formatWhen.js'
 import ChangePasswordDialog from './settings/ChangePasswordDialog.jsx'
 import SupportInfoDialog from './settings/SupportInfoDialog.jsx'
 import ReloadDataDialog from './settings/ReloadDataDialog.jsx'
@@ -74,8 +75,10 @@ function Header() {
             onClick={() => showToast(isNetworkError(staleError?.details) ? t('sync.noConnection') : t('sync.staleExplain'), { type: 'error', code: staleError?.code, details: staleError?.details })}
             title={t('sync.problemDetails')}
           >
-            {t('sync.staleSince')}
-            {lastSyncedAt ? ` ${lastSyncedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : ''}
+            {/* SPEC.md 22.6: never a dangling "not updated since". */}
+            {lastSyncedAt
+              ? `${t('sync.staleSince')} ${formatWhen(lastSyncedAt.toISOString(), t, new Date(), { omitToday: true })}`
+              : t('sync.neverSynced')}
           </button>
         )}
         {pendingCount > 0 && (syncProblem ? (
@@ -111,7 +114,7 @@ function Header() {
       {managingLists && <ConfigManager onClose={() => setManagingLists(false)} />}
       {confirmingSignOut && <SignOutConfirm onCancel={() => setConfirmingSignOut(false)} onConfirm={signOut} />}
       {dialog === 'password' && <ChangePasswordDialog onClose={() => setDialog(null)} />}
-      {dialog === 'support' && <SupportInfoDialog isOnline={isOnline} lastSyncedAt={lastSyncedAt} onClose={() => setDialog(null)} />}
+      {dialog === 'support' && <SupportInfoDialog isOnline={isOnline} onClose={() => setDialog(null)} />}
       {dialog === 'reload' && <ReloadDataDialog isOnline={isOnline} onClose={() => setDialog(null)} />}
       {/* SPEC.md section 9: signing out here keeps the local data and the
           change queue - after signing back in, queued changes go out. */}

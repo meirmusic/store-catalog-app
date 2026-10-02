@@ -9,6 +9,7 @@ import DiscardConfirm from './DiscardConfirm.jsx';
 import ShareDialog from './ShareDialog.jsx';
 import DuplicateConfirm from './DuplicateConfirm.jsx';
 import { findDuplicates } from './duplicateCheck.js';
+import { formatDateTime } from './formatWhen.js';
 
 function ConfigSelect({ list, value, onChange, config, addConfigValue, label }) {
   const { t } = useI18n();
@@ -260,7 +261,7 @@ export default function ItemForm({ item, template = null, onClose, onRequestDele
           </h2>
           {!isNew && (
             <p className="sub">
-              {item.last_modified_by} · {item.last_modified_at ? new Date(item.last_modified_at).toLocaleString() : ''}
+              {item.last_modified_by} · {formatDateTime(item.last_modified_at)}
             </p>
           )}
           {/* noValidate: the browser must never block a save on its own -

@@ -1,46 +1,59 @@
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useI18n } from '../i18n/I18nContext.jsx';
 import { useIdentity } from '../identity/IdentityContext.jsx';
 import { useTeamMember } from '../identity/TeamMemberContext.jsx';
 import { db } from '../db/db.js';
-import { countStuckChanges } from '../sync/syncEngine.js';
+import { FAILURE_THRESHOLD } from '../sync/syncEngine.js';
+import { useSyncRecord } from '../sync/syncRecord.js';
 import { APP_VERSION, getRecentErrors } from '../errors/errorReporting.js';
 import { formatWhen } from '../items/formatWhen.js';
+import { currentDevice } from './deviceInfo.js';
 import Dialog from './Dialog.jsx';
 
-// SPEC.md 21.4: everything support needs, on one screen and in one copy.
-// Never a password, a reset code or item data.
-export default function SupportInfoDialog({ isOnline, lastSyncedAt, onClose }) {
+// SPEC.md 21.4 / 22.7: everything support needs, each field saying exactly
+// what it claims. Never a password, a reset code or item data.
+export default function SupportInfoDialog({ isOnline, onClose }) {
   const { t } = useI18n();
   const { user } = useIdentity();
   const { member } = useTeamMember();
-  const pending = useLiveQuery(() => db.pendingChanges.count(), [], 0);
-  const [stuck, setStuck] = useState(0);
+  const { lastPullAt, lastPushAt, server } = useSyncRecord();
+  // Both live (a stuck count that only refreshed on open was stale).
+  const pending = useLiveQuery(() => db.pendingChanges.count(), [], null);
+  const stuck = useLiveQuery(() => db.pendingChanges.filter((c) => (c.attempts || 0) >= FAILURE_THRESHOLD).count(), [], null);
   const [copied, setCopied] = useState(false);
   const textRef = useRef(null);
   const errors = getRecentErrors();
+  const device = currentDevice();
+  const when = (iso) => formatWhen(iso, t);
 
-  useEffect(() => {
-    countStuckChanges().then(setStuck).catch(() => {});
-  }, [pending]);
+  let serverText = t('support.notChecked');
+  if (server) {
+    const stateText = { ok: t('support.serverOk'), error: t('support.serverError'), unreachable: t('support.serverDown') }[server.state] || server.state;
+    serverText = [stateText, `${t('support.checked')} ${when(server.at)}`, server.state !== 'ok' && server.message].filter(Boolean).join(' · ');
+  }
+  let pendingText = t('support.loading');
+  if (pending != null && stuck != null) pendingText = stuck ? `${pending} (${t('support.stuck')}: ${stuck})` : String(pending);
+  const deviceText = [device.device, device.os, device.browser, device.installed ? t('support.installed') : t('support.inBrowser')].join(' · ');
 
   const rows = [
     [t('app.version'), APP_VERSION],
     [t('support.account'), user?.email || '—'],
     [t('support.member'), member || '—'],
-    [t('support.connection'), isOnline ? t('sync.online') : t('sync.offline')],
-    [t('support.lastSync'), lastSyncedAt ? formatWhen(lastSyncedAt.toISOString(), t) : t('support.notYet')],
-    [t('support.pending'), stuck ? `${pending} (${t('support.stuck')}: ${stuck})` : String(pending)],
-    [t('support.device'), navigator.userAgent],
+    [t('support.internet'), isOnline ? t('sync.online') : t('sync.offline')],
+    [t('support.server'), serverText],
+    [t('support.lastPull'), lastPullAt ? when(lastPullAt) : t('support.neverPulled')],
+    [t('support.lastPush'), lastPushAt ? when(lastPushAt) : t('support.neverPushed')],
+    [t('support.pending'), pendingText],
+    [t('support.device'), `${deviceText} ${t('support.asReported')}`],
   ];
 
+  const errorLine = (e) => [when(e.at), e.code || '—', e.action, e.message, e.logged === false ? t('support.notLogged') : ''].filter(Boolean).join(' · ');
   const text = [
     ...rows.map(([label, value]) => `${label}: ${value}`),
+    `User agent: ${navigator.userAgent}`,
     `${t('support.recentErrors')}:`,
-    ...(errors.length
-      ? errors.map((e) => `${formatWhen(e.at, t)} · ${e.code} · ${e.action} · ${e.message}`)
-      : [t('support.noErrors')]),
+    ...(errors.length ? errors.map(errorLine) : [t('support.noErrors')]),
   ].join('\n');
 
   async function copy() {
@@ -74,8 +87,11 @@ export default function SupportInfoDialog({ isOnline, lastSyncedAt, onClose }) {
           {errors.length ? (
             <ul>
               {errors.map((e) => (
-                <li key={e.code}>
-                  <span>{formatWhen(e.at, t)} · <bdi>{e.code}</bdi> · {e.action}</span>
+                <li key={`${e.action}|${e.message}`}>
+                  <span>
+                    {when(e.at)} · <bdi>{e.code || '—'}</bdi> · {e.action}
+                    {e.logged === false && <span className="support-not-logged"> · {t('support.notLogged')}</span>}
+                  </span>
                   <bdi dir="ltr" className="support-error-message">{e.message}</bdi>
                 </li>
               ))}

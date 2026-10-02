@@ -35,11 +35,15 @@ export function ItemsProvider({ children }) {
     ensureConfigSeeded();
   }, []);
 
-  const items = useLiveQuery(
+  // null until the first read from the device finishes - so the list can
+  // say "loading", never "no items" / "0" (SPEC.md 22.2).
+  const loadedItems = useLiveQuery(
     () => db.items.filter((it) => !it.is_deleted).toArray(),
     [],
-    [],
+    null,
   );
+  const itemsLoaded = loadedItems !== null;
+  const items = useMemo(() => loadedItems || [], [loadedItems]);
   const configRows = useLiveQuery(() => db.config.toArray(), [], []);
   const pendingCount = useLiveQuery(() => db.pendingChanges.count(), [], 0);
 
@@ -166,13 +170,14 @@ export function ItemsProvider({ children }) {
       config,
       pendingCount: pendingCount || 0,
       saveItem,
+      itemsLoaded,
       softDeleteItem,
       restoreItem,
       addConfigValue: addConfigValueAndQueue,
       queueImageUpload,
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [items, config, pendingCount, member],
+    [items, itemsLoaded, config, pendingCount, member],
   );
 
   return <ItemsContext.Provider value={value}>{children}</ItemsContext.Provider>;

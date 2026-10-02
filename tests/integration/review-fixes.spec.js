@@ -104,7 +104,7 @@ test('TC-ERR-011: no connection to the server - the explanation says what to do,
   await page.route(MOCK_URL, (route) => route.abort('internetdisconnected'));
   await reloadAndWait(page);
   await clickRefresh(page);
-  await page.locator('.chip-problem', { hasText: 'לא עודכן מאז' }).click();
+  await page.locator('.chip-problem', { hasText: 'לא התקבלו נתונים מהשרת' }).click();
   const toast = page.locator('.toast.error');
   await expect(toast).toContainText('אין חיבור לשרת. בדקו שהאינטרנט עובד');
   await expect(toast).toContainText('עברו מ-Wi-Fi לסלולר');
