@@ -111,6 +111,7 @@ export const translations = {
     'delete.confirm': 'מחיקה',
 
     'sync.online': 'מחובר',
+    'update.applying': "מתעדכן לגרסה החדשה...",
     'menu.language': "שפה",
     'menu.changePassword': "שינוי סיסמת המשרד",
     'menu.passwordChanged': "הסיסמה עודכנה. במכשירים אחרים יתבקשו להיכנס עם הסיסמה החדשה.",
@@ -306,6 +307,7 @@ export const translations = {
     'delete.confirm': 'Delete',
 
     'sync.online': 'Online',
+    'update.applying': "Updating to the new version...",
     'menu.language': "Language",
     'menu.changePassword': "Change office password",
     'menu.passwordChanged': "Password updated. Other devices will be asked to sign in with the new password.",
@@ -501,6 +503,7 @@ export const translations = {
     'delete.confirm': 'Slet',
 
     'sync.online': 'Online',
+    'update.applying': "Opdaterer til den nye version...",
     'menu.language': "Sprog",
     'menu.changePassword': "Skift kontorets adgangskode",
     'menu.passwordChanged': "Adgangskoden er opdateret. Andre enheder bliver bedt om at logge ind med den nye adgangskode.",
