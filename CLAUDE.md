@@ -38,7 +38,8 @@ These rules exist so nothing depends on what one session remembers.
 - [ ] **Every screen state** (loading, empty, failed, offline, slow): no flash of a wrong state.
       The observer tests (`tests/integration/screen-observer.spec.js`) and truth tables
       (`status-truth.spec.js`) are the pattern.
-- [ ] **Phone first:** check at 390px width, Hebrew (RTL) and English.
+- [ ] **Phone first:** check at 390px width, in Hebrew and in English (the layout stays
+      right-to-left in every language, by design - TEST_PLAN I18N-03).
 - [ ] **End of feature:** an end-to-end "observer" walk-through of the real flow before pushing.
 - [ ] **Things a test can't check** (real iPhone, WhatsApp, Google side): add them to
       `OPEN_ITEMS.md` for Meir.

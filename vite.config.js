@@ -16,7 +16,7 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'prompt',
-      includeAssets: ['icon-192.png', 'icon-512.png'],
+      includeAssets: ['icon-192.png', 'icon-512.png', 'apple-touch-icon.png', 'logo-white.png'],
       manifest: {
         name: 'קטלוג הגלריה',
         short_name: 'קטלוג הגלריה',
@@ -25,8 +25,9 @@ export default defineConfig({
         dir: 'rtl',
         start_url: './',
         display: 'standalone',
-        background_color: '#FBF7ED',
-        theme_color: '#B4903F',
+        // SPEC.md 25.5: the catalog cover's black
+        background_color: '#0E0E0D',
+        theme_color: '#0E0E0D',
         icons: [
           { src: 'icon-192.png', sizes: '192x192', type: 'image/png' },
           { src: 'icon-512.png', sizes: '512x512', type: 'image/png' },

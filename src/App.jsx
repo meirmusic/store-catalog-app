@@ -54,9 +54,8 @@ function Header() {
             the logo image itself is the gallery's own fixed design, same in
             every language. */}
         <h1 className="serif visually-hidden">{t('app.title')}</h1>
-        <span className="brand-logo-plate">
-          <img src="./logo-header.png" alt={t('app.title')} className="brand-logo" />
-        </span>
+        {/* SPEC.md 25.1: the logo white on the black band, as in the catalog. */}
+        <img src="./logo-white.png" alt={t('app.title')} className="brand-logo" />
       </div>
       <div className="status-cluster">
         {/* SPEC.md 19.9: only the unusual state is shown. */}
@@ -130,12 +129,21 @@ function Header() {
   )
 }
 
+// SPEC.md 25.1: the header sits on a black band across the whole screen.
+// The band is its own full-width element (not a trick on the header), so
+// nothing clips the ⚙ menu that opens down out of it.
 function AppShell() {
   return (
-    <div className="page-wrap">
-      <Header />
-      <ItemList />
-    </div>
+    <>
+      <div className="top-band">
+        <div className="page-wrap">
+          <Header />
+        </div>
+      </div>
+      <div className="page-wrap">
+        <ItemList />
+      </div>
+    </>
   )
 }
 

@@ -50,6 +50,35 @@ test('TC-BUILT-003: the designed share card is built with no internet - its font
   await context.setOffline(false);
 });
 
+test('TC-BUILT-004: the installed app is in the brand\'s black - colors, icons, and an iPhone icon (SPEC.md 25.5)', async ({ page }) => {
+  await page.goto('./');
+  const manifest = await page.evaluate(async () => (await fetch(document.querySelector('link[rel=manifest]').href)).json());
+  expect(manifest.theme_color.toUpperCase()).toBe('#0E0E0D');
+  expect(manifest.background_color.toUpperCase()).toBe('#0E0E0D');
+  await expect(page.locator('meta[name=theme-color]')).toHaveAttribute('content', '#0E0E0D');
+  const apple = await page.locator('link[rel=apple-touch-icon]').getAttribute('href');
+  // each icon: black at the corner, the white logo at the center line
+  const icons = [...manifest.icons.map((i) => i.src), apple];
+  for (const src of icons) {
+    const px = await page.evaluate(async (src) => {
+      const img = new Image();
+      img.src = src;
+      await img.decode();
+      const c = document.createElement('canvas');
+      c.width = img.naturalWidth; c.height = img.naturalHeight;
+      const ctx = c.getContext('2d');
+      ctx.drawImage(img, 0, 0);
+      const corner = [...ctx.getImageData(2, 2, 1, 1).data.slice(0, 3)];
+      const row = ctx.getImageData(0, Math.floor(c.height / 2), c.width, 1).data;
+      let brightest = 0;
+      for (let i = 0; i < row.length; i += 4) brightest = Math.max(brightest, row[i]);
+      return { corner, brightest, size: [c.width, c.height] };
+    }, src);
+    expect(Math.max(...px.corner), `${src} corner is black`).toBeLessThan(30);
+    expect(px.brightest, `${src} has the white logo`).toBeGreaterThan(200);
+  }
+});
+
 test('TC-BUILT-002: a new version installs by itself on returning to the app - no "update" button flashes', async ({ page }) => {
   // Everything that ever appears in the update banner, kept across the
   // reload the update causes.

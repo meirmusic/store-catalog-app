@@ -1,4 +1,6 @@
 :root {
+  --brand-black: #0E0E0D;
+  --art-wall: #EBEAE7;
   --stone: #FAFAF9;
   --wall: #FFFFFF;
   --wall-2: #F2F1EE;
@@ -18,6 +20,7 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     --stone: #141412;
+    --art-wall: #2A2925;
     --wall: #1E1E1B;
     --wall-2: #262622;
     --ink: #F3F1EA;
@@ -35,6 +38,7 @@
 
 :root[data-theme="dark"] {
   --stone: #141412;
+    --art-wall: #2A2925;
   --wall: #1E1E1B;
   --wall-2: #262622;
   --ink: #F3F1EA;
@@ -86,3 +90,10 @@ h1, h2, h3, .serif {
 #root {
   min-height: 100vh;
 }
+
+/* SPEC.md 25.3: the catalog cover's tagline font - bundled, works offline. */
+@font-face { font-family: 'Cormorant Garamond'; src: url('./items/card-fonts/cormorant-garamond-latin-300-italic.woff2') format('woff2'); font-weight: 300; font-style: italic; font-display: swap; }
+
+/* SPEC.md 25.1: in dark mode the black band gets a thin line under it. */
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .top-band { border-bottom: 1px solid #2E2D29; } }
+:root[data-theme="dark"] .top-band { border-bottom: 1px solid #2E2D29; }
