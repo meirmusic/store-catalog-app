@@ -250,6 +250,43 @@ export async function getStuckChangeError() {
   return stuck.map((c) => c.lastError).filter(Boolean).pop() || null;
 }
 
+export async function countStuckChanges() {
+  return db.pendingChanges.filter((c) => (c.attempts || 0) >= FAILURE_THRESHOLD).count();
+}
+
+// SPEC.md 21.5: replace this device's copy with a fresh one from the
+// server - only with nothing waiting to be sent, and only once the fresh
+// data has actually arrived (a failure never leaves an empty device).
+export class PendingChangesError extends Error {
+  constructor(count) {
+    super(`${count} changes are still waiting to be sent`);
+    this.name = 'PendingChangesError';
+    this.count = count;
+  }
+}
+
+export async function reloadAllData() {
+  const before = await db.pendingChanges.count();
+  if (before) throw new PendingChangesError(before);
+  const data = await withQuickRetry(() => getAll());
+  if (!data || !Array.isArray(data.items)) throw new Error('the server returned no catalog data');
+  const items = data.items.map(normalizeItem);
+  await db.transaction('rw', db.items, db.config, db.pendingChanges, async () => {
+    const pending = await db.pendingChanges.count();
+    if (pending) throw new PendingChangesError(pending);
+    if (items.length === 0 && (await db.items.count()) > 0) {
+      throw new Error('the server returned an empty catalog - nothing was replaced');
+    }
+    await db.items.clear();
+    await db.items.bulkPut(items);
+    if (data.config) {
+      await db.config.clear();
+      await db.config.bulkPut(Object.entries(data.config).map(([list_name, values]) => ({ list_name, values })));
+    }
+  });
+  return items.filter((it) => !it.is_deleted).length;
+}
+
 export async function hasSyncProblem() {
   const stuck = await db.pendingChanges.filter((c) => (c.attempts || 0) >= FAILURE_THRESHOLD).count();
   return stuck > 0;

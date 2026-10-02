@@ -31,7 +31,7 @@ const linkButtonStyle = {
 // request step's response is deliberately generic either way (see
 // Code.gs's handleRequestPasswordReset) so this UI never reveals whether
 // the typed email was the right one.
-export default function ForgotPasswordPanel({ defaultEmail, onDone, onCancel }) {
+export default function ForgotPasswordPanel({ defaultEmail, onDone, onCancel, cancelLabel }) {
   const { t } = useI18n();
   const [email, setEmail] = useState(defaultEmail || '');
   const [code, setCode] = useState('');
@@ -82,7 +82,7 @@ export default function ForgotPasswordPanel({ defaultEmail, onDone, onCancel }) 
     setSubmitting(true);
     try {
       await resetPassword(email.trim(), code.trim(), newPassword);
-      onDone(email.trim());
+      onDone(email.trim(), newPassword);
     } catch (err) {
       // Only a wrong/expired code is the user's to fix by requesting a new
       // one - anything else (network, server) gets an honest generic message.
@@ -175,7 +175,7 @@ export default function ForgotPasswordPanel({ defaultEmail, onDone, onCancel }) 
       )}
 
       <button type="button" onClick={onCancel} style={{ ...linkButtonStyle, marginTop: 14 }}>
-        {t('identity.backToLogin')}
+        {cancelLabel || t('identity.backToLogin')}
       </button>
     </div>
   );

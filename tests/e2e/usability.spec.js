@@ -11,7 +11,9 @@ import {
   saveItemForm,
 } from '../helpers/app.js';
 
-const HOUR = 60 * 60 * 1000;
+// Seconds apart, not hours: the test must not depend on the time of day
+// (an hour ago is "yesterday" just after midnight).
+const HOUR = 1000;
 const ITEMS = [
   { row_id: 'U1', name: 'אלף', price: 900, serial_number: '000200', sku: 'S-1', size: '50X70', type: 'מקורי', location: 'גלריה', physical_status: 'ממוסגר', notes: 'הערה', availability_status: 'available', image_url: 'https://drive.google.com/thumbnail?id=X1&sz=w1000', last_modified_by: 'שרה', last_modified_at: new Date(Date.now() - 3 * HOUR).toISOString() },
   { row_id: 'U2', name: 'בית', price: 2500, serial_number: '000100', availability_status: 'sold', last_modified_by: 'דב', last_modified_at: new Date(Date.now() - 1 * HOUR).toISOString() },
@@ -160,7 +162,8 @@ test('TC-UX-008: ⚙ is a menu with "manage lists" and "sign out"; no separate �
   await expect(page.locator('header button', { hasText: '🔐' })).toHaveCount(0);
   await page.click('button[title="תפריט"]');
   const menu = page.locator('.header-menu-list');
-  await expect(menu.locator('button')).toHaveText(['ניהול רשימות', 'התנתקות']);
+  await expect(menu.locator('> button', { hasText: 'ניהול רשימות' })).toHaveCount(1);
+  await expect(menu.locator('> button', { hasText: 'התנתקות' })).toHaveCount(1); // full order: TC-SET-001
   await page.keyboard.press('Escape');
   await expect(menu).toHaveCount(0);
   await page.click('button[title="תפריט"]');

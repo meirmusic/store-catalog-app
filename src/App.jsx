@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import { useI18n } from './i18n/I18nContext.jsx'
-import LanguageSwitcher from './i18n/LanguageSwitcher.jsx'
 import { IdentityProvider, useIdentity } from './identity/IdentityContext.jsx'
 import IdentityPicker from './identity/IdentityPicker.jsx'
 import { TeamMemberProvider, useTeamMember } from './identity/TeamMemberContext.jsx'
@@ -15,6 +14,9 @@ import { ToastProvider, useToast } from './toast/ToastContext.jsx'
 import UpdateBanner from './pwa/UpdateBanner.jsx'
 import SignOutConfirm from './identity/SignOutConfirm.jsx'
 import HeaderMenu from './HeaderMenu.jsx'
+import ChangePasswordDialog from './settings/ChangePasswordDialog.jsx'
+import SupportInfoDialog from './settings/SupportInfoDialog.jsx'
+import ReloadDataDialog from './settings/ReloadDataDialog.jsx'
 import GlobalErrorCatcher from './errors/GlobalErrorCatcher.jsx'
 import './items/items.css'
 
@@ -25,6 +27,7 @@ function Header() {
   const { isOnline, syncing, lastSyncedAt, pendingCount, syncProblem, stale, staleError, authExpired, refresh } = useSyncStatus()
   const [managingLists, setManagingLists] = useState(false)
   const [confirmingSignOut, setConfirmingSignOut] = useState(false)
+  const [dialog, setDialog] = useState(null) // SPEC.md 21: 'password' | 'support' | 'reload'
   const { showToast, showErrorToast } = useToast()
 
   async function explainSyncProblem() {
@@ -91,8 +94,14 @@ function Header() {
           </span>
         ))}
         <button className={`icon-btn${syncing ? ' spin' : ''}`} onClick={refresh} title={t('actions.refresh')}>⟳</button>
-        <HeaderMenu onManageLists={() => setManagingLists(true)} onSignOut={() => setConfirmingSignOut(true)} />
-        <LanguageSwitcher />
+        <HeaderMenu
+          onManageLists={() => setManagingLists(true)}
+          onSwitchUser={clearMember}
+          onChangePassword={() => setDialog('password')}
+          onSignOut={() => setConfirmingSignOut(true)}
+          onSupportInfo={() => setDialog('support')}
+          onReloadData={() => setDialog('reload')}
+        />
         {member && (
           <span className="chip user" onClick={clearMember} title={t('actions.switchUser')}>
             👤 {member}
@@ -101,6 +110,9 @@ function Header() {
       </div>
       {managingLists && <ConfigManager onClose={() => setManagingLists(false)} />}
       {confirmingSignOut && <SignOutConfirm onCancel={() => setConfirmingSignOut(false)} onConfirm={signOut} />}
+      {dialog === 'password' && <ChangePasswordDialog onClose={() => setDialog(null)} />}
+      {dialog === 'support' && <SupportInfoDialog isOnline={isOnline} lastSyncedAt={lastSyncedAt} onClose={() => setDialog(null)} />}
+      {dialog === 'reload' && <ReloadDataDialog isOnline={isOnline} onClose={() => setDialog(null)} />}
       {/* SPEC.md section 9: signing out here keeps the local data and the
           change queue - after signing back in, queued changes go out. */}
       {authExpired && (

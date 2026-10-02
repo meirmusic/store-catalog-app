@@ -55,7 +55,7 @@ export default function ShareDialog({ item, onClose }) {
     setBusy(true);
     try {
       const withLink = photoUrl ? `${text}\n${photoUrl}` : text;
-      if (navigator.share) {
+      if (typeof navigator.share === 'function') {
         const file = await photoAsFile(photo);
         const data = file && navigator.canShare?.({ files: [file] })
           ? { title: item.name, text, files: [file] }

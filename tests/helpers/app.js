@@ -157,12 +157,11 @@ export async function saveItemForm(page) {
   await page.waitForSelector('#item-overlay', { state: 'detached' });
 }
 
-// LanguageSwitcher's trigger button carries aria-label = current language's
-// own display name (e.g. "עברית"), so this works regardless of which
-// language is currently active.
+// SPEC.md 21.1: the language is chosen in the ⚙ menu.
 export async function switchLanguage(page, targetLabel) {
-  await page.click('button.chip[aria-expanded]');
-  await page.click(`button:has-text("${targetLabel}")`);
+  await page.click('.header-menu > button');
+  await page.click('.menu-language');
+  await page.click(`.menu-languages button:has-text("${targetLabel}")`);
 }
 
 export async function cancelItemForm(page) {
@@ -172,7 +171,7 @@ export async function cancelItemForm(page) {
 
 // SPEC.md 19.10: "manage lists" and "sign out" live in the ⚙ menu.
 export async function openMenuItem(page, label) {
-  await page.click('button[title="תפריט"]');
+  await page.click('.header-menu > button');
   await page.click(`.header-menu-list button:has-text("${label}")`);
 }
 

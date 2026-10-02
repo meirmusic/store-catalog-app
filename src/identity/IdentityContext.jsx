@@ -53,6 +53,13 @@ export function IdentityProvider({ children }) {
           return { ok: false, reason: error instanceof AuthError ? 'wrong' : 'unreachable', error };
         }
       },
+      // SPEC.md 21.3: after changing the office password from this device,
+      // it keeps working here without signing in again.
+      updateStoredPassword: (email, newPassword) => {
+        setPasswordAuth(email, newPassword);
+        savePasswordIdentity(email, newPassword);
+        setIdentityState({ kind: 'password', email, name: email });
+      },
       signOut: () => {
         clearStoredPasswordIdentity();
         clearAuth();

@@ -5,6 +5,30 @@
 // are recorded - never passwords, reset codes, photos or item data.
 
 const QUEUE_KEY = 'gallery_error_log_queue';
+// SPEC.md 21.4: the last few failures, kept on the device even after the
+// queue above was sent - for "info and support".
+const RECENT_KEY = 'gallery_recent_errors';
+const MAX_RECENT = 10;
+
+function rememberRecent(code, action, message) {
+  try {
+    const raw = localStorage.getItem(RECENT_KEY);
+    const list = (raw ? JSON.parse(raw) : []).filter((e) => e && e.code !== code);
+    list.unshift({ code, action, message: String(message).slice(0, 300), at: new Date().toISOString() });
+    localStorage.setItem(RECENT_KEY, JSON.stringify(list.slice(0, MAX_RECENT)));
+  } catch {
+    // storage unavailable - the on-screen report still works
+  }
+}
+
+export function getRecentErrors() {
+  try {
+    const list = JSON.parse(localStorage.getItem(RECENT_KEY) || '[]');
+    return Array.isArray(list) ? list : [];
+  } catch {
+    return [];
+  }
+}
 const MAX_QUEUE = 30;
 const DEDUP_WINDOW_MS = 10 * 60 * 1000;
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -64,6 +88,7 @@ export function reportError(action, error, { log = true } = {}) {
   if (repeat) {
     repeat.count += 1;
     saveQueue(queue);
+    rememberRecent(repeat.code, action, details);
     return { code: repeat.code, details };
   }
 
@@ -81,6 +106,7 @@ export function reportError(action, error, { log = true } = {}) {
   };
   queue.push(entry);
   saveQueue(queue.slice(-MAX_QUEUE));
+  rememberRecent(entry.code, action, details);
   return { code: entry.code, details };
 }
 

@@ -402,3 +402,33 @@ select:hover, .btn:hover { border-color: var(--accent); }
 .value-count { color: var(--ink-dim); font-size: .78rem; }
 .value-note { grid-column: 1 / -1; font-size: .78rem; color: var(--ink-dim); margin: 0; }
 .duplicate-confirm .confirm-actions button.primary { background: var(--accent); border-color: var(--accent); color: var(--wall); }
+
+/* ---- SPEC.md section 21: settings menu and its windows ---- */
+.header-menu-list { min-width: 220px; }
+.header-menu-list hr { border: none; border-top: 1px solid var(--line); margin: 4px 6px; }
+.menu-language .chevron { float: inline-end; color: var(--ink-dim); font-size: .75rem; }
+.menu-languages { display: flex; flex-direction: column; padding-inline-start: 14px; }
+.menu-languages button { font-size: .88rem; }
+.support-info { max-width: 480px; text-align: start; }
+.support-body { margin-top: 10px; }
+.support-rows { margin: 0; display: flex; flex-direction: column; gap: 6px; }
+.support-rows div { display: flex; justify-content: space-between; gap: 12px; font-size: .86rem; border-bottom: 1px dashed var(--line); padding-bottom: 5px; }
+.support-rows dt { color: var(--ink-dim); flex: 0 0 auto; }
+.support-rows dd { margin: 0; text-align: end; overflow-wrap: anywhere; }
+.support-errors { margin-top: 12px; }
+.support-errors ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; max-height: 180px; overflow-y: auto; }
+.support-errors li { font-size: .8rem; display: flex; flex-direction: column; gap: 2px; }
+.support-error-message { font-family: ui-monospace, Menlo, Consolas, monospace; color: var(--ink-dim); overflow-wrap: anywhere; }
+.support-info .confirm-actions button.primary,
+.reload-data .confirm-actions button.primary { background: var(--accent); border-color: var(--accent); color: var(--wall); }
+.reload-data .confirm-actions button:disabled { opacity: .5; cursor: default; }
+.reload-blocker { font-size: .86rem; color: var(--sold); background: var(--sold-bg); border-radius: 10px; padding: 8px 10px; }
+.change-password { text-align: start; }
+.header-menu-list { max-width: calc(100vw - 32px); }
+@media (max-width: 640px) {
+  /* Anchored to the header's full width on phones, so a longer menu never
+     runs off the screen edge (and never makes the page scroll sideways). */
+  header.top { position: relative; }
+  .header-menu { position: static; }
+  .header-menu-list { inset-inline: 0; top: calc(100% + 4px); min-width: 0; max-width: none; }
+}
