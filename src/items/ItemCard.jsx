@@ -4,7 +4,7 @@ import ImageLightbox from './ImageLightbox.jsx';
 import { displayImage, sizedImageUrl, THUMB_IMAGE_WIDTH, FULL_IMAGE_WIDTH } from './imageUrl.js';
 import { formatWhen } from './formatWhen.js';
 
-export default function ItemCard({ item, onClick, onShare, showModified = false }) {
+export default function ItemCard({ item, onClick, onShare, showModified = false, highlight = false }) {
   const { t } = useI18n();
   const sold = item.availability_status === 'sold';
   const [zoomed, setZoomed] = useState(false);
@@ -12,7 +12,7 @@ export default function ItemCard({ item, onClick, onShare, showModified = false 
   const isPending = Boolean(item.pending_image);
 
   return (
-    <article className={`card${sold ? ' sold' : ''}`} onClick={onClick}>
+    <article className={`card${sold ? ' sold' : ''}${highlight ? ' just-saved' : ''}`} data-row-id={item.row_id} onClick={onClick}>
       <div className="thumb">
         {photo ? (
           <>

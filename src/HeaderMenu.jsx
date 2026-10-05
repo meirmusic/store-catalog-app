@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useI18n } from './i18n/I18nContext.jsx';
 import { LANGUAGES } from './i18n/translations';
+import { BackStep } from './hooks/useBackToClose.js';
 
 // SPEC.md 19.10 / 21: ⚙ holds what's done rarely, in three groups -
 // work, account, support. Closes on a click outside or Esc.
@@ -50,6 +51,7 @@ export default function HeaderMenu({ onManageLists, onSwitchUser, onChangePasswo
       >
         ⚙
       </button>
+      {open && <BackStep onClose={() => setOpen(false)} />}
       {open && (
         <div className="header-menu-list" role="menu">
           <button type="button" role="menuitem" onClick={() => choose(onManageLists)}>{t('config.manageLists')}</button>

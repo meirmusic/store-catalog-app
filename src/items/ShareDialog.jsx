@@ -7,6 +7,7 @@ import { buildShareText } from './shareText.js';
 import { prepareShareImage } from './shareImage.js';
 import { buildShareCard } from './shareCard.js';
 import { currentDevice } from '../settings/deviceInfo.js';
+import { useBackToClose } from '../hooks/useBackToClose.js';
 
 // SPEC.md section 23: share an artwork with a client - the designed card
 // (23.5) or the photo itself, and a clean caption, in two taps.
@@ -16,6 +17,7 @@ import { currentDevice } from '../settings/deviceInfo.js';
 const OFFER_LINK_AFTER_MS = 6000;
 
 export default function ShareDialog({ item, onClose }) {
+  useBackToClose(onClose); // SPEC.md 26.1
   const { t } = useI18n();
   const { showToast, showErrorToast } = useToast();
   const [lang, setLang] = useDevicePreference('gallery_share_lang', 'he', ['he', 'en']);

@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useI18n } from '../i18n/I18nContext.jsx';
 import { useBodyScrollLock } from '../hooks/useBodyScrollLock.js';
+import { useBackToClose } from '../hooks/useBackToClose.js';
 
 // Full-size view of an item's photo - staff need to actually inspect an
 // artwork's condition/detail, not just recognize it from a small card
@@ -12,6 +13,7 @@ import { useBodyScrollLock } from '../hooks/useBodyScrollLock.js';
 // went on to the card would open the edit form as the zoom closes
 // (SPEC.md 24.2 - found by the view parity test).
 export default function ImageLightbox({ src, alt, onClose }) {
+  useBackToClose(onClose); // SPEC.md 26.1
   const { t } = useI18n();
   useBodyScrollLock();
 

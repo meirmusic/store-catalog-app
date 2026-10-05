@@ -1,11 +1,13 @@
 import { useEffect } from 'react';
 import { useI18n } from '../i18n/I18nContext.jsx';
+import { useBackToClose } from '../hooks/useBackToClose.js';
 
 // SPEC.md section 9: asked when closing the item form with unsaved edits.
 // Deliberately not window.confirm - its buttons are in the browser's
 // language, and its "Cancel" would mean "stay", the opposite of the form's
 // own "Cancel". Each button here says exactly what it does.
 export default function DiscardConfirm({ onSave, onDiscard, onKeepEditing }) {
+  useBackToClose(onKeepEditing); // SPEC.md 26.1 - "back" = the safe choice
   const { t } = useI18n();
 
   useEffect(() => {

@@ -4,12 +4,18 @@ import { useI18n } from '../i18n/I18nContext.jsx';
 import { useItems } from './ItemsContext.jsx';
 import { useToast } from '../toast/ToastContext.jsx';
 import { useBodyScrollLock } from '../hooks/useBodyScrollLock.js';
+import { useBackToClose } from '../hooks/useBackToClose.js';
 import ImageField from './ImageField.jsx';
 import DiscardConfirm from './DiscardConfirm.jsx';
 import ShareDialog from './ShareDialog.jsx';
 import DuplicateConfirm from './DuplicateConfirm.jsx';
 import { findDuplicates } from './duplicateCheck.js';
 import { formatDateTime } from './formatWhen.js';
+import { saveDraft, clearDraft } from './drafts.js';
+
+const DRAFT_DELAY_MS = 500;
+// The form's fields, in the order of `currentValues` below.
+const FIELDS = ['name', 'size', 'sku', 'type', 'location', 'status', 'price', 'serial', 'notes', 'availability', 'imageUrl'];
 
 function ConfigSelect({ list, value, onChange, config, addConfigValue, label }) {
   const { t } = useI18n();
@@ -62,7 +68,8 @@ function ConfigSelect({ list, value, onChange, config, addConfigValue, label }) 
 const SAVE_DELAY_NOTICE_MS = 5000;
 
 // `template`: a new item's starting values when duplicating (SPEC.md 19.3).
-export default function ItemForm({ item, template = null, onClose, onRequestDelete, onSaved, onDuplicate }) {
+// `restore`: a draft's changed fields, put back on top (SPEC.md 26.2).
+export default function ItemForm({ item, template = null, restore = null, onClose, onRequestDelete, onSaved, onDuplicate, isHiddenByFilters }) {
   const { t } = useI18n();
   useBlocksAutoUpdate(); // SPEC.md 9: no automatic app update while this is open
   const { items, config, saveItem, addConfigValue, queueImageUpload } = useItems();
@@ -96,28 +103,80 @@ export default function ItemForm({ item, template = null, onClose, onRequestDele
   // SKU/serial from the Sheet; the form treats every field as text.
   const text = (v) => (v == null ? '' : String(v));
   const start = item || template || {};
-  const [name, setName] = useState(text(start.name));
-  const [size, setSize] = useState(text(start.size));
-  const [sku, setSku] = useState(text(start.sku));
-  const [type, setType] = useState(text(start.type));
-  const [location, setLocation] = useState(text(start.location));
-  const [status, setStatus] = useState(text(start.physical_status));
-  const [price, setPrice] = useState(start.price ?? '');
-  const [serial, setSerial] = useState(text(start.serial_number));
-  const [notes, setNotes] = useState(text(start.notes));
-  const [availability, setAvailability] = useState(start.availability_status || 'available');
   // A saved photo still waiting to upload is what the item shows (SPEC.md
   // section 10), so the form starts from it too.
   const pendingPhoto = item?.pending_image || null;
-  const [imageUrl, setImageUrl] = useState(pendingPhoto || item?.image_url || null);
+  const base = {
+    name: text(start.name),
+    size: text(start.size),
+    sku: text(start.sku),
+    type: text(start.type),
+    location: text(start.location),
+    status: text(start.physical_status),
+    price: start.price ?? '',
+    serial: text(start.serial_number),
+    notes: text(start.notes),
+    availability: start.availability_status || 'available',
+    imageUrl: pendingPhoto || item?.image_url || null,
+  };
+  const first = restore ? { ...base, ...restore } : base;
+  const [name, setName] = useState(first.name);
+  const [size, setSize] = useState(first.size);
+  const [sku, setSku] = useState(first.sku);
+  const [type, setType] = useState(first.type);
+  const [location, setLocation] = useState(first.location);
+  const [status, setStatus] = useState(first.status);
+  const [price, setPrice] = useState(first.price);
+  const [serial, setSerial] = useState(first.serial);
+  const [notes, setNotes] = useState(first.notes);
+  const [availability, setAvailability] = useState(first.availability);
+  const [imageUrl, setImageUrl] = useState(first.imageUrl);
   const [imageBusy, setImageBusy] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState(''); // not about one field - shown at the bottom
+  // SPEC.md 26.4: a field's error shows next to it, and the cursor goes there.
+  const [fieldErrors, setFieldErrors] = useState({});
+  const nameRef = useRef(null);
+  const priceRef = useRef(null);
+  function fieldError(field, message, ref) {
+    setFieldErrors({ [field]: message });
+    ref.current?.scrollIntoView({ block: 'center' });
+    ref.current?.focus({ preventScroll: true });
+  }
+  // A new item: the cursor starts in the name. Not when editing - the
+  // phone's keyboard shouldn't jump up for someone just looking.
+  useEffect(() => {
+    if (isNew) nameRef.current?.focus({ preventScroll: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // SPEC.md section 9: closing with unsaved edits asks first. Compared as
   // strings so e.g. a price of 100 vs '100' isn't mistaken for an edit.
   const currentValues = [name, size, sku, type, location, status, price, serial, notes, availability, imageUrl];
-  const initialValuesRef = useRef(currentValues.map(String));
+  // Compared against the item's own values - a restored draft counts as changes.
+  const initialValuesRef = useRef(FIELDS.map((f) => String(base[f])));
   const isDirty = currentValues.some((v, i) => String(v) !== initialValuesRef.current[i]);
+
+  // SPEC.md 26.2: keep a draft while there are unsaved changes.
+  const draftTimer = useRef(null);
+  const draftKey = currentValues.map(String).join('\u0001');
+  useEffect(() => {
+    clearTimeout(draftTimer.current);
+    if (!isDirty) return undefined;
+    draftTimer.current = setTimeout(() => {
+      const changes = {};
+      FIELDS.forEach((f, i) => {
+        if (String(currentValues[i]) !== initialValuesRef.current[i]) changes[f] = currentValues[i];
+      });
+      saveDraft({ row_id: item?.row_id || null, name: name.trim() || item?.name || '', changes }).catch(() => {});
+    }, DRAFT_DELAY_MS);
+    return () => clearTimeout(draftTimer.current);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draftKey, isDirty]);
+  // The form closed the normal way: the draft is no longer needed.
+  function dropDraft() {
+    clearTimeout(draftTimer.current);
+    clearDraft().catch(() => {});
+  }
 
   const [confirmingDiscard, setConfirmingDiscard] = useState(false);
   const [sharing, setSharing] = useState(false);
@@ -142,14 +201,18 @@ export default function ItemForm({ item, template = null, onClose, onRequestDele
     });
   }
 
+  // Returns false when the form stays open (it asked about unsaved changes).
   function requestClose() {
     // Mid-save the edits are already on their way to being stored.
     if (isDirty && !saving) {
       setConfirmingDiscard(true);
-      return;
+      return false;
     }
+    if (!saving) dropDraft();
     onClose();
+    return true;
   }
+  useBackToClose(requestClose); // SPEC.md 26.1: "back" = "cancel"
 
   function saveFromDiscardConfirm() {
     setConfirmingDiscard(false);
@@ -165,12 +228,13 @@ export default function ItemForm({ item, template = null, onClose, onRequestDele
   async function handleSubmit(e, { skipDuplicateCheck = false } = {}) {
     e.preventDefault();
     setError('');
+    setFieldErrors({});
     if (!name.trim()) {
-      setError(t('errors.nameRequired'));
+      fieldError('name', t('errors.nameRequired'), nameRef);
       return;
     }
     if (price !== '' && !(Number(price) >= 0)) {
-      setError(t('errors.priceInvalid'));
+      fieldError('price', t('errors.priceInvalid'), priceRef);
       return;
     }
     if (!skipDuplicateCheck) {
@@ -216,20 +280,21 @@ export default function ItemForm({ item, template = null, onClose, onRequestDele
       // once the upload succeeds.
       const isNewPhoto = Boolean(imageUrl && imageUrl.startsWith('data:') && imageUrl !== pendingPhoto);
       const keepsPendingPhoto = Boolean(pendingPhoto && imageUrl === pendingPhoto);
+      const saved = {
+        name: name.trim(),
+        size: size.trim() || null,
+        sku: sku.trim() || null,
+        type: type || null,
+        location: location || null,
+        physical_status: status || null,
+        price: price === '' ? null : Number(price),
+        serial_number: serial.trim() || null,
+        notes: notes.trim() || null,
+        availability_status: availability,
+        image_url: isNewPhoto || keepsPendingPhoto ? (item?.image_url || null) : imageUrl,
+      };
       const row_id = await saveItem(
-        {
-          name: name.trim(),
-          size: size.trim() || null,
-          sku: sku.trim() || null,
-          type: type || null,
-          location: location || null,
-          physical_status: status || null,
-          price: price === '' ? null : Number(price),
-          serial_number: serial.trim() || null,
-          notes: notes.trim() || null,
-          availability_status: availability,
-          image_url: isNewPhoto || keepsPendingPhoto ? (item?.image_url || null) : imageUrl,
-        },
+        saved,
         item?.row_id,
         // Removing a photo that was still waiting to upload also cancels that
         // upload - otherwise it would bring the photo back once it finished.
@@ -239,8 +304,10 @@ export default function ItemForm({ item, template = null, onClose, onRequestDele
       // ACT-03/MSG-06 (UI_STANDARD_GAP_ANALYSIS.md): local save is what
       // just actually happened - "נשמר מקומית" is accurate whether or
       // not the background sync to the server has finished yet.
-      showToast(t('sync.savedLocal'));
-      if (mountedRef.current) onSaved();
+      dropDraft();
+      // SPEC.md 26.5: say so when the current search / filters hide it.
+      showToast(t(isHiddenByFilters?.({ ...saved, row_id }) ? 'sync.savedLocalHidden' : 'sync.savedLocal'));
+      if (mountedRef.current) onSaved(row_id);
     } catch (err) {
       // Real user report: a local write (e.g. IndexedDB blocked/full on
       // that specific device) used to fail silently here - the button
@@ -279,13 +346,25 @@ export default function ItemForm({ item, template = null, onClose, onRequestDele
             </div>
 
             <div className="field">
-              <label>{t('fields.name')}</label>
+              <label htmlFor="item-name">
+                {t('fields.name')} <span className="required-mark" aria-hidden="true">*</span>
+              </label>
               {/* No native `required` here on purpose: the browser's own
                   validation tooltip would pre-empt this submit handler and
                   show in the browser's language, not the app's chosen one
                   (see TEST_PLAN.md / task #15) - errors.nameRequired below
                   is what users actually see, in he/en/da. */}
-              <input type="text" value={name} onChange={(e) => setName(e.target.value)} />
+              <input
+                id="item-name"
+                ref={nameRef}
+                type="text"
+                value={name}
+                onChange={(e) => { setName(e.target.value); setFieldErrors((fe) => ({ ...fe, name: undefined })); }}
+                aria-required="true"
+                aria-invalid={Boolean(fieldErrors.name)}
+                aria-describedby={fieldErrors.name ? 'item-name-error' : undefined}
+              />
+              {fieldErrors.name && <p className="field-error" id="item-name-error" role="alert">{fieldErrors.name}</p>}
             </div>
 
             <div className="row2">
@@ -308,7 +387,18 @@ export default function ItemForm({ item, template = null, onClose, onRequestDele
               <ConfigSelect list="physical_status" label={t('fields.status')} value={status} onChange={setStatus} config={config} addConfigValue={addConfigValue} />
               <div className="field">
                 <label>{t('fields.price')}</label>
-                <input type="number" min="0" step="any" inputMode="decimal" value={price} onChange={(e) => setPrice(e.target.value)} />
+                <input
+                  ref={priceRef}
+                  type="number"
+                  min="0"
+                  step="any"
+                  inputMode="decimal"
+                  value={price}
+                  onChange={(e) => { setPrice(e.target.value); setFieldErrors((fe) => ({ ...fe, price: undefined })); }}
+                  aria-invalid={Boolean(fieldErrors.price)}
+                  aria-describedby={fieldErrors.price ? 'item-price-error' : undefined}
+                />
+                {fieldErrors.price && <p className="field-error" id="item-price-error" role="alert">{fieldErrors.price}</p>}
               </div>
             </div>
 
@@ -384,7 +474,7 @@ export default function ItemForm({ item, template = null, onClose, onRequestDele
       {confirmingDiscard && (
         <DiscardConfirm
           onSave={saveFromDiscardConfirm}
-          onDiscard={onClose}
+          onDiscard={() => { dropDraft(); onClose(); }}
           onKeepEditing={() => setConfirmingDiscard(false)}
         />
       )}

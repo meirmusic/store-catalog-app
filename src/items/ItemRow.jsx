@@ -10,7 +10,7 @@ import { formatWhen } from './formatWhen.js';
 // thumbnail would be too small for a finger.
 const ROW_IMAGE_WIDTH = 160;
 
-export default function ItemRow({ item, onClick, onShare, showModified = false }) {
+export default function ItemRow({ item, onClick, onShare, showModified = false, highlight = false }) {
   const { t } = useI18n();
   const sold = item.availability_status === 'sold';
   const photo = displayImage(item);
@@ -21,7 +21,7 @@ export default function ItemRow({ item, onClick, onShare, showModified = false }
     .join(' ');
 
   return (
-    <article className={`item-row${sold ? ' sold' : ''}`} onClick={onClick}>
+    <article className={`item-row${sold ? ' sold' : ''}${highlight ? ' just-saved' : ''}`} data-row-id={item.row_id} onClick={onClick}>
       {photo ? (
         <button
           type="button"

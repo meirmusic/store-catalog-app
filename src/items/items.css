@@ -21,6 +21,9 @@ header.top {
 }
 header.top .icon-btn,
 header.top .chip.user { background: transparent; border-color: #45433E; color: #F3F1EA; }
+/* SPEC.md 26.3: finger-sized - 44px. */
+header.top .icon-btn { width: 44px; height: 44px; font-size: 1.05rem; }
+header.top .chip.user { min-height: 44px; padding: 0 14px; }
 header.top .icon-btn:hover,
 header.top .chip.user:hover { border-color: #8E8B82; }
 .brand { display: flex; align-items: center; gap: 10px; }
@@ -28,7 +31,7 @@ header.top .chip.user:hover { border-color: #8E8B82; }
 .brand-logo { height: 40px; width: auto; display: block; }
 /* A phone: logo and buttons on one line, so the band stays slim. */
 @media (max-width: 600px) {
-  header.top { gap: 8px 10px; padding: 12px 0; }
+  header.top { gap: 8px 10px; padding: 10px 0; }
   .brand-logo { height: 30px; }
   /* alerts ("offline", "pending") may add a second line - never off-screen */
   header.top .status-cluster { gap: 6px; justify-content: flex-end; }
@@ -497,3 +500,14 @@ button.row-thumb:focus-visible { outline: 2px solid var(--accent); outline-offse
 .share-card-placeholder { height: 340px; max-width: 272px; margin: 0 auto; background: #F3F2F0; }
 .share-copy { display: block; margin: 12px auto 0; font-size: .86rem; color: var(--ink-dim); }
 .share-dialog .confirm-actions button:disabled { opacity: .6; cursor: default; }
+
+/* ---- SPEC.md section 26 ---- */
+.draft-banner { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; background: var(--wall); border: 1px solid var(--ink); border-radius: 10px; padding: 10px 12px; margin: 0 0 14px; font-size: .9rem; }
+.draft-actions { display: inline-flex; gap: 8px; }
+.required-mark { color: var(--sold); font-weight: 700; }
+.field-error { color: var(--sold); font-size: .82rem; margin: 4px 0 0; }
+.field input[aria-invalid="true"] { border-color: var(--sold); box-shadow: 0 0 0 1px var(--sold); }
+/* SPEC.md 26.5: the artwork just saved - a frame that fades. */
+.card.just-saved, .item-row.just-saved { outline: 2px solid var(--ink); outline-offset: 2px; animation: just-saved 2.6s ease-out forwards; }
+@keyframes just-saved { 0%, 55% { outline-color: var(--ink); } 100% { outline-color: transparent; } }
+@media (prefers-reduced-motion: reduce) { .card.just-saved, .item-row.just-saved { animation: none; } }

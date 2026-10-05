@@ -4,6 +4,7 @@ import { useI18n } from '../i18n/I18nContext.jsx';
 import { useItems } from '../items/ItemsContext.jsx';
 import { useToast } from '../toast/ToastContext.jsx';
 import { useBodyScrollLock } from '../hooks/useBodyScrollLock.js';
+import { useBackToClose } from '../hooks/useBackToClose.js';
 
 // SPEC.md CFG-04 (stage 2) and sections 13/15: every existing value in each
 // shared list - including the team list - with the ability to add new ones.
@@ -52,6 +53,7 @@ function ConfigListSection({ list, label }) {
 }
 
 export default function ConfigManager({ onClose }) {
+  useBackToClose(onClose); // SPEC.md 26.1
   const { t } = useI18n();
   useBlocksAutoUpdate(); // SPEC.md 9: no automatic app update while this is open
   useBodyScrollLock();

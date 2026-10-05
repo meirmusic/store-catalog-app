@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useI18n } from '../i18n/I18nContext.jsx';
 import { useItems } from './ItemsContext.jsx';
 import { useToast } from '../toast/ToastContext.jsx';
@@ -11,6 +11,8 @@ import ItemForm from './ItemForm.jsx';
 import DeleteConfirm from './DeleteConfirm.jsx';
 import ShareDialog from './ShareDialog.jsx';
 import { downloadItemsCsv } from './exportCsv.js';
+import { getDraft, clearDraft } from './drafts.js';
+import { formatWhen } from './formatWhen.js';
 
 const UNDO_WINDOW_MS = 8000;
 
@@ -53,6 +55,8 @@ export default function ItemList() {
 
   const [editingItem, setEditingItem] = useState(undefined); // undefined = closed, null = new, object = edit
   const [template, setTemplate] = useState(null); // SPEC.md 19.3: values for a duplicated new item
+  const [restore, setRestore] = useState(null); // SPEC.md 26.2: a draft's changes, put back
+  const [draft, setDraft] = useState(null); // an interrupted form's draft, offered once at start
   const [formKey, setFormKey] = useState(0); // a fresh form each time one opens
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [shareTarget, setShareTarget] = useState(null); // SPEC.md 23.2
@@ -62,10 +66,35 @@ export default function ItemList() {
   const [view, setView] = useDevicePreference('gallery_view', 'cards', ['cards', 'list']);
   const [filtersOpen, setFiltersOpen] = useState(false);
 
-  function openForm(item, nextTemplate = null) {
+  function openForm(item, nextTemplate = null, nextRestore = null) {
     setTemplate(nextTemplate);
+    setRestore(nextRestore);
     setEditingItem(item);
     setFormKey((k) => k + 1);
+  }
+
+  // SPEC.md 26.2: a form interrupted last time (app closed, phone off, crash).
+  useEffect(() => {
+    getDraft().then((d) => d && setDraft(d)).catch(() => {});
+  }, []);
+
+  function restoreDraft() {
+    const d = draft;
+    setDraft(null);
+    const current = d.row_id ? items.find((it) => it.row_id === d.row_id && !it.is_deleted) : null;
+    if (current) {
+      openForm(current, null, d.changes);
+      return;
+    }
+    // A new item - or one deleted meanwhile, which comes back as a new item
+    // with the draft's details, but not its SKU and serial (like duplicating).
+    const { sku, serial, ...rest } = d.changes;
+    openForm(null, null, d.row_id ? rest : d.changes);
+  }
+
+  function discardDraft() {
+    setDraft(null);
+    clearDraft().catch(() => {});
   }
 
   const [statsExpanded, setStatsExpanded] = useState(() => {
@@ -83,18 +112,38 @@ export default function ItemList() {
     });
   }
 
+  // Does an item pass the current search and filters? (Also asked about an
+  // item just saved, before the list has caught up - SPEC.md 26.5.)
+  const passesFilters = (it) =>
+    matchesSearch(it, search) &&
+    (availability === 'all' || it.availability_status === availability) &&
+    (locationFilter === 'all' || it.location === locationFilter) &&
+    (typeFilter === 'all' || it.type === typeFilter) &&
+    (statusFilter === 'all' || it.physical_status === statusFilter) &&
+    (!missingSerial || !it.serial_number) &&
+    (!missingSku || !it.sku) &&
+    (!missingPrice || it.price == null || it.price === '');
+
   const filtered = useMemo(() => {
-    const list = items
-      .filter((it) => matchesSearch(it, search))
-      .filter((it) => availability === 'all' || it.availability_status === availability)
-      .filter((it) => locationFilter === 'all' || it.location === locationFilter)
-      .filter((it) => typeFilter === 'all' || it.type === typeFilter)
-      .filter((it) => statusFilter === 'all' || it.physical_status === statusFilter)
-      .filter((it) => !missingSerial || !it.serial_number)
-      .filter((it) => !missingSku || !it.sku)
-      .filter((it) => !missingPrice || it.price == null || it.price === '');
+    const list = items.filter(passesFilters);
     return sortItems(list, sortBy); // the export follows the same order
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [items, search, availability, locationFilter, typeFilter, statusFilter, missingSerial, missingSku, missingPrice, sortBy]);
+
+  // SPEC.md 26.5: the artwork just saved is highlighted for a moment, and
+  // scrolled to if it's out of view.
+  const [justSaved, setJustSaved] = useState(null);
+  useEffect(() => {
+    if (!justSaved) return undefined;
+    const el = document.querySelector(`[data-row-id="${CSS.escape(justSaved)}"]`);
+    if (el) {
+      const r = el.getBoundingClientRect();
+      if (r.top < 0 || r.bottom > window.innerHeight) el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    }
+    const id = setTimeout(() => setJustSaved(null), 2600);
+    return () => clearTimeout(id);
+    // the list may still be catching up with the save - look again when it does
+  }, [justSaved, filtered]);
 
   // How many filters (not the search) are on - shown on the "סינון" button.
   const activeFilterCount = [
@@ -125,6 +174,18 @@ export default function ItemList() {
 
   return (
     <div>
+      {draft && editingItem === undefined && (
+        <div className="draft-banner" role="status">
+          <span>
+            {t('draft.found').replace('{name}', draft.name || t('draft.newItem'))}
+            {' · '}{formatWhen(draft.saved_at, t)}
+          </span>
+          <span className="draft-actions">
+            <button type="button" className="btn primary" onClick={restoreDraft}>{t('draft.restore')}</button>
+            <button type="button" className="btn" onClick={discardDraft}>{t('draft.discard')}</button>
+          </span>
+        </div>
+      )}
       {/* SPEC.md 22.2: no totals until the catalog has loaded from the device. */}
       {itemsLoaded && <div className="stats-bar">
         <button
@@ -279,13 +340,13 @@ export default function ItemList() {
         view === 'list' ? (
           <div className="item-rows">
             {filtered.map((item) => (
-              <ItemRow key={item.row_id} item={item} showModified={sortBy === 'recent'} onClick={() => openForm(item)} onShare={setShareTarget} />
+              <ItemRow key={item.row_id} item={item} highlight={justSaved === item.row_id} showModified={sortBy === 'recent'} onClick={() => openForm(item)} onShare={setShareTarget} />
             ))}
           </div>
         ) : (
           <div className="grid">
             {filtered.map((item) => (
-              <ItemCard key={item.row_id} item={item} showModified={sortBy === 'recent'} onClick={() => openForm(item)} onShare={setShareTarget} />
+              <ItemCard key={item.row_id} item={item} highlight={justSaved === item.row_id} showModified={sortBy === 'recent'} onClick={() => openForm(item)} onShare={setShareTarget} />
             ))}
           </div>
         )
@@ -296,10 +357,15 @@ export default function ItemList() {
           key={formKey}
           item={editingItem}
           template={template}
+          restore={restore}
           onDuplicate={(values) => openForm(null, values)}
           onClose={() => setEditingItem(undefined)}
           onRequestDelete={(item) => setDeleteTarget(item)}
-          onSaved={() => setEditingItem(undefined)}
+          isHiddenByFilters={(saved) => !passesFilters(saved)}
+          onSaved={(rowId) => {
+            setEditingItem(undefined);
+            setJustSaved(rowId);
+          }}
         />
       )}
 
@@ -320,6 +386,7 @@ export default function ItemList() {
               return; // the edit form stays open - nothing was deleted
             }
             setEditingItem(undefined);
+            clearDraft().catch(() => {}); // SPEC.md 26.2: nothing left to restore
             // SPEC.md section 11: a mistaken delete can be undone right here.
             showToast(t('toast.itemDeleted'), {
               duration: UNDO_WINDOW_MS,

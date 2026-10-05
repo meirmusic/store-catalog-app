@@ -21,6 +21,12 @@ db.version(1).stores({
   pendingChanges: '++id, row_id, createdAt',
 });
 
+// SPEC.md 26.2: the draft of a form that was interrupted (one at a time) -
+// on this device only, never sent anywhere.
+db.version(2).stores({
+  drafts: 'id',
+});
+
 // SPEC.md section 9: ask the browser not to evict this database on its own
 // when the device runs low on space - the catalog copy would just
 // re-download, but queued changes not yet sent would be lost.

@@ -1,10 +1,12 @@
 import { useEffect } from 'react';
 import { useI18n } from '../i18n/I18nContext.jsx';
+import { useBackToClose } from '../hooks/useBackToClose.js';
 
 // SPEC.md 20.1: a warning, not a block - sometimes a shared value is right
 // (e.g. one SKU for prints of the same artwork). "Back to editing" is the
 // default; Esc and a click outside do the same.
 export default function DuplicateConfirm({ duplicates, onSaveAnyway, onBack }) {
+  useBackToClose(onBack); // SPEC.md 26.1 - "back" = the safe choice
   const { t } = useI18n();
 
   useEffect(() => {

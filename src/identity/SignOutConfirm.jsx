@@ -1,11 +1,13 @@
 import { useEffect } from 'react';
 import { useI18n } from '../i18n/I18nContext.jsx';
 import { useBodyScrollLock } from '../hooks/useBodyScrollLock.js';
+import { useBackToClose } from '../hooks/useBackToClose.js';
 
 // SPEC.md section 15: the app's own dialog, not window.confirm (whose
 // buttons are in the browser's language). Signing out affects this device
 // only. Esc and clicking outside cancel; "cancel" starts focused.
 export default function SignOutConfirm({ onCancel, onConfirm }) {
+  useBackToClose(onCancel); // SPEC.md 26.1 - "back" = the safe choice
   const { t } = useI18n();
   useBodyScrollLock();
 

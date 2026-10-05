@@ -32,6 +32,7 @@ const PARITY = {
   pendingUpload: { cards: true, list: true },
   ids: { cards: true, list: true },
   typeAndCondition: { cards: true, list: 'by design - the row is for quick scanning (SPEC.md 24.2)' },
+  savedHighlight: { cards: true, list: true },
 };
 
 const at = (page, view, name) => page.locator(VIEWS[view].item, { hasText: name });
@@ -98,6 +99,15 @@ const CHECKS = {
   ids: {
     present: async (page, view) => expect(at(page, view, 'עם תמונה')).toContainText('SKU-77'),
     part: (page, view) => at(page, view, 'עם תמונה').getByText('SKU-77'),
+  },
+  savedHighlight: {
+    present: async (page, view) => {
+      await at(page, view, 'עם תמונה').locator('.name').click();
+      await page.locator('#item-overlay textarea').fill('נשמר');
+      await page.click('#item-overlay button:has-text("שמירה")');
+      await expect(at(page, view, 'עם תמונה')).toHaveClass(/just-saved/);
+    },
+    part: (page, view) => at(page, view, 'עם תמונה').and(page.locator('.just-saved')),
   },
 };
 
