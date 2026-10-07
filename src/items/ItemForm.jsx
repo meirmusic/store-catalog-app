@@ -8,7 +8,7 @@ import { useBackToClose } from '../hooks/useBackToClose.js';
 import ImageField from './ImageField.jsx';
 import DiscardConfirm from './DiscardConfirm.jsx';
 import ShareDialog from './ShareDialog.jsx';
-import { findSerialOwner, newSerial } from './duplicateCheck.js';
+import { findSerialOwner } from './duplicateCheck.js';
 import { formatDateTime } from './formatWhen.js';
 import { saveDraft, clearDraft } from './drafts.js';
 import { useServerFeature } from '../sync/serverFeatures.js';
@@ -224,12 +224,6 @@ export default function ItemForm({ item, template = null, restore = null, onClos
     handleSubmit({ preventDefault: () => {} }); // same path as the form's own save, validation included
   }
 
-  // SPEC.md 27.1: never a number another artwork already has.
-  function generateSerial() {
-    setSerial(newSerial(items));
-    setFieldErrors((fe) => ({ ...fe, serial: undefined }));
-  }
-
   async function handleSubmit(e) {
     e.preventDefault();
     setError('');
@@ -425,7 +419,6 @@ export default function ItemForm({ item, template = null, restore = null, onClos
                   aria-invalid={Boolean(fieldErrors.serial)}
                   aria-describedby={fieldErrors.serial ? 'item-serial-error' : undefined}
                 />
-                <button type="button" className="btn" onClick={generateSerial}>{t('actions.generateSerial')}</button>
               </div>
               {fieldErrors.serial && <p className="field-error" id="item-serial-error" role="alert">{fieldErrors.serial}</p>}
             </div>

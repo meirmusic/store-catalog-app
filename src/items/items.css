@@ -496,6 +496,8 @@ button.row-thumb:focus-visible { outline: 2px solid var(--accent); outline-offse
 .share-format { display: flex; gap: 6px; margin: 10px 0 0; font-size: .88rem; }
 .share-preview-img.share-card-img { max-height: 340px; background: var(--wall-2); }
 .share-card-placeholder { height: 340px; max-width: 272px; margin: 0 auto; background: #F3F2F0; }
+.share-with-link { text-align: center; }
+.share-dialog .share-price { margin: 4px 0 2px; }
 .share-copy { display: block; margin: 12px auto 0; font-size: .86rem; color: var(--ink-dim); }
 .share-dialog .confirm-actions button:disabled { opacity: .6; cursor: default; }
 

@@ -63,7 +63,7 @@ export default function ItemList() {
   const [shareTarget, setShareTarget] = useState(null); // SPEC.md 23.2
 
   // SPEC.md 19.1/19.4/19.6
-  const [sortBy, setSortBy] = useDevicePreference('gallery_sort', 'name', SORT_OPTIONS);
+  const [sortBy, setSortBy] = useDevicePreference('gallery_sort', 'recent', SORT_OPTIONS); // SPEC.md 28.2: newest change first
   const [view, setView] = useDevicePreference('gallery_view', 'cards', ['cards', 'list']);
   const [filtersOpen, setFiltersOpen] = useState(false);
 

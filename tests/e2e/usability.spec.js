@@ -29,8 +29,11 @@ test.beforeEach(async ({ page }) => {
   await reloadAndWait(page);
 });
 
-test('TC-UX-001: sort by price both ways - items without a price last - and the choice is remembered', async ({ page }) => {
-  expect(await names(page)).toEqual(['אלף', 'בית', 'גימל']); // default: name
+test('TC-UX-001: by default "recently updated" (SPEC.md 28.2); by name and by price both ways - items without a price last - and the choice is remembered', async ({ page }) => {
+  expect(await names(page)).toEqual(['בית', 'גימל', 'אלף']); // default: the latest change first
+  await expect(page.locator('.sort-select select')).toHaveValue('recent');
+  await page.selectOption('.sort-select select', 'name');
+  expect(await names(page)).toEqual(['אלף', 'בית', 'גימל']);
   await page.selectOption('.sort-select select', 'priceHigh');
   expect(await names(page)).toEqual(['בית', 'אלף', 'גימל']);
   await page.selectOption('.sort-select select', 'priceLow');
@@ -41,11 +44,17 @@ test('TC-UX-001: sort by price both ways - items without a price last - and the 
   expect(await names(page)).toEqual(['בית', 'אלף', 'גימל']);
 });
 
-test('TC-UX-002: "recently updated" puts the latest change first and shows who and when', async ({ page }) => {
-  await expect(page.locator('.modified-line')).toHaveCount(0); // only in this sort
-  await page.selectOption('.sort-select select', 'recent');
+test('TC-UX-001b: a device where someone already chose a sort keeps it - the new default is only for devices that never chose', async ({ page }) => {
+  await page.evaluate(() => localStorage.setItem('gallery_sort', 'name'));
+  await reloadAndWait(page);
+  expect(await names(page)).toEqual(['אלף', 'בית', 'גימל']);
+});
+
+test('TC-UX-002: "recently updated" puts the latest change first and shows who and when; other sorts don\'t show it', async ({ page }) => {
   expect(await names(page)).toEqual(['בית', 'גימל', 'אלף']);
   await expect(page.locator('.card').first().locator('.modified-line')).toContainText('דב · היום');
+  await page.selectOption('.sort-select select', 'name');
+  await expect(page.locator('.modified-line')).toHaveCount(0); // only in this sort
 });
 
 test('TC-UX-003: duplicate opens a new item with the details - never name, SKU, serial or photo', async ({ page }) => {

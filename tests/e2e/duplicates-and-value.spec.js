@@ -80,23 +80,6 @@ test('TC-DUP-004: an artwork\'s own number, a deleted artwork\'s number, and an 
   expect(await serialError(page).count()).toBe(0);
 });
 
-test('TC-DUP-005: "create code" never gives a number another artwork has', async ({ page }) => {
-  // the first draw is a number already in use, the second is free
-  const code = await page.evaluate(async () => {
-    const { newSerial } = await import('/src/items/duplicateCheck.js');
-    const draws = [0.1, 0.1, 0.2, 0.3, 0.4, 0.5, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9];
-    let i = 0;
-    return newSerial([{ serial_number: '112345' }], () => draws[i++]);
-  });
-  expect(code).toBe('999999');
-  // and in the form: a 6-digit number that isn't taken
-  await openNewItemForm(page);
-  await page.click('#item-overlay button:has-text("צור קוד")');
-  const made = await page.locator('.field:has-text("מספר סידורי") input').inputValue();
-  expect(made).toMatch(/^\d{6}$/);
-  expect(made).not.toBe('112345');
-});
-
 test('TC-VAL-001: the summary line at the top shows the count only - no money total (SPEC.md 27.2)', async ({ page }) => {
   await expect(page.locator('.stats-toggle')).toHaveText(/סה"כ פריטים: 4\s*$/);
   await expect(page.locator('.stats-toggle')).not.toContainText('$');

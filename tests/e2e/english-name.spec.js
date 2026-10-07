@@ -6,7 +6,6 @@ import { pickIdentity, clearAllData, reloadAndWait, getItems } from '../helpers/
 
 const MOCK_URL = 'https://mock-apps-script.test/exec';
 const ART = { row_id: 'E1', name: 'זריחה בגליל', name_en: null, size: '91X132', type: 'מקורי', price: 2500, availability_status: 'available' };
-const strip = (s) => s.replace(/[‎‏]/g, '');
 
 // A server that keeps the English name (features: name_en) - or an older one.
 async function server(page, { features = ['name_en'], items = [ART] } = {}) {
@@ -51,17 +50,14 @@ test('TC-EN-002: the field appears once the server keeps it; typed by hand, left
   await expect.poll(() => sent.some((p) => JSON.stringify(p).includes('Sunrise over the Galilee'))).toBe(true);
 });
 
-test('TC-EN-003: sharing in English uses the English name; in Hebrew the Hebrew one; with no English name - the Hebrew one', async ({ page }) => {
-  await start(page, { items: [{ ...ART, name_en: 'Sunrise over the Galilee' }, { ...ART, row_id: 'E2', name: 'גשם', name_en: null }] });
-  await page.locator('.card', { hasText: 'זריחה בגליל' }).locator('.share-icon-btn').click();
-  await page.click('.share-lang button:has-text("English")');
-  await expect.poll(async () => strip(await page.locator('.share-preview').textContent())).toContain('Yossi Bitton - Sunrise over the Galilee');
-  await page.click('.share-lang button:has-text("עברית")');
-  await expect.poll(async () => strip(await page.locator('.share-preview').textContent())).toContain('Yossi Bitton - זריחה בגליל');
-  await page.click('.share-dialog button:has-text("ביטול")');
-  await page.locator('.card', { hasText: 'גשם' }).locator('.share-icon-btn').click();
-  await page.click('.share-lang button:has-text("English")');
-  await expect.poll(async () => strip(await page.locator('.share-preview').textContent())).toContain('Yossi Bitton - גשם');
+test('TC-EN-003: the English name goes on the shared card, under the Hebrew one; without one - Hebrew only (SPEC.md 28.1)', async ({ page }) => {
+  await start(page, { items: [{ ...ART, name_en: 'Sunrise over the Galilee' }] });
+  const d = await page.evaluate(async () => {
+    const { shareDetails } = await import('/src/items/shareText.js');
+    const items = (await (await import('/src/db/db.js')).db.items.toArray());
+    return [shareDetails(items[0]), shareDetails({ ...items[0], name_en: null })].map((x) => [x.name, x.nameEn]);
+  });
+  expect(d).toEqual([['זריחה בגליל', 'Sunrise over the Galilee'], ['זריחה בגליל', '']]);
 });
 
 test('TC-EN-004: search finds an artwork by its English name', async ({ page }) => {

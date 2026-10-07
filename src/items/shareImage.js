@@ -1,4 +1,5 @@
 import { getImage } from '../api/client.js';
+import { sizedImageUrl, FULL_IMAGE_WIDTH } from './imageUrl.js';
 
 // SPEC.md 23.3: the photo file for sharing. A photo not uploaded yet is
 // taken from the device; an uploaded one comes from the server (Drive can't
@@ -44,12 +45,32 @@ async function toCache(key, blob) {
 // still downloading waits for the same download instead of starting another.
 const inFlight = new Map();
 
+// SPEC.md 28.1: if the server can't send it (e.g. its Apps Script isn't
+// updated yet), try Drive directly - Google may or may not allow a page to
+// read its pictures. If not, the server's reason is what's reported.
+async function fromDrive(item) {
+  const res = await fetch(sizedImageUrl(item.image_url, FULL_IMAGE_WIDTH), { mode: 'cors', credentials: 'omit', referrerPolicy: 'no-referrer' });
+  if (!res.ok) throw new Error(`Drive answered ${res.status}`);
+  const blob = await res.blob();
+  if (!blob.type.startsWith('image/')) throw new Error(`Drive sent ${blob.type || 'no type'}, not a picture`);
+  return blob;
+}
+
 async function loadBlob(item, key) {
   const cached = await fromCache(key);
   if (cached) return cached;
-  const res = await getImage(item.row_id);
-  if (!res || !res.data) throw new Error('the server returned no photo');
-  const blob = dataUrlToFile(`data:${res.mime || 'image/jpeg'};base64,${res.data}`, fileName(item));
+  let blob;
+  try {
+    const res = await getImage(item.row_id);
+    if (!res || !res.data) throw new Error('the server returned no photo');
+    blob = dataUrlToFile(`data:${res.mime || 'image/jpeg'};base64,${res.data}`, fileName(item));
+  } catch (serverError) {
+    try {
+      blob = await fromDrive(item);
+    } catch {
+      throw serverError;
+    }
+  }
   await toCache(key, blob);
   return blob;
 }

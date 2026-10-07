@@ -123,7 +123,7 @@ function drawSpaced(ctx, text, x, y, spacing) {
   }
 }
 
-function drawCard(ctx, photo, logo, { name, details, price }, lang) {
+function drawCard(ctx, photo, logo, { name, nameEn, details, price }, lang) {
   const he = lang === 'he';
   const innerWidth = CARD_WIDTH - 2 * PAD_X;
   ctx.fillStyle = COLORS.paper;
@@ -165,6 +165,8 @@ function drawCard(ctx, photo, logo, { name, details, price }, lang) {
     const { size, lines: nameLines } = layoutName(ctx, name, innerWidth);
     for (const text of nameLines) lines.push({ text, font: `700 ${size}px "${TITLE}"`, color: COLORS.ink, height: Math.round(size * 1.3) });
   }
+  // SPEC.md 28.1: the English name under the Hebrew one, as in the catalog.
+  if (nameEn) lines.push({ text: nameEn, font: `italic 300 38px "${SERIF}"`, color: COLORS.ink, height: 50, gapBefore: 2 });
   if (details) lines.push({ text: details, font: `400 32px "${TEXT}"`, color: COLORS.dim, height: 46, gapBefore: name ? 6 : 0 });
   if (price) lines.push({ text: price, font: `500 50px "${SERIF}"`, color: COLORS.ink, height: 62, gapBefore: 2 });
   const infoHeight = lines.reduce((h, l) => h + l.height + (l.gapBefore || 0), 0);

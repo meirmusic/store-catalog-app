@@ -182,14 +182,12 @@ test('SAVE-25: a save is attributed to the picked team member, not the shared of
   await expect(page.locator('#item-overlay .sub')).not.toContainText('office@example.com');
 });
 
-test('SAVE-27: a serial number made with the "generate" button is saved', async ({ page }) => {
+test('SAVE-27: there is no "create code" button - the serial number is typed by hand, and saved (SPEC.md 28.3)', async ({ page }) => {
   await openNewItemForm(page);
-  await fillItemForm(page, { name: 'מספר אוטומטי' });
-  await page.click('#item-overlay button:has-text("צור קוד")');
-  const generated = await page.locator('.field:has-text("מספר סידורי") input').inputValue();
-  expect(generated).toMatch(/^\d{6}$/);
+  await expect(page.locator('#item-overlay button:has-text("צור קוד")')).toHaveCount(0);
+  await fillItemForm(page, { name: 'מספר מוקלד', serial: '445566' });
   await saveItemForm(page);
-  expect((await getItems(page))[0].serial_number).toBe(generated);
+  expect((await getItems(page))[0].serial_number).toBe('445566');
 });
 
 test('SAVE-28: long notes mixing Hebrew, English and emoji are saved exactly as typed', async ({ page }) => {
