@@ -60,7 +60,7 @@ test('TC-LST-011: headers are in the app\'s language, availability is readable, 
   const [header, row] = (await exportCsv(page)).split('\r\n');
 
   expect(header.split(',')).toEqual([
-    'מספר סידורי (תג פיזי)', 'מק"ט', 'שם היצירה', 'גודל', 'סוג', 'מיקום', 'סטטוס (מצב פיזי)', 'זמינות',
+    'מספר סידורי (תג פיזי)', 'מק"ט', 'שם היצירה', 'שם היצירה באנגלית', 'גודל', 'סוג', 'מיקום', 'סטטוס (מצב פיזי)', 'זמינות',
     'מחיר ($)', 'הערות', 'קישור לתמונה', 'עודכן ע"י', 'תאריך עדכון',
   ].map((h) => (h.includes('"') ? `"${h.replace(/"/g, '""')}"` : h)));
   expect(row).toContain('נמכר');

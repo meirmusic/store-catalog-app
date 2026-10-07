@@ -157,6 +157,27 @@ function buildErrorLogRow(entry, serverTime) {
   ];
 }
 
+// Mirrors Code.gs's missingHeaderCells (SPEC.md 27.3).
+function missingHeaderCells(headerRow, columns) {
+  const missing = [];
+  columns.forEach((name, i) => {
+    if (!headerRow[i]) missing.push({ col: i + 1, name });
+  });
+  return missing;
+}
+
+// Mirrors Code.gs's buildUpsertRow (SPEC.md 27.3).
+function buildUpsertRow(columns, payload, existingRow, now) {
+  return columns.map((key, i) => {
+    if (key === 'row_id') return payload.row_id;
+    if (key === 'last_modified_at') return now;
+    if (key === 'last_modified_by') return payload.last_modified_by || '';
+    if (key === 'is_deleted') return !!payload.is_deleted;
+    if (!(key in payload)) return existingRow ? existingRow[i] : '';
+    return payload[key] != null ? payload[key] : '';
+  });
+}
+
 // Mirrors Code.gs's anyDriveFileId (SPEC.md 23.3).
 function anyDriveFileId(url) {
   if (typeof url !== 'string') return null;
@@ -165,6 +186,8 @@ function anyDriveFileId(url) {
 }
 
 export {
+  missingHeaderCells,
+  buildUpsertRow,
   anyDriveFileId,
   buildErrorLogRow,
   findRowIndex,

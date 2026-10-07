@@ -3,6 +3,7 @@ import { getAll, upsertItem, softDeleteItem, addConfigOption, uploadImage, logEr
 import { reportError, flushErrorLog } from '../errors/errorReporting.js';
 import { APPS_SCRIPT_URL } from '../api/config.js';
 import { recordPushOk, recordPullOk } from './syncRecord.js';
+import { setServerFeatures } from './serverFeatures.js';
 
 // See SPEC.md "מדיניות כשלים": a change that keeps failing stays queued
 // and retried, but after enough failures the UI should show a visible
@@ -127,7 +128,7 @@ export async function pushPending({ shouldStop = () => false, onProgress = () =>
 // text (REG-028: trimming a numeric SKU made every save of such an item
 // fail). Normalize text fields at the boundary, as the data arrives -
 // row_id too (SPEC.md 18.5): an all-digit id must still match its item.
-const TEXT_FIELDS = ['row_id', 'name', 'size', 'sku', 'serial_number', 'type', 'location', 'physical_status', 'notes', 'image_url', 'last_modified_by'];
+const TEXT_FIELDS = ['row_id', 'name', 'name_en', 'size', 'sku', 'serial_number', 'type', 'location', 'physical_status', 'notes', 'image_url', 'last_modified_by'];
 
 export function normalizeItem(item) {
   const out = { ...item };
@@ -140,6 +141,8 @@ export function normalizeItem(item) {
 export async function pullLatest() {
   const data = await getAll();
   if (!data) return;
+  // SPEC.md 27.3: an older server sends no list - nothing new is shown.
+  setServerFeatures(data.features);
   if (Array.isArray(data.items)) {
     data.items = data.items.map(normalizeItem);
     // REG-017: never overwrite an item that still has a queued change -

@@ -60,7 +60,45 @@ var ITEM_COLUMNS = [
   'row_id', 'serial_number', 'sku', 'name', 'size', 'type', 'location',
   'physical_status', 'availability_status', 'price', 'notes', 'image_url',
   'is_deleted', 'last_modified_by', 'last_modified_at',
+  // SPEC.md 27.3 - added at the end (column P), so existing rows stay as they are.
+  'name_en',
 ];
+
+// What this server version can store - the app shows a field only once the
+// server behind it keeps it (SPEC.md 27.3).
+var SERVER_FEATURES = ['name_en'];
+
+// A column added to ITEM_COLUMNS later gets its header cell written the first
+// time it's needed (SPEC.md 27.3) - no manual step in the Sheet.
+function ensureItemHeaders(sheet, headerRow) {
+  missingHeaderCells(headerRow, ITEM_COLUMNS).forEach(function (cell) {
+    sheet.getRange(1, cell.col).setValue(cell.name);
+  });
+}
+
+// Mirrors logic.js: header cells (1-based column) that are blank where
+// ITEM_COLUMNS expects a name.
+function missingHeaderCells(headerRow, columns) {
+  var missing = [];
+  columns.forEach(function (name, i) {
+    if (!headerRow[i]) missing.push({ col: i + 1, name: name });
+  });
+  return missing;
+}
+
+// Mirrors logic.js: the row to write for an upsert. A field the app didn't
+// send keeps what the Sheet already has - an app version that doesn't know
+// a newer field (e.g. name_en) must not erase it.
+function buildUpsertRow(columns, payload, existingRow, now) {
+  return columns.map(function (key, i) {
+    if (key === 'row_id') return payload.row_id;
+    if (key === 'last_modified_at') return now;
+    if (key === 'last_modified_by') return payload.last_modified_by || '';
+    if (key === 'is_deleted') return !!payload.is_deleted;
+    if (!(key in payload)) return existingRow ? existingRow[i] : '';
+    return payload[key] != null ? payload[key] : '';
+  });
+}
 
 // Only these actions write to the Sheet and need the exclusive script
 // lock (to stop two concurrent writes from corrupting each other's
@@ -384,6 +422,7 @@ function rowToItem(headerRow, row) {
 
 function handleGetAll() {
   var sheet = getItemsSheet();
+  ensureItemHeaders(sheet, sheet.getRange(1, 1, 1, ITEM_COLUMNS.length).getValues()[0]);
   var values = sheet.getDataRange().getValues();
   var header = values[0];
   var items = [];
@@ -405,7 +444,7 @@ function handleGetAll() {
     config[listName].push(value);
   }
 
-  return { items: items, config: config };
+  return { items: items, config: config, features: SERVER_FEATURES };
 }
 
 function findRowIndexByRowId(sheet, rowId) {
@@ -420,21 +459,18 @@ function findRowIndexByRowId(sheet, rowId) {
 
 function handleUpsert(payload) {
   var sheet = getItemsSheet();
+  ensureItemHeaders(sheet, sheet.getRange(1, 1, 1, ITEM_COLUMNS.length).getValues()[0]);
   var now = new Date().toISOString();
-  var item = {};
-  ITEM_COLUMNS.forEach(function (key) { item[key] = payload[key] != null ? payload[key] : ''; });
-  item.row_id = payload.row_id;
-  item.last_modified_at = now;
-  item.last_modified_by = payload.last_modified_by || '';
-  item.is_deleted = !!payload.is_deleted;
-
-  var rowValues = ITEM_COLUMNS.map(function (key) { return item[key]; });
-  var rowIndex = findRowIndexByRowId(sheet, item.row_id);
+  var rowIndex = findRowIndexByRowId(sheet, payload.row_id);
+  var existingRow = rowIndex === -1 ? null : sheet.getRange(rowIndex, 1, 1, ITEM_COLUMNS.length).getValues()[0];
+  var rowValues = buildUpsertRow(ITEM_COLUMNS, payload, existingRow, now);
   if (rowIndex === -1) {
     sheet.appendRow(rowValues);
   } else {
     sheet.getRange(rowIndex, 1, 1, ITEM_COLUMNS.length).setValues([rowValues]);
   }
+  var item = {};
+  ITEM_COLUMNS.forEach(function (key, i) { item[key] = rowValues[i]; });
   return item;
 }
 

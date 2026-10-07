@@ -42,7 +42,9 @@ export function shareDetails(item, { lang = 'he', includePrice = true } = {}) {
   const details = [formatSize(item.size, lang), type].filter(Boolean).join(' · ');
   const hasPrice = item.price != null && item.price !== '' && !Number.isNaN(Number(item.price));
   const price = !sold && includePrice && hasPrice ? `$${Number(item.price).toLocaleString('en-US')}` : '';
-  return { name: item.name ? String(item.name).trim() : '', details, price };
+  // SPEC.md 27.3: in English, the English name when there is one.
+  const name = lang === 'en' && item.name_en && String(item.name_en).trim() ? item.name_en : item.name;
+  return { name: name ? String(name).trim() : '', details, price };
 }
 
 export function buildShareText(item, { lang = 'he', includePrice = true } = {}) {

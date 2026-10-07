@@ -1,6 +1,8 @@
 // TC-BE-001..008 from TEST_PLAN.md. Pure Node - no browser needed.
 import { test, expect } from '@playwright/test';
 import {
+  missingHeaderCells,
+  buildUpsertRow,
   anyDriveFileId,
   findRowIndex,
   driveThumbnailUrl,
@@ -245,5 +247,27 @@ test.describe('TC-BE: Apps Script pure logic', () => {
     expect(anyDriveFileId('')).toBeNull();
     expect(anyDriveFileId(null)).toBeNull();
     expect(anyDriveFileId('https://example.com/photo.jpg')).toBeNull();
+  });
+
+  // SPEC.md 27.3: the English name column, added at the end of the Sheet.
+  const COLS = ['row_id', 'name', 'notes', 'is_deleted', 'last_modified_by', 'last_modified_at', 'name_en'];
+
+  test('TC-BE-016: a new column gets its header written - only where the header cell is blank', () => {
+    expect(missingHeaderCells(['row_id', 'name', 'notes', 'is_deleted', 'last_modified_by', 'last_modified_at'], COLS)).toEqual([{ col: 7, name: 'name_en' }]);
+    expect(missingHeaderCells(['row_id', 'name', 'notes', 'is_deleted', 'last_modified_by', 'last_modified_at', 'name_en'], COLS)).toEqual([]);
+  });
+
+  test('TC-BE-017: the English name is saved; an app version that doesn\'t send it does not erase it', () => {
+    const existing = ['R1', 'שם', 'הערה', false, 'דב', 'then', 'Sunrise'];
+    // a current app: sends name_en
+    expect(buildUpsertRow(COLS, { row_id: 'R1', name: 'שם', notes: '', name_en: 'Dawn', last_modified_by: 'שרה' }, existing, 'now'))
+      .toEqual(['R1', 'שם', '', false, 'שרה', 'now', 'Dawn']);
+    // an older app version: no name_en key - the Sheet keeps "Sunrise"
+    expect(buildUpsertRow(COLS, { row_id: 'R1', name: 'שם 2', notes: 'x', last_modified_by: 'דב' }, existing, 'now'))
+      .toEqual(['R1', 'שם 2', 'x', false, 'דב', 'now', 'Sunrise']);
+    // clearing it on purpose (null) does clear it
+    expect(buildUpsertRow(COLS, { row_id: 'R1', name: 'שם', name_en: null }, existing, 'now')[6]).toBe('');
+    // a new row: missing fields are blank
+    expect(buildUpsertRow(COLS, { row_id: 'R2', name: 'חדש' }, null, 'now')).toEqual(['R2', 'חדש', '', false, '', 'now', '']);
   });
 });

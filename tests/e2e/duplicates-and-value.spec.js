@@ -1,4 +1,4 @@
-// SPEC.md section 20 - duplicate serial/SKU warning and inventory value.
+// SPEC.md sections 20 and 27 - the unique serial number and inventory value.
 // TEST_PLAN.md TC-DUP-*, TC-VAL-*.
 import { test, expect } from '@playwright/test';
 import {
@@ -28,42 +28,44 @@ test.beforeEach(async ({ page }) => {
   await reloadAndWait(page);
 });
 
-test('TC-DUP-001: a serial number already in use warns - "back to editing" keeps the form, nothing saved', async ({ page }) => {
+const serialError = (page) => page.locator('#item-serial-error');
+
+test('TC-DUP-001: a serial number already in use is blocked - the message is under the field, the cursor in it, nothing saved', async ({ page }) => {
   await openNewItemForm(page);
   await fillItemForm(page, { name: 'חדשה', serial: ' 112345 ' });
   await page.click(SAVE);
-  const dialog = page.locator('.duplicate-confirm');
-  await expect(dialog).toContainText('המספר הסידורי 112345 כבר קיים ביצירה "שביל תפילה". לשמור בכל זאת?');
-  await expect(dialog.locator('button:has-text("חזרה לעריכה")')).toBeFocused();
-  await page.keyboard.press('Escape');
-  await expect(dialog).toHaveCount(0);
+  await expect(serialError(page)).toHaveText('המספר הסידורי 112345 כבר קיים ביצירה "שביל תפילה" - מספר סידורי הוא מזהה ייחודי, יש להזין מספר אחר');
+  await expect(page.locator('.field:has-text("מספר סידורי") input')).toBeFocused();
   await expect(page.locator('#item-overlay')).toBeVisible();
+  await expect(page.locator('[role=alertdialog]')).toHaveCount(0); // no "save anyway"
   expect(await getItems(page)).toHaveLength(4);
-});
-
-test('TC-DUP-002: SKU in another case warns too; both lines when both repeat; "save anyway" saves', async ({ page }) => {
-  await openNewItemForm(page);
-  await fillItemForm(page, { name: 'חדשה', sku: 'sku-7', serial: '112345' });
+  // another number - saves
+  await page.locator('.field:has-text("מספר סידורי") input').fill('112346');
+  await expect(serialError(page)).toHaveCount(0);
   await page.click(SAVE);
-  const dialog = page.locator('.duplicate-confirm');
-  await expect(dialog).toContainText('המספר הסידורי 112345');
-  await expect(dialog).toContainText('המק"ט sku-7 כבר קיים ביצירה "שביל תפילה"');
-  await dialog.locator('button:has-text("שמירה בכל זאת")').click();
   await page.waitForSelector('#item-overlay', { state: 'detached' });
   expect(await getItems(page)).toHaveLength(5);
 });
 
-test('TC-DUP-003: an unchanged value does not warn - editing other fields of an item that already shares one', async ({ page }) => {
+test('TC-DUP-002: a SKU may repeat - saved with no message at all', async ({ page }) => {
+  await openNewItemForm(page);
+  await fillItemForm(page, { name: 'הדפס', sku: 'SKU-7' });
+  await page.click(SAVE);
+  await page.waitForSelector('#item-overlay', { state: 'detached' });
+  expect((await getItems(page)).filter((it) => it.sku === 'SKU-7')).toHaveLength(2);
+});
+
+test('TC-DUP-003: an unchanged serial number is not checked - an old artwork that already shares one still saves other changes', async ({ page }) => {
   await seedItems(page, [{ row_id: 'V5', name: 'תאומה', serial_number: '112345' }]);
   await reloadAndWait(page);
   await page.click('.card:has-text("תאומה")');
   await page.locator('#item-overlay textarea').fill('רק הערה');
   await page.click(SAVE);
   await page.waitForSelector('#item-overlay', { state: 'detached' });
-  await expect(page.locator('.duplicate-confirm')).toHaveCount(0);
+  expect((await getItems(page)).find((it) => it.row_id === 'V5').notes).toBe('רק הערה');
 });
 
-test('TC-DUP-004: an item\'s own value, a deleted item\'s value, and an empty value never warn', async ({ page }) => {
+test('TC-DUP-004: an artwork\'s own number, a deleted artwork\'s number, and an empty one are fine', async ({ page }) => {
   await page.click('.card:has-text("שביל תפילה")');
   await page.locator('.field:has-text("מספר סידורי") input').fill('112345 '); // its own, just retyped
   await page.click(SAVE);
@@ -75,12 +77,29 @@ test('TC-DUP-004: an item\'s own value, a deleted item\'s value, and an empty va
   await fillItemForm(page, { name: 'חדשה', serial: '999999' });
   await page.click(SAVE);
   await page.waitForSelector('#item-overlay', { state: 'detached' });
-  await expect(page.locator('.duplicate-confirm')).toHaveCount(0);
+  expect(await serialError(page).count()).toBe(0);
 });
 
-test('TC-VAL-001: the summary shows the value of available items with a price', async ({ page }) => {
-  // 1000 + 2500 (available, priced); the sold 9000 and the unpriced one don't count
-  await expect(page.locator('.stats-toggle')).toContainText('סה"כ פריטים: 4 · שווי הזמינים: $3,500');
+test('TC-DUP-005: "create code" never gives a number another artwork has', async ({ page }) => {
+  // the first draw is a number already in use, the second is free
+  const code = await page.evaluate(async () => {
+    const { newSerial } = await import('/src/items/duplicateCheck.js');
+    const draws = [0.1, 0.1, 0.2, 0.3, 0.4, 0.5, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9];
+    let i = 0;
+    return newSerial([{ serial_number: '112345' }], () => draws[i++]);
+  });
+  expect(code).toBe('999999');
+  // and in the form: a 6-digit number that isn't taken
+  await openNewItemForm(page);
+  await page.click('#item-overlay button:has-text("צור קוד")');
+  const made = await page.locator('.field:has-text("מספר סידורי") input').inputValue();
+  expect(made).toMatch(/^\d{6}$/);
+  expect(made).not.toBe('112345');
+});
+
+test('TC-VAL-001: the summary line at the top shows the count only - no money total (SPEC.md 27.2)', async ({ page }) => {
+  await expect(page.locator('.stats-toggle')).toHaveText(/סה"כ פריטים: 4\s*$/);
+  await expect(page.locator('.stats-toggle')).not.toContainText('$');
 });
 
 test('TC-VAL-002: the breakdown shows value by type and by location, and says what wasn\'t counted', async ({ page }) => {
@@ -92,15 +111,16 @@ test('TC-VAL-002: the breakdown shows value by type and by location, and says wh
   await expect(page.locator('.value-note')).toHaveText('1 יצירות זמינות בלי מחיר לא נספרו');
 });
 
-test('TC-VAL-003: with a filter on, the results line shows the value of what is shown, and it updates with changes', async ({ page }) => {
+test('TC-VAL-003: with a filter on, the results line shows the count only; the value inside the breakdown updates with changes', async ({ page }) => {
   await openFilters(page);
   await page.selectOption('.filter-group:has-text("מיקום") select', { label: 'גלריה' });
-  await expect(page.locator('.results-line')).toContainText('מוצגים 3 מתוך 4 · שווי הזמינים: $1,000');
+  await expect(page.locator('.results-line')).toContainText('מוצגים 3 מתוך 4');
+  await expect(page.locator('.results-line')).not.toContainText('$');
 
   await page.click('.card:has-text("שביל תפילה")');
   await page.fill('#item-overlay input[type=number]', '1500');
   await page.click(SAVE);
   await page.waitForSelector('#item-overlay', { state: 'detached' });
-  await expect(page.locator('.results-line')).toContainText('שווי הזמינים: $1,500');
-  await expect(page.locator('.stats-toggle')).toContainText('$4,000');
+  await page.click('.stats-toggle');
+  await expect(page.locator('.value-group', { hasText: 'שווי לפי סוג' }).locator('.value-row')).toHaveText(['מקורי (2)$4,000']);
 });

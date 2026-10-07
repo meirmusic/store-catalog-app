@@ -6,7 +6,7 @@ import ItemCard from './ItemCard.jsx';
 import ItemRow from './ItemRow.jsx';
 import { SORT_OPTIONS, sortItems } from './sortItems.js';
 import { useDevicePreference } from '../hooks/useDevicePreference.js';
-import { inventoryValue, availableValue, formatMoney } from './inventoryValue.js';
+import { inventoryValue, formatMoney } from './inventoryValue.js';
 import ItemForm from './ItemForm.jsx';
 import DeleteConfirm from './DeleteConfirm.jsx';
 import ShareDialog from './ShareDialog.jsx';
@@ -23,6 +23,7 @@ function matchesSearch(item, q) {
   if (!needle) return true;
   return (
     (item.name != null && String(item.name).toLowerCase().includes(needle)) ||
+    (item.name_en != null && String(item.name_en).toLowerCase().includes(needle)) ||
     (item.sku && String(item.sku).toLowerCase().includes(needle)) ||
     (item.notes && String(item.notes).toLowerCase().includes(needle)) ||
     // SPEC.md section 1: serial-number search is exact-match only (unlike
@@ -195,8 +196,8 @@ export default function ItemList() {
           aria-expanded={statsExpanded}
         >
           <span className="chevron">▾</span>
+          {/* SPEC.md 27.2: the count only - no money total at the top. */}
           {stats[0][0]}: {stats[0][1]}
-          <span className="stats-value"> · {t('stats.availableValue')}: {formatMoney(value.total)}</span>
         </button>
 
         {/* SPEC.md 19.11: collapsed = the total only; details on demand. */}
@@ -320,7 +321,6 @@ export default function ItemList() {
         <div className="results-line" role="status">
           <span>
             {t('list.showing')} {filtered.length} {t('list.of')} {items.length}
-            {' · '}{t('stats.availableValue')}: {formatMoney(availableValue(filtered))}
           </span>
           <button type="button" className="btn clear-filters" onClick={clearFilters}>{t('filters.clear')}</button>
         </div>

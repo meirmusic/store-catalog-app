@@ -8,14 +8,14 @@ import { useBackToClose } from '../hooks/useBackToClose.js';
 import ImageField from './ImageField.jsx';
 import DiscardConfirm from './DiscardConfirm.jsx';
 import ShareDialog from './ShareDialog.jsx';
-import DuplicateConfirm from './DuplicateConfirm.jsx';
-import { findDuplicates } from './duplicateCheck.js';
+import { findSerialOwner, newSerial } from './duplicateCheck.js';
 import { formatDateTime } from './formatWhen.js';
 import { saveDraft, clearDraft } from './drafts.js';
+import { useServerFeature } from '../sync/serverFeatures.js';
 
 const DRAFT_DELAY_MS = 500;
 // The form's fields, in the order of `currentValues` below.
-const FIELDS = ['name', 'size', 'sku', 'type', 'location', 'status', 'price', 'serial', 'notes', 'availability', 'imageUrl'];
+const FIELDS = ['name', 'size', 'sku', 'type', 'location', 'status', 'price', 'serial', 'notes', 'availability', 'imageUrl', 'nameEn'];
 
 function ConfigSelect({ list, value, onChange, config, addConfigValue, label }) {
   const { t } = useI18n();
@@ -118,6 +118,7 @@ export default function ItemForm({ item, template = null, restore = null, onClos
     notes: text(start.notes),
     availability: start.availability_status || 'available',
     imageUrl: pendingPhoto || item?.image_url || null,
+    nameEn: text(item?.name_en), // never copied when duplicating - names belong to one artwork
   };
   const first = restore ? { ...base, ...restore } : base;
   const [name, setName] = useState(first.name);
@@ -131,12 +132,17 @@ export default function ItemForm({ item, template = null, restore = null, onClos
   const [notes, setNotes] = useState(first.notes);
   const [availability, setAvailability] = useState(first.availability);
   const [imageUrl, setImageUrl] = useState(first.imageUrl);
+  const [nameEn, setNameEn] = useState(first.nameEn);
+  // SPEC.md 27.3: shown once the server keeps it (or the artwork already has one).
+  const englishNameSupported = useServerFeature('name_en');
+  const showEnglishName = englishNameSupported || Boolean(base.nameEn);
   const [imageBusy, setImageBusy] = useState(false);
   const [error, setError] = useState(''); // not about one field - shown at the bottom
   // SPEC.md 26.4: a field's error shows next to it, and the cursor goes there.
   const [fieldErrors, setFieldErrors] = useState({});
   const nameRef = useRef(null);
   const priceRef = useRef(null);
+  const serialRef = useRef(null);
   function fieldError(field, message, ref) {
     setFieldErrors({ [field]: message });
     ref.current?.scrollIntoView({ block: 'center' });
@@ -151,7 +157,7 @@ export default function ItemForm({ item, template = null, restore = null, onClos
 
   // SPEC.md section 9: closing with unsaved edits asks first. Compared as
   // strings so e.g. a price of 100 vs '100' isn't mistaken for an edit.
-  const currentValues = [name, size, sku, type, location, status, price, serial, notes, availability, imageUrl];
+  const currentValues = [name, size, sku, type, location, status, price, serial, notes, availability, imageUrl, nameEn];
   // Compared against the item's own values - a restored draft counts as changes.
   const initialValuesRef = useRef(FIELDS.map((f) => String(base[f])));
   const isDirty = currentValues.some((v, i) => String(v) !== initialValuesRef.current[i]);
@@ -180,7 +186,6 @@ export default function ItemForm({ item, template = null, restore = null, onClos
 
   const [confirmingDiscard, setConfirmingDiscard] = useState(false);
   const [sharing, setSharing] = useState(false);
-  const [duplicates, setDuplicates] = useState(null); // SPEC.md 20.1
 
   // SPEC.md 19.3: a new item with this one's details - but never its name,
   // SKU, serial number or photo (those belong to this artwork only).
@@ -219,13 +224,13 @@ export default function ItemForm({ item, template = null, restore = null, onClos
     handleSubmit({ preventDefault: () => {} }); // same path as the form's own save, validation included
   }
 
+  // SPEC.md 27.1: never a number another artwork already has.
   function generateSerial() {
-    let code = '';
-    for (let i = 0; i < 6; i++) code += Math.floor(Math.random() * 10);
-    setSerial(code);
+    setSerial(newSerial(items));
+    setFieldErrors((fe) => ({ ...fe, serial: undefined }));
   }
 
-  async function handleSubmit(e, { skipDuplicateCheck = false } = {}) {
+  async function handleSubmit(e) {
     e.preventDefault();
     setError('');
     setFieldErrors({});
@@ -237,16 +242,13 @@ export default function ItemForm({ item, template = null, restore = null, onClos
       fieldError('price', t('errors.priceInvalid'), priceRef);
       return;
     }
-    if (!skipDuplicateCheck) {
-      const found = findDuplicates(items, {
-        rowId: item?.row_id,
-        serial,
-        sku,
-        serialChanged: String(serial) !== initialValuesRef.current[7],
-        skuChanged: String(sku) !== initialValuesRef.current[2],
-      });
-      if (found.length) {
-        setDuplicates(found);
+    // SPEC.md 27.1: the serial number is unique - a block, not a warning.
+    // Only a changed one is checked: an old artwork that already shares its
+    // number isn't stopped from saving a change elsewhere.
+    if (String(serial) !== initialValuesRef.current[7]) {
+      const owner = findSerialOwner(items, { rowId: item?.row_id, serial });
+      if (owner) {
+        fieldError('serial', t('errors.serialTaken').replace('{value}', serial.trim()).replace('{name}', owner.name ?? ''), serialRef);
         return;
       }
     }
@@ -292,6 +294,8 @@ export default function ItemForm({ item, template = null, restore = null, onClos
         notes: notes.trim() || null,
         availability_status: availability,
         image_url: isNewPhoto || keepsPendingPhoto ? (item?.image_url || null) : imageUrl,
+        // typed by hand - never translated automatically (SPEC.md 27.3)
+        ...(showEnglishName ? { name_en: nameEn.trim() || null } : {}),
       };
       const row_id = await saveItem(
         saved,
@@ -367,6 +371,13 @@ export default function ItemForm({ item, template = null, restore = null, onClos
               {fieldErrors.name && <p className="field-error" id="item-name-error" role="alert">{fieldErrors.name}</p>}
             </div>
 
+            {showEnglishName && (
+              <div className="field">
+                <label htmlFor="item-name-en">{t('fields.nameEn')}</label>
+                <input id="item-name-en" type="text" dir="ltr" lang="en" value={nameEn} onChange={(e) => setNameEn(e.target.value)} />
+              </div>
+            )}
+
             <div className="row2">
               <div className="field">
                 <label>{t('fields.size')}</label>
@@ -405,9 +416,18 @@ export default function ItemForm({ item, template = null, restore = null, onClos
             <div className="field">
               <label>{t('fields.serialNumber')}</label>
               <div style={{ display: 'flex', gap: 6 }}>
-                <input type="text" value={serial} onChange={(e) => setSerial(e.target.value)} style={{ flex: 1 }} />
+                <input
+                  ref={serialRef}
+                  type="text"
+                  value={serial}
+                  onChange={(e) => { setSerial(e.target.value); setFieldErrors((fe) => ({ ...fe, serial: undefined })); }}
+                  style={{ flex: 1 }}
+                  aria-invalid={Boolean(fieldErrors.serial)}
+                  aria-describedby={fieldErrors.serial ? 'item-serial-error' : undefined}
+                />
                 <button type="button" className="btn" onClick={generateSerial}>{t('actions.generateSerial')}</button>
               </div>
+              {fieldErrors.serial && <p className="field-error" id="item-serial-error" role="alert">{fieldErrors.serial}</p>}
             </div>
 
             <div className="field">
@@ -461,16 +481,6 @@ export default function ItemForm({ item, template = null, restore = null, onClos
         </div>
       </div>
       {sharing && <ShareDialog item={item} onClose={() => setSharing(false)} />}
-      {duplicates && (
-        <DuplicateConfirm
-          duplicates={duplicates}
-          onBack={() => setDuplicates(null)}
-          onSaveAnyway={() => {
-            setDuplicates(null);
-            handleSubmit({ preventDefault: () => {} }, { skipDuplicateCheck: true });
-          }}
-        />
-      )}
       {confirmingDiscard && (
         <DiscardConfirm
           onSave={saveFromDiscardConfirm}

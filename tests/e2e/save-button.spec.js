@@ -60,17 +60,20 @@ test('SAVE-06: clearing an existing price saves it empty and the card shows no p
   await expect(page.locator('.card', { hasText: 'היה מחיר' })).not.toContainText('חסר מחיר');
 });
 
-test('SAVE-07: a serial number and SKU already used by another item warn first, and are saved if confirmed (SPEC.md 20.1)', async ({ page }) => {
+test('SAVE-07: a SKU used by another item saves with no message; a serial number used by another item does not save (SPEC.md 27.1)', async ({ page }) => {
   await seedItems(page, [{ row_id: 'FIRST', name: 'ראשון', serial_number: '111111', sku: 'A-1' }]);
   await reloadAndWait(page);
   await openNewItemForm(page);
   await fillItemForm(page, { name: 'שני עם אותם מזהים', sku: 'A-1', serial: '111111' });
   await page.click('#item-overlay button[type=submit]');
-  await page.click('.duplicate-confirm button:has-text("שמירה בכל זאת")');
+  await expect(page.locator('#item-serial-error')).toBeVisible();
+  expect(await getItems(page)).toHaveLength(1);
+  await page.locator('.field:has-text("מספר סידורי") input').fill('');
+  await page.click('#item-overlay button[type=submit]');
   await page.waitForSelector('#item-overlay', { state: 'detached' });
   const items = await getItems(page);
   expect(items).toHaveLength(2);
-  expect(items.filter((it) => it.serial_number === '111111' && it.sku === 'A-1')).toHaveLength(2);
+  expect(items.filter((it) => it.sku === 'A-1')).toHaveLength(2);
 });
 
 // --- ב. פידבק ונעילה ---

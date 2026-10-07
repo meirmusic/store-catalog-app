@@ -17,6 +17,7 @@ const COLUMNS = [
   ['serial_number', 'fields.serialNumber'],
   ['sku', 'fields.sku'],
   ['name', 'fields.name'],
+  ['name_en', 'fields.nameEn'],
   ['size', 'fields.size'],
   ['type', 'filters.type'],
   ['location', 'filters.location'],
