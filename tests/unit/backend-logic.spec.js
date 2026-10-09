@@ -1,6 +1,7 @@
 // TC-BE-001..008 from TEST_PLAN.md. Pure Node - no browser needed.
 import { test, expect } from '@playwright/test';
 import {
+  usableItemColumns,
   missingHeaderCells,
   buildUpsertRow,
   anyDriveFileId,
@@ -269,5 +270,13 @@ test.describe('TC-BE: Apps Script pure logic', () => {
     expect(buildUpsertRow(COLS, { row_id: 'R1', name: 'שם', name_en: null }, existing, 'now')[6]).toBe('');
     // a new row: missing fields are blank
     expect(buildUpsertRow(COLS, { row_id: 'R2', name: 'חדש' }, null, 'now')).toEqual(['R2', 'חדש', '', false, '', 'now', '']);
+  });
+
+  test('TC-BE-018: column P already used for something else - the English name is not written over it', () => {
+    const cols = ['a', 'b', 'name_en'];
+    expect(usableItemColumns(['a', 'b', ''], cols, 2)).toEqual(cols); // empty - ours to use
+    expect(usableItemColumns(['a', 'b', 'name_en'], cols, 2)).toEqual(cols);
+    expect(usableItemColumns(['a', 'b', 'הערות של מאיר'], cols, 2)).toEqual(['a', 'b']); // someone else's column
+    expect(usableItemColumns(['a', 'b'], cols, 2)).toEqual(cols); // the Sheet has no third column yet
   });
 });

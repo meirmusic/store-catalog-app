@@ -166,6 +166,14 @@ function missingHeaderCells(headerRow, columns) {
   return missing;
 }
 
+// Mirrors Code.gs's usableItemColumns (SPEC.md 27.3).
+function usableItemColumns(headerRow, columns, originalCount) {
+  for (let i = originalCount; i < columns.length; i++) {
+    if (headerRow[i] && headerRow[i] !== columns[i]) return columns.slice(0, i);
+  }
+  return columns;
+}
+
 // Mirrors Code.gs's buildUpsertRow (SPEC.md 27.3).
 function buildUpsertRow(columns, payload, existingRow, now) {
   return columns.map((key, i) => {
@@ -186,6 +194,7 @@ function anyDriveFileId(url) {
 }
 
 export {
+  usableItemColumns,
   missingHeaderCells,
   buildUpsertRow,
   anyDriveFileId,

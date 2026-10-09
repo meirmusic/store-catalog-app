@@ -64,16 +64,42 @@ var ITEM_COLUMNS = [
   'name_en',
 ];
 
-// What this server version can store - the app shows a field only once the
-// server behind it keeps it (SPEC.md 27.3).
-var SERVER_FEATURES = ['name_en'];
+// The columns the Sheet has had from the start. Columns added after them
+// (name_en...) are only used where the Sheet really has them (see below).
+var ORIGINAL_COLUMN_COUNT = 15;
 
-// A column added to ITEM_COLUMNS later gets its header cell written the first
-// time it's needed (SPEC.md 27.3) - no manual step in the Sheet.
-function ensureItemHeaders(sheet, headerRow) {
-  missingHeaderCells(headerRow, ITEM_COLUMNS).forEach(function (cell) {
+// The Items columns this server can safely use, after making sure the Sheet
+// has room for them (SPEC.md 27.3):
+// - a Sheet made from an Excel import may have exactly 15 columns - reading
+//   a 16th would fail every request, so missing columns are added;
+// - a new column's header is written the first time (no manual step);
+// - if that column of the Sheet is already used for something else (a
+//   header with another name), it is left alone and not written to.
+function prepareItemColumns(sheet) {
+  if (sheet.getMaxColumns() < ITEM_COLUMNS.length) {
+    sheet.insertColumnsAfter(sheet.getMaxColumns(), ITEM_COLUMNS.length - sheet.getMaxColumns());
+  }
+  var headerRow = sheet.getRange(1, 1, 1, ITEM_COLUMNS.length).getValues()[0];
+  var columns = usableItemColumns(headerRow, ITEM_COLUMNS, ORIGINAL_COLUMN_COUNT);
+  missingHeaderCells(headerRow, columns).forEach(function (cell) {
     sheet.getRange(1, cell.col).setValue(cell.name);
   });
+  return columns;
+}
+
+// Mirrors logic.js: ITEM_COLUMNS up to the first added column whose header
+// cell holds a different name.
+function usableItemColumns(headerRow, columns, originalCount) {
+  for (var i = originalCount; i < columns.length; i++) {
+    if (headerRow[i] && headerRow[i] !== columns[i]) return columns.slice(0, i);
+  }
+  return columns;
+}
+
+// What this server can store - the app shows a field only once the server
+// behind it keeps it (SPEC.md 27.3).
+function serverFeatures(columns) {
+  return columns.indexOf('name_en') !== -1 ? ['name_en'] : [];
 }
 
 // Mirrors logic.js: header cells (1-based column) that are blank where
@@ -422,7 +448,7 @@ function rowToItem(headerRow, row) {
 
 function handleGetAll() {
   var sheet = getItemsSheet();
-  ensureItemHeaders(sheet, sheet.getRange(1, 1, 1, ITEM_COLUMNS.length).getValues()[0]);
+  var columns = prepareItemColumns(sheet);
   var values = sheet.getDataRange().getValues();
   var header = values[0];
   var items = [];
@@ -444,7 +470,7 @@ function handleGetAll() {
     config[listName].push(value);
   }
 
-  return { items: items, config: config, features: SERVER_FEATURES };
+  return { items: items, config: config, features: serverFeatures(columns) };
 }
 
 function findRowIndexByRowId(sheet, rowId) {
@@ -459,18 +485,18 @@ function findRowIndexByRowId(sheet, rowId) {
 
 function handleUpsert(payload) {
   var sheet = getItemsSheet();
-  ensureItemHeaders(sheet, sheet.getRange(1, 1, 1, ITEM_COLUMNS.length).getValues()[0]);
+  var columns = prepareItemColumns(sheet);
   var now = new Date().toISOString();
   var rowIndex = findRowIndexByRowId(sheet, payload.row_id);
-  var existingRow = rowIndex === -1 ? null : sheet.getRange(rowIndex, 1, 1, ITEM_COLUMNS.length).getValues()[0];
-  var rowValues = buildUpsertRow(ITEM_COLUMNS, payload, existingRow, now);
+  var existingRow = rowIndex === -1 ? null : sheet.getRange(rowIndex, 1, 1, columns.length).getValues()[0];
+  var rowValues = buildUpsertRow(columns, payload, existingRow, now);
   if (rowIndex === -1) {
     sheet.appendRow(rowValues);
   } else {
-    sheet.getRange(rowIndex, 1, 1, ITEM_COLUMNS.length).setValues([rowValues]);
+    sheet.getRange(rowIndex, 1, 1, columns.length).setValues([rowValues]);
   }
   var item = {};
-  ITEM_COLUMNS.forEach(function (key, i) { item[key] = rowValues[i]; });
+  columns.forEach(function (key, i) { item[key] = rowValues[i]; });
   return item;
 }
 
@@ -502,11 +528,10 @@ function getOrCreateImageFolder() {
   return DriveApp.createFolder(DRIVE_FOLDER_NAME);
 }
 
-// SPEC.md 23.3: the photo file itself, for sharing with a client - the app
-// can't read it from Drive directly (Drive doesn't allow it from a web
-// page), so it would otherwise only be able to send a link. Read-only, so
-// no lock. A very large original (old migrated photos) is refused, and the
-// app then sends a link instead.
+// SPEC.md 23.3 / 28.1: the photo file itself, for the designed share card -
+// the app can't read it from Drive directly (Drive doesn't allow it from a
+// web page). Read-only, so no lock. A very large original (old migrated
+// photos) is refused, and the app says the card can't be made.
 var MAX_SHARE_IMAGE_BYTES = 8 * 1024 * 1024;
 
 function handleGetImage(payload) {
