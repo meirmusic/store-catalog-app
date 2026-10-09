@@ -11,7 +11,7 @@ const PNG_B64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8B
 
 const ARTWORK = { row_id: 'S1', name: 'זריחה בגליל', size: '91X132', type: 'מקורי', location: 'מחסן', sku: 'SKU-9', serial_number: '112345', notes: 'פנימי', physical_status: 'ממוסגר', price: 2500, availability_status: 'available', image_url: 'https://drive.google.com/thumbnail?id=F1&sz=w1000' };
 
-async function server(page, { image = 'ok', delayMs = 0 } = {}) {
+async function server(page, { image = 'ok', delayMs = 0, driveAllows = false } = {}) {
   const state = { image, seen: [] };
   await page.route(MOCK_URL, async (route) => {
     const body = JSON.parse(route.request().postData());
@@ -19,12 +19,20 @@ async function server(page, { image = 'ok', delayMs = 0 } = {}) {
     if (body.action === 'getImage') {
       if (delayMs) await new Promise((r) => setTimeout(r, delayMs));
       if (state.image === 'ok') return route.fulfill({ json: { mime: 'image/png', data: PNG_B64 } });
-      return route.fulfill({ json: { error: 'unknown action: getImage' } });
+      if (state.image === 'old') return route.fulfill({ json: { error: 'unknown action: getImage' } }); // an older Apps Script
+      return route.fulfill({ json: { error: 'photo too large to share as a file' } });
     }
     return route.fulfill({ json: { items: [], config: {} } });
   });
-  // Drive itself won't hand the picture to the page (the fallback fails too)
+  // Drive itself won't hand the picture to the page (the fallback fails too) -
+  // unless the test says Google's picture server allows it.
   await page.route('https://drive.google.com/**', (route) => route.abort());
+  await page.route('https://lh3.googleusercontent.com/**', (route) => {
+    state.drive = (state.drive || 0) + 1;
+    return driveAllows
+      ? route.fulfill({ status: 200, contentType: 'image/png', headers: { 'Access-Control-Allow-Origin': '*' }, body: Buffer.from(PNG_B64, 'base64') })
+      : route.abort();
+  });
   return state;
 }
 
@@ -138,7 +146,7 @@ test('TC-SHARE-005: no photo - no card, says so, and nothing can be shared', asy
   expect(await shared(page)).toEqual([]);
 });
 
-test('TC-SHARE-006: the photo can\'t be fetched (e.g. before the server update) - an error with a code, nothing sent instead; "try again" works', async ({ page }) => {
+test('TC-SHARE-006: the photo can\'t be fetched - an error with a code, nothing sent instead; "try again" works', async ({ page }) => {
   const state = await open(page, [ARTWORK], { image: 'fail' });
   await fakeShareSheet(page);
   await page.click('.card .share-icon-btn');
@@ -151,6 +159,40 @@ test('TC-SHARE-006: the photo can\'t be fetched (e.g. before the server update) 
   await page.click('.share-failed button:has-text("לנסות שוב")');
   await expect(page.locator('.share-card-img')).toBeVisible();
   await expect(page.locator(SHARE)).toBeEnabled();
+});
+
+test('TC-SHARE-006b: an older server (no getImage) and Drive refuses - said in plain words, with a code; nothing sent (REG-049)', async ({ page }) => {
+  const state = await open(page, [ARTWORK], { image: 'old' });
+  await fakeShareSheet(page);
+  await page.click('.card .share-icon-btn');
+  await expect(page.locator('.toast.error')).toContainText('השרת עוד לא מעודכן לשיתוף כרטיסים');
+  await expect(page.locator('.toast.error')).toContainText(/E-[A-Z0-9]{4}/);
+  await expect(page.locator('.share-failed')).toHaveText('שיתוף כרטיס ליצירה שהתמונה שלה כבר בדרייב יתאפשר אחרי עדכון השרת. יצירה עם תמונה חדשה שעוד לא עלתה - אפשר לשתף כבר עכשיו.');
+  await expect(page.locator(SHARE)).toBeDisabled();
+  expect(state.drive).toBeGreaterThan(0); // Google's picture server was tried first
+  expect(await shared(page)).toEqual([]);
+});
+
+test('TC-SHARE-006c: an older server, but Google\'s picture server lets the page read the photo - the card is built and shared', async ({ page }) => {
+  await open(page, [ARTWORK], { image: 'old', driveAllows: true });
+  await fakeShareSheet(page);
+  await page.click('.card .share-icon-btn');
+  await expect(page.locator('.share-card-img')).toBeVisible();
+  await page.click(SHARE);
+  const [s] = await shared(page);
+  expect(s.files[0].type).toBe('image/jpeg');
+  expect(s.text).toBe(INSTAGRAM);
+});
+
+test('TC-SHARE-006d: the photo\'s two Drive addresses, from any link format in the Sheet', async ({ page }) => {
+  await open(page);
+  const out = await page.evaluate(async () => {
+    const { driveCandidates } = await import('/src/items/shareImage.js');
+    return [driveCandidates('https://drive.google.com/thumbnail?id=AbC_1-x&sz=w1000'), driveCandidates('https://drive.google.com/file/d/F9/view'), driveCandidates(null)];
+  });
+  expect(out[0]).toEqual(['https://lh3.googleusercontent.com/d/AbC_1-x=w1600', 'https://drive.google.com/thumbnail?id=AbC_1-x&sz=w1600']);
+  expect(out[1][0]).toBe('https://lh3.googleusercontent.com/d/F9=w1600');
+  expect(out[2]).toEqual([]);
 });
 
 test('TC-SHARE-007: a photo not uploaded yet is taken from the device, without asking the server', async ({ page }) => {

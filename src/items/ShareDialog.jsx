@@ -4,7 +4,7 @@ import { useToast } from '../toast/ToastContext.jsx';
 import { useDevicePreference } from '../hooks/useDevicePreference.js';
 import { displayImage } from './imageUrl.js';
 import { INSTAGRAM_URL } from './shareText.js';
-import { prepareShareImage } from './shareImage.js';
+import { prepareShareImage, isServerNotUpdated } from './shareImage.js';
 import { buildShareCard } from './shareCard.js';
 import { currentDevice } from '../settings/deviceInfo.js';
 import { useBackToClose } from '../hooks/useBackToClose.js';
@@ -41,8 +41,9 @@ export default function ShareDialog({ item, onClose }) {
       .then((file) => !cancelled && setPhoto(file ? { state: 'ready', file } : { state: 'none', file: null }))
       .catch((error) => {
         if (cancelled) return;
-        showErrorToast(t('errors.sharePhotoFailed'), 'sharePhoto', error, { log: navigator.onLine });
-        setPhoto({ state: 'failed', file: null });
+        const notUpdated = isServerNotUpdated(error);
+        showErrorToast(t(notUpdated ? 'errors.shareServerNotUpdated' : 'errors.sharePhotoFailed'), 'sharePhoto', error, { log: navigator.onLine });
+        setPhoto({ state: 'failed', file: null, notUpdated });
       });
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -118,7 +119,9 @@ export default function ShareDialog({ item, onClose }) {
 
   let status = null;
   if (photo.state === 'none') status = <p className="share-note share-failed" role="status">{t('share.noPhoto')}</p>;
-  else if (photo.state === 'failed') {
+  else if (photo.state === 'failed' && photo.notUpdated) {
+    status = <p className="share-note share-failed" role="status">{t('share.serverNotUpdated')}</p>;
+  } else if (photo.state === 'failed') {
     status = (
       <p className="share-note share-failed" role="status">
         {t('share.photoFailed')}{' '}
