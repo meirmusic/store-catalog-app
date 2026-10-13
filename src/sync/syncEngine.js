@@ -1,5 +1,7 @@
 import { db } from '../db/db.js';
-import { getAll, upsertItem, softDeleteItem, addConfigOption, uploadImage, logErrors, AuthError, TimeoutError } from '../api/client.js';
+import { getAll, upsertItem, softDeleteItem, addConfigOption, uploadImage, logErrors, logUsage, sendFeedback, AuthError, TimeoutError } from '../api/client.js';
+import { countUsage, timeUsage, flushUsage } from '../telemetry/usage.js';
+import { flushFeedback } from '../telemetry/feedback.js';
 import { reportError, flushErrorLog } from '../errors/errorReporting.js';
 import { APPS_SCRIPT_URL } from '../api/config.js';
 import { recordPushOk, recordPullOk } from './syncRecord.js';
@@ -102,6 +104,11 @@ export async function pushPending({ shouldStop = () => false, onProgress = () =>
       if (!sent) continue;
       await db.pendingChanges.delete(change.id);
       pushed++;
+      // SPEC.md 29.3 / 29.7: how long it waited to be sent; a photo - until it's in Drive.
+      if (change.createdAt) {
+        timeUsage('pending', Date.now() - change.createdAt);
+        if (change.op === 'uploadImage') timeUsage('upload', Date.now() - change.createdAt);
+      }
       recordPushOk(); // SPEC.md 22.7
     } catch (err) {
       // A rejected sign-in isn't this change's fault, and every other
@@ -209,6 +216,7 @@ export async function syncNow({ shouldStop = () => false, onProgress = () => {},
     // No backend configured yet - nothing to do but leave the queue as-is.
     return { ok: false, reason: 'not-configured', pushed: 0 };
   }
+  const startedAt = performance.now();
   let pushed;
   try {
     pushed = await pushPending({ shouldStop, onProgress });
@@ -228,13 +236,19 @@ export async function syncNow({ shouldStop = () => false, onProgress = () => {},
     // are not affected either way.
     // The "not updated since" chip shows this reason when tapped (SPEC 17).
     const pullError = reportError('sync-pull', err, { log: navigator.onLine });
+    if (navigator.onLine) countUsage('sync-fail'); // SPEC.md 29.7 - being offline is counted on its own
     flushErrorLog(logErrors);
     return { ok: false, reason: 'pull-failed', pushed, pullError };
   }
   recordPullOk(); // SPEC.md 22.6: kept on the device, survives closing the app
+  countUsage('sync-ok');
+  timeUsage('sync', performance.now() - startedAt);
   // After the pull, never awaited: the error log must never hold up fresh
-  // data (SPEC.md 18.6). flushErrorLog never rejects.
+  // data (SPEC.md 18.6). None of these ever rejects. Usage goes out once a
+  // day (finished days only), suggestions whenever they're waiting (29.8).
   flushErrorLog(logErrors);
+  flushUsage(logUsage);
+  flushFeedback(sendFeedback);
   return { ok: true, pushed };
 }
 

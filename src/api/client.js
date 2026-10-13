@@ -56,9 +56,9 @@ async function callApi(action, payload) {
     controller.abort();
   }, ms);
   // SPEC.md 22.7: how the server answered, for "info & support". The error
-  // log's own sends don't count (before Apps Script knows logErrors, they
-  // would make a healthy server look broken).
-  const record = action === 'logErrors' ? () => {} : recordServerAnswer;
+  // log's own sends don't count, nor usage and suggestions (before Apps
+  // Script knows them, they would make a healthy server look broken).
+  const record = ['logErrors', 'logUsage', 'sendFeedback'].includes(action) ? () => {} : recordServerAnswer;
   let res;
   let data;
   try {
@@ -98,6 +98,15 @@ export function softDeleteItem(rowId, lastModifiedBy) {
 // SPEC.md section 17: queued error reports, for the Sheet's ErrorLog tab.
 export function logErrors(entries) {
   return callApi('logErrors', { entries });
+}
+
+// SPEC.md 29: a day's usage summary per day, and the team's suggestions.
+export function logUsage(days) {
+  return callApi('logUsage', { days });
+}
+
+export function sendFeedback(entries) {
+  return callApi('sendFeedback', { entries });
 }
 
 export function addConfigOption(listName, value) {

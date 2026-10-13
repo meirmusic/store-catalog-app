@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useI18n } from '../i18n/I18nContext.jsx';
 import { useItems } from './ItemsContext.jsx';
 import { useToast } from '../toast/ToastContext.jsx';
@@ -13,8 +13,11 @@ import ShareDialog from './ShareDialog.jsx';
 import { downloadItemsCsv } from './exportCsv.js';
 import { getDraft, clearDraft } from './drafts.js';
 import { formatWhen } from './formatWhen.js';
+import { countUsage, startTimer, markCatalogShown, noteScreen } from '../telemetry/usage.js';
 
 const UNDO_WINDOW_MS = 8000;
+// SPEC.md 29.5: a search counts once the typing has stopped this long.
+const SEARCH_SETTLE_MS = 1500;
 
 function matchesSearch(item, q) {
   // Stray spaces (common when pasting, or from a phone keyboard) must not
@@ -68,6 +71,11 @@ export default function ItemList() {
   const [filtersOpen, setFiltersOpen] = useState(false);
 
   function openForm(item, nextTemplate = null, nextRestore = null) {
+    startTimer('form'); // SPEC.md 29.3 - until the form shows
+    if (item && search.trim() && searchCounted.current && !searchOpened.current) {
+      searchOpened.current = true;
+      countUsage('search-open');
+    }
     setTemplate(nextTemplate);
     setRestore(nextRestore);
     setEditingItem(item);
@@ -82,6 +90,7 @@ export default function ItemList() {
   function restoreDraft() {
     const d = draft;
     setDraft(null);
+    countUsage('draft-restored');
     const current = d.row_id ? items.find((it) => it.row_id === d.row_id && !it.is_deleted) : null;
     if (current) {
       openForm(current, null, d.changes);
@@ -95,6 +104,7 @@ export default function ItemList() {
 
   function discardDraft() {
     setDraft(null);
+    countUsage('draft-discarded');
     clearDraft().catch(() => {});
   }
 
@@ -130,6 +140,31 @@ export default function ItemList() {
     return sortItems(list, sortBy); // the export follows the same order
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [items, search, availability, locationFilter, typeFilter, statusFilter, missingSerial, missingSku, missingPrice, sortBy]);
+
+  // SPEC.md 29.3: the catalog is on screen - how long opening the app took.
+  useEffect(() => {
+    if (itemsLoaded) markCatalogShown();
+  }, [itemsLoaded]);
+  useEffect(() => {
+    if (editingItem === undefined && !shareTarget) noteScreen('catalog');
+  }, [editingItem, shareTarget]);
+
+  // SPEC.md 29.5: searches - counts only, never what was searched for.
+  const searchCounted = useRef(false);
+  const searchOpened = useRef(false);
+  const shownCount = useRef(0);
+  shownCount.current = filtered.length;
+  useEffect(() => {
+    searchCounted.current = false;
+    searchOpened.current = false;
+    if (!search.trim()) return undefined;
+    const id = setTimeout(() => {
+      searchCounted.current = true;
+      countUsage('search');
+      if (shownCount.current === 0) countUsage('search-empty');
+    }, SEARCH_SETTLE_MS);
+    return () => clearTimeout(id);
+  }, [search]);
 
   // SPEC.md 26.5: the artwork just saved is highlighted for a moment, and
   // scrolled to if it's out of view.
@@ -244,6 +279,7 @@ export default function ItemList() {
           <button
             type="button"
             className={`btn filters-toggle${activeFilterCount ? ' has-active' : ''}`}
+            data-usage="filters"
             onClick={() => setFiltersOpen((open) => !open)}
             aria-expanded={filtersOpen}
           >
@@ -258,12 +294,12 @@ export default function ItemList() {
               ))}
             </select>
           </label>
-          <div className="view-toggle" role="group" aria-label={t('view.label')}>
+          <div className="view-toggle" role="group" aria-label={t('view.label')} data-usage="view">
             <button type="button" className={view === 'cards' ? 'on' : ''} onClick={() => setView('cards')} title={t('view.cards')} aria-label={t('view.cards')} aria-pressed={view === 'cards'}>▦</button>
             <button type="button" className={view === 'list' ? 'on' : ''} onClick={() => setView('list')} title={t('view.list')} aria-label={t('view.list')} aria-pressed={view === 'list'}>☰</button>
           </div>
           <span className="toolbar-spacer" />
-          <button className="btn primary" onClick={() => openForm(null)}>{t('actions.newItem')}</button>
+          <button className="btn primary" data-usage="new-item" onClick={() => openForm(null)}>{t('actions.newItem')}</button>
           <button className="btn" onClick={exportList}>{t('actions.exportExcel')}</button>
         </div>
         {filtersOpen && (
@@ -318,7 +354,7 @@ export default function ItemList() {
       </div>
 
       {filtersActive && (
-        <div className="results-line" role="status">
+        <div className="results-line" role="status" data-dead="results">
           <span>
             {t('list.showing')} {filtered.length} {t('list.of')} {items.length}
           </span>
@@ -393,6 +429,7 @@ export default function ItemList() {
               action: {
                 label: t('actions.undo'),
                 onClick: async () => {
+                  countUsage('undo-delete'); // SPEC.md 29.4
                   try {
                     if (undo) await restoreItem(undo);
                     showToast(t('toast.itemRestored'));

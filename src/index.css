@@ -10,9 +10,10 @@
   --line: #E3E1DB;
   --accent: #1C1B18;
   --accent-ink: #000000;
-  --sold: #96685C;
+  /* REG-051: a shade deeper - "נמכר" / "זמין" on their light backgrounds were too faint (3.9:1) */
+  --sold: #865A4F;
   --sold-bg: #F1E8E5;
-  --available: #6E7A63;
+  --available: #5E6A54;
   --available-bg: #EDF0E9;
   --shadow: 0 1px 2px rgba(20, 20, 18, .05), 0 6px 18px -12px rgba(20, 20, 18, .15);
   --radius: 14px;

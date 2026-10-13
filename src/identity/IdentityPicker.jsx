@@ -121,8 +121,8 @@ export default function IdentityPicker() {
               fontSize: '.85rem',
               textDecoration: 'underline',
               cursor: 'pointer',
-              padding: 0,
-              marginTop: 14,
+              padding: '8px 4px', // REG-052: big enough for a finger
+              marginTop: 6,
             }}
           >
             {t('identity.forgotPassword')}

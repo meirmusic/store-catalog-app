@@ -12,7 +12,7 @@ export default function ItemCard({ item, onClick, onShare, showModified = false,
   const isPending = Boolean(item.pending_image);
 
   return (
-    <article className={`card${sold ? ' sold' : ''}${highlight ? ' just-saved' : ''}`} data-row-id={item.row_id} onClick={onClick}>
+    <article className={`card${sold ? ' sold' : ''}${highlight ? ' just-saved' : ''}`} data-row-id={item.row_id} data-usage="card" onClick={onClick}>
       <div className="thumb">
         {photo ? (
           <>
@@ -31,6 +31,7 @@ export default function ItemCard({ item, onClick, onShare, showModified = false,
             <button
               type="button"
               className="thumb-zoom"
+              data-usage="zoom"
               onClick={(e) => { e.stopPropagation(); setZoomed(true); }}
               aria-label={t('actions.zoomImage')}
               title={t('actions.zoomImage')}
@@ -78,6 +79,7 @@ export default function ItemCard({ item, onClick, onShare, showModified = false,
               <button
                 type="button"
                 className="share-icon-btn"
+                data-usage="share"
                 onClick={(e) => { e.stopPropagation(); onShare(item); }}
                 aria-label={t('share.shareArtwork')}
                 title={t('share.shareArtwork')}

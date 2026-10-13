@@ -22,7 +22,7 @@ const linkButtonStyle = {
   fontSize: '.85rem',
   textDecoration: 'underline',
   cursor: 'pointer',
-  padding: 0,
+  padding: '8px 4px', // REG-052: big enough for a finger
 };
 
 // Self-service "forgot password" (task #28 v4) - a one-time code emailed to
@@ -174,7 +174,7 @@ export default function ForgotPasswordPanel({ defaultEmail, onDone, onCancel, ca
         </div>
       )}
 
-      <button type="button" onClick={onCancel} style={{ ...linkButtonStyle, marginTop: 14 }}>
+      <button type="button" onClick={onCancel} style={{ ...linkButtonStyle, marginTop: 6 }}>
         {cancelLabel || t('identity.backToLogin')}
       </button>
     </div>

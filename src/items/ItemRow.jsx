@@ -21,11 +21,12 @@ export default function ItemRow({ item, onClick, onShare, showModified = false, 
     .join(' ');
 
   return (
-    <article className={`item-row${sold ? ' sold' : ''}${highlight ? ' just-saved' : ''}`} data-row-id={item.row_id} onClick={onClick}>
+    <article className={`item-row${sold ? ' sold' : ''}${highlight ? ' just-saved' : ''}`} data-row-id={item.row_id} data-usage="row" onClick={onClick}>
       {photo ? (
         <button
           type="button"
           className="row-thumb row-zoom"
+          data-usage="zoom"
           onClick={(e) => { e.stopPropagation(); setZoomed(true); }}
           aria-label={t('actions.zoomImage')}
           title={t('actions.zoomImage')}
@@ -66,6 +67,7 @@ export default function ItemRow({ item, onClick, onShare, showModified = false, 
           <button
             type="button"
             className="share-icon-btn"
+            data-usage="share"
             onClick={(e) => { e.stopPropagation(); onShare(item); }}
             aria-label={t('share.shareArtwork')}
             title={t('share.shareArtwork')}

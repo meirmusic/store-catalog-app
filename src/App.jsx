@@ -18,7 +18,9 @@ import { formatWhen } from './items/formatWhen.js'
 import ChangePasswordDialog from './settings/ChangePasswordDialog.jsx'
 import SupportInfoDialog from './settings/SupportInfoDialog.jsx'
 import ReloadDataDialog from './settings/ReloadDataDialog.jsx'
+import FeedbackDialog from './settings/FeedbackDialog.jsx'
 import GlobalErrorCatcher from './errors/GlobalErrorCatcher.jsx'
+import { markSignInShown } from './telemetry/usage.js'
 import './items/items.css'
 
 function Header() {
@@ -28,7 +30,7 @@ function Header() {
   const { isOnline, syncing, lastSyncedAt, pendingCount, syncProblem, stale, staleError, authExpired, refresh } = useSyncStatus()
   const [managingLists, setManagingLists] = useState(false)
   const [confirmingSignOut, setConfirmingSignOut] = useState(false)
-  const [dialog, setDialog] = useState(null) // SPEC.md 21: 'password' | 'support' | 'reload'
+  const [dialog, setDialog] = useState(null) // SPEC.md 21 / 29.8: 'password' | 'support' | 'reload' | 'feedback'
   const { showToast, showErrorToast } = useToast()
 
   async function explainSyncProblem() {
@@ -47,7 +49,7 @@ function Header() {
 
   return (
     <header className="top">
-      <div className="brand">
+      <div className="brand" data-dead="header">
         {/* Kept as a real (visually-hidden) heading, not just the image's alt
             text, so screen readers get a proper page title and the i18n
             switcher still has something to translate here (TC-I18N-001..003) -
@@ -95,7 +97,7 @@ function Header() {
             ⏳ {pendingCount} {t('sync.pending')}
           </span>
         ))}
-        <button className={`icon-btn${syncing ? ' spin' : ''}`} onClick={refresh} title={t('actions.refresh')}>⟳</button>
+        <button className={`icon-btn${syncing ? ' spin' : ''}`} data-usage="sync" onClick={refresh} title={t('actions.refresh')}>⟳</button>
         <HeaderMenu
           onManageLists={() => setManagingLists(true)}
           onSwitchUser={clearMember}
@@ -103,6 +105,7 @@ function Header() {
           onSignOut={() => setConfirmingSignOut(true)}
           onSupportInfo={() => setDialog('support')}
           onReloadData={() => setDialog('reload')}
+          onFeedback={() => setDialog('feedback')}
         />
         {member && (
           <span className="chip user" onClick={clearMember} title={t('actions.switchUser')}>
@@ -115,6 +118,7 @@ function Header() {
       {dialog === 'password' && <ChangePasswordDialog onClose={() => setDialog(null)} />}
       {dialog === 'support' && <SupportInfoDialog isOnline={isOnline} onClose={() => setDialog(null)} />}
       {dialog === 'reload' && <ReloadDataDialog isOnline={isOnline} onClose={() => setDialog(null)} />}
+      {dialog === 'feedback' && <FeedbackDialog onClose={() => setDialog(null)} />}
       {/* SPEC.md section 9: signing out here keeps the local data and the
           change queue - after signing back in, queued changes go out. */}
       {authExpired && (
@@ -183,6 +187,8 @@ function VersionLine() {
 function IdentityGate() {
   const { user } = useIdentity()
   const { member } = useTeamMember()
+  // SPEC.md 29.3: "opening the app" is timed only when no sign-in came first.
+  if (!user || !member) markSignInShown()
   if (!user) return <IdentityPicker />
   if (!member) return <TeamMemberPicker />
   return <AppShell />

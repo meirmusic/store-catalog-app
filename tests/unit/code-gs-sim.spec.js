@@ -36,6 +36,8 @@ function makeSheet(rows, maxColumns) {
       const width = Math.max(...data.map((r) => r.length));
       return { getValues: () => data.map((row) => Array.from({ length: width }, (_, j) => row[j] ?? '')) };
     },
+    clearContents: () => { data.length = 0; },
+    setFrozenRows() {},
     appendRow(row) {
       if (row.length > sheet.maxColumns) sheet.maxColumns = row.length; // Google widens the sheet
       data.push([...row]);
@@ -45,36 +47,60 @@ function makeSheet(rows, maxColumns) {
   return sheet;
 }
 
-function google({ itemsHeader = OLD_HEADER, maxColumns, files = {} } = {}) {
-  const items = makeSheet([itemsHeader, ['R1', '112345', 'SKU-1', 'זריחה', '91X132', 'מקורי', 'גלריה', '', 'available', 2500, '', 'https://drive.google.com/thumbnail?id=FILE1&sz=w1000', false, 'דב', 'then']], maxColumns);
+function google({ itemsHeader = OLD_HEADER, maxColumns, files = {}, itemRows, driveFails = false } = {}) {
+  const firstRow = ['R1', '112345', 'SKU-1', 'זריחה', '91X132', 'מקורי', 'גלריה', '', 'available', 2500, '', 'https://drive.google.com/thumbnail?id=FILE1&sz=w1000', false, 'דב', 'then'];
+  const items = makeSheet([itemsHeader, ...(itemRows || [firstRow])], maxColumns);
   const config = makeSheet([['list_name', 'value'], ['type', 'מקורי']]);
+  const sheets = { Items: items, Config: config };
   const props = {};
+  const mails = [];
+  const triggers = [];
+  const spreadsheet = {
+    getSheetByName: (n) => sheets[n] || null,
+    insertSheet: (n) => { sheets[n] = makeSheet([], 30); return sheets[n]; },
+  };
   const sandbox = {
-    SpreadsheetApp: { getActiveSpreadsheet: () => ({ getSheetByName: (n) => ({ Items: items, Config: config }[n] || null), insertSheet: () => makeSheet([[]]) }) },
-    PropertiesService: { getScriptProperties: () => ({ getProperty: (k) => props[k] ?? null, setProperty: (k, v) => { props[k] = v; }, deleteProperty: (k) => { delete props[k]; } }) },
+    SpreadsheetApp: { getActiveSpreadsheet: () => spreadsheet },
+    PropertiesService: { getScriptProperties: () => ({ getProperty: (k) => props[k] ?? null, setProperty: (k, v) => { props[k] = String(v); }, deleteProperty: (k) => { delete props[k]; } }) },
     LockService: { getScriptLock: () => ({ tryLock: () => true, releaseLock: () => {} }) },
     ContentService: { MimeType: { JSON: 'json' }, createTextOutput: (text) => ({ text, setMimeType() { return this; } }) },
+    Session: { getScriptTimeZone: () => 'Asia/Jerusalem' },
     Utilities: {
       DigestAlgorithm: { SHA_256: 'sha256' },
       computeDigest: (alg, s) => [...crypto.createHash('sha256').update(s, 'utf8').digest()].map((b) => (b > 127 ? b - 256 : b)),
       base64Encode: (bytes) => Buffer.from(bytes.map((b) => (b + 256) % 256)).toString('base64'),
       base64Decode: (s) => [...Buffer.from(s, 'base64')],
       newBlob: (bytes, type, name) => ({ bytes, type, name }),
+      formatDate: (date, tz) => date.toLocaleDateString('en-CA', { timeZone: tz }),
     },
     DriveApp: {
       getFileById: (id) => {
         if (!files[id]) throw new Error('No item with the given ID could be found');
         return { getBlob: () => ({ getBytes: () => files[id], getContentType: () => 'image/jpeg' }), setTrashed() {} };
       },
+      getFoldersByName: () => {
+        if (driveFails) throw new Error('Drive is not available');
+        return { hasNext: () => true, next: () => ({ getName: () => 'Gallery Catalog Images' }) };
+      },
     },
-    MailApp: { sendEmail() {}, getRemainingDailyQuota: () => 100 },
+    MailApp: { sendEmail(msg) { mails.push(msg); }, getRemainingDailyQuota: () => 100 },
+    ScriptApp: {
+      WeekDay: { SUNDAY: 'SUNDAY' },
+      getProjectTriggers: () => [...triggers],
+      deleteTrigger: (t) => triggers.splice(triggers.indexOf(t), 1),
+      newTrigger: (fn) => {
+        const t = { fn, getHandlerFunction: () => fn };
+        const b = { timeBased: () => b, everyHours: (n) => { t.hours = n; return b; }, onWeekDay: (d) => { t.day = d; return b; }, atHour: (h) => { t.hour = h; return b; }, create: () => { triggers.push(t); return t; } };
+        return b;
+      },
+    },
   };
   vm.createContext(sandbox);
   vm.runInContext(SOURCE, sandbox);
   props.LOGIN_PASSWORD_HASH = sandbox.hashPassword('secret-pass');
   const call = (action, payload, auth = { email: 'office@yossibittonart.com', password: 'secret-pass' }) =>
     JSON.parse(sandbox.doPost({ postData: { contents: JSON.stringify({ action, auth, payload }) } }).text);
-  return { call, items };
+  return { call, items, sheets, props, mails, triggers, run: (fn) => sandbox[fn](), gs: sandbox };
 }
 
 test.describe('Code.gs in a simulated Google', () => {
@@ -127,11 +153,136 @@ test.describe('Code.gs in a simulated Google', () => {
 
   test('TC-GS-006: every action the app uses is known; no sign-in - forbidden; everything answers JSON', () => {
     const g = google({ files: { FILE1: [1] } });
-    for (const [action, payload] of [['getAll'], ['upsert', { row_id: 'R1', name: 'x' }], ['softDelete', { row_id: 'R1' }], ['addConfigOption', { list_name: 'type', value: 'הדפס' }], ['getImage', { row_id: 'R1' }], ['logErrors', { entries: [] }]]) {
+    for (const [action, payload] of [['getAll'], ['upsert', { row_id: 'R1', name: 'x' }], ['softDelete', { row_id: 'R1' }], ['addConfigOption', { list_name: 'type', value: 'הדפס' }], ['getImage', { row_id: 'R1' }], ['logErrors', { entries: [] }], ['logUsage', { days: [] }], ['sendFeedback', { entries: [] }]]) {
       expect(String(g.call(action, payload).error || ''), action).not.toMatch(/unknown action/);
     }
     expect(g.call('requestPasswordReset', { email: 'someone@else' })).toEqual({ ok: true });
     expect(g.call('getAll', null, { email: 'office@yossibittonart.com', password: 'wrong' })).toEqual({ error: 'forbidden' });
     expect(g.call('noSuchAction').error).toBe('unknown action: noSuchAction');
   });
+
+  // ---- SPEC.md 29: the improvement loop ----
+  const DAY = 24 * 60 * 60 * 1000;
+  const usageDay = (g, daysAgo, extra = {}) => ({
+    day: g.gs.dayString(Date.now() - daysAgo * DAY), device_id: 'dev123abc', kind: 'iphone', installed: true, version: '2026-10-13-abc1234',
+    counts: { 'share-open': 2, 'share-sent': 1 }, times: { open: [1200, 900] }, ...extra,
+  });
+
+  test('TC-GS-101: logUsage - a row per device and day in a Usage tab it creates; only the known names, only numbers', () => {
+    const g = google();
+    const res = g.call('logUsage', { days: [usageDay(g, 1, {
+      counts: { 'share-open': 3, 'rage:share': 2, 'זריחה': 5, 'SKU-1': 1, 'rage:זריחה': 1, 'form-error-price': -4 },
+      times: { open: [1234, 'x', 99999999, 800], card: [2000], pending: [2 * DAY], 'זריחה': [1] },
+    }), { day: 'not a day', device_id: 'dev123abc' }, { ...usageDay(g, 1), device_id: 'זריחה 2500' }] });
+    expect(res).toEqual({ ok: true, logged: 1 });
+    const tab = g.sheets.Usage;
+    expect(tab.data[0][0]).toBe('יום');
+    expect(tab.data).toHaveLength(2);
+    const [day, device, kind, installed, version, json] = tab.data[1];
+    expect([day, device, kind, installed, version]).toEqual([g.gs.dayString(Date.now() - DAY), 'dev123abc', 'iphone', 'כן', '2026-10-13-abc1234']);
+    expect(JSON.parse(json)).toEqual({ c: { 'share-open': 3, 'rage:share': 2 }, t: { open: [1200, 800], card: [2000], pending: [2 * DAY] } }); // a long wait is kept
+    expect(JSON.stringify(tab.data)).not.toMatch(/זריחה|SKU|2500/);
+  });
+
+  test('TC-GS-102: sendFeedback - saved with the sender\'s name, the screens and the version; sent twice - kept once; never a formula', () => {
+    const g = google();
+    const entry = { id: 'fb1', text: 'הכפתור של השיתוף קטן מדי', screens: ['catalog', 'share'], version: 'v9', kind: 'android', member: 'שרה' };
+    expect(g.call('sendFeedback', { entries: [entry, { id: 'fb2', text: '=HYPERLINK("x")', member: 'דב' }, { id: 'fb3', text: '   ' }] })).toEqual({ ok: true, saved: 2 });
+    expect(g.call('sendFeedback', { entries: [entry] })).toEqual({ ok: true, saved: 0 });
+    const tab = g.sheets.Feedback;
+    expect(tab.data).toHaveLength(3);
+    expect(tab.data[1].slice(1)).toEqual(['הכפתור של השיתוף קטן מדי', 'catalog ← share', 'v9', 'android', 'שרה', '', 'fb1']);
+    expect(tab.data[2][1]).toBe("'=HYPERLINK(\"x\")");
+  });
+
+  test('TC-GS-103: catalog health - what\'s missing, duplicates, untouched, and (from the second scan) new this week; the list in a Health tab', () => {
+    const old = new Date(Date.now() - 200 * DAY).toISOString();
+    const now = new Date().toISOString();
+    const row = (id, serial, name, location, price, image, at) => [id, serial, '', name, '', '', location, '', 'available', price, '', image, false, '', at];
+    const g = google({ itemRows: [
+      row('A', '1', 'זריחה', 'גלריה', 100, 'img', now),
+      row('B', '1', 'זריחה', '', '', '', old),
+      row('C', '', 'שקיעה', 'גלריה', 300, 'img', now),
+      [...row('D', '9', 'נמחקה', '', '', '', old).slice(0, 12), true, '', old],
+    ] });
+    const first = g.run('catalogHealth');
+    expect(first).toMatchObject({ total: 3, no_photo: 1, no_price: 1, no_serial: 1, no_location: 1, no_name_en: 3, untouched: 1, dup_names: 2, dup_serials: 2, new_week: null });
+    const health = g.sheets.Health.data;
+    expect(health[0]).toEqual(['בעיה', 'מספר סידורי', 'שם', 'row_id', 'נבדק']);
+    expect(health.filter((r) => r[3] === 'B').map((r) => r[0])).toEqual(['בלי תמונה', 'בלי מחיר', 'בלי מיקום', 'לא עודכנה יותר מ-6 חודשים', 'שם כפול', 'מספר סידורי כפול']);
+    expect(health.some((r) => r[3] === 'D')).toBe(false); // deleted - not counted
+    g.items.data.push(row('E', '5', 'חדשה', 'גלריה', '', 'img', now));
+    const second = g.run('catalogHealth');
+    expect(second).toMatchObject({ total: 4, new_week: 1, new_incomplete: 1 });
+    expect(g.sheets.Health.data.filter((r) => r[0] === 'בלי מחיר').length).toBe(2); // rewritten, not added to
+  });
+
+  test('TC-GS-104: hourly self-check - quiet when fine; an email at once when Drive fails, not again for the same failure; an email when errors jump x3', () => {
+    const ok = google();
+    expect(ok.run('selfCheck')).toBe('ok');
+    expect(ok.mails).toHaveLength(0);
+    const g = google({ driveFails: true });
+    expect(g.run('selfCheck')).toMatch(/^failed: דרייב/);
+    expect(g.mails).toHaveLength(1);
+    expect(g.mails[0].subject).toMatch(/השרת לא עובד/);
+    expect(g.mails[0].to).toBe('office@yossibittonart.com');
+    g.run('selfCheck');
+    expect(g.mails).toHaveLength(1);
+    expect(JSON.parse(g.props.SELF_CHECK_WEEK)).toEqual({ ok: 0, fail: 2 });
+
+    const spike = google();
+    spike.call('logErrors', { entries: [{ code: 'E-1', action: 'sync-push:upsert', message: 'x', count: 2 }] });
+    spike.sheets.ErrorLog.data[1][0] = new Date(Date.now() - 3 * DAY).toISOString(); // the usual: 2 in a week
+    spike.call('logErrors', { entries: [{ code: 'E-2', action: 'share', message: 'y', count: 6 }] });
+    spike.run('selfCheck');
+    expect(spike.mails.map((m) => m.subject)).toEqual(['⚠️ קטלוג הגלריה: קפיצה בתקלות']);
+    spike.run('selfCheck');
+    expect(spike.mails).toHaveLength(1); // once a day at most
+  });
+
+  test('TC-GS-105: the weekly report - this week against the last, from every source, by email; nothing about artworks except the health numbers', () => {
+    const g = google();
+    g.call('logUsage', { days: [
+      usageDay(g, 1, { counts: { 'share-open': 5, 'share-sent': 3, 'form-error-price': 4, 'rage:share': 2, 'new-open': 2, 'new-saved': 1 }, times: { open: [1000, 2000, 3000], 'new-time': [60000] } }),
+      usageDay(g, 2, { device_id: 'other999', kind: 'computer', installed: false, version: '2026-10-01-old0000', counts: {}, times: {} }),
+      usageDay(g, 9, { counts: { 'form-error-price': 1 } }),
+    ] });
+    g.call('logUsage', { days: [usageDay(g, 1, { counts: { 'share-open': 5, 'share-sent': 3, 'form-error-price': 4, 'rage:share': 2, 'new-open': 2, 'new-saved': 1 }, times: { open: [1000, 2000, 3000], 'new-time': [60000] } })] }); // sent again
+    g.call('logErrors', { entries: [{ code: 'E-AB', action: 'share', message: 'card failed', count: 3 }] });
+    g.call('sendFeedback', { entries: [{ id: 'f1', text: 'חסר מיון לפי גודל', screens: ['catalog'], member: 'שרה', kind: 'iphone' }] });
+    g.run('installTriggers');
+    g.sheets.Goals.appendRow(['הודעת מחיר ברורה', 'form-error-price', '2026-10-01', '9', '']);
+    g.run('selfCheck');
+    expect(g.run('weeklyReport')).toBe('sent to office@yossibittonart.com');
+    expect(g.mails).toHaveLength(1);
+    const { subject, htmlBody, to } = g.mails[0];
+    expect(to).toBe('office@yossibittonart.com');
+    expect(subject).toMatch(/^דוח שבועי - קטלוג הגלריה/);
+    expect(htmlBody).toContain('dir="rtl"');
+    expect(htmlBody).toMatch(/מכשירים פעילים<\/td><td[^>]*>2 /);
+    expect(htmlBody).toMatch(/תקלות<\/td><td[^>]*>3 /);
+    expect(htmlBody).toContain('חסר מיון לפי גודל');
+    expect(htmlBody).toContain('שרה');
+    expect(htmlBody).toContain('- שרה, קטלוג</span>'); // the screen in plain words
+    expect(htmlBody).toMatch(/מחיר לא תקין<\/td><td[^>]*>4 .*שבוע קודם: 1 ▲/);
+    expect(htmlBody).toContain('הקשות חוזרות: כפתור שיתוף');
+    expect(htmlBody).toContain('נפתח 5 ← כרטיס מוכן 0 ← נשלח 3');
+    expect(htmlBody).toContain('נפתחה 2 ← נשמרה 1 · זמן (חציון) 1 דק\'');
+    expect(htmlBody).toContain('פתיחת האפליקציה</td><td style="padding:4px 10px;border-bottom:1px solid #D9D6CF">2 שנ\'');
+    expect(htmlBody).toContain('בדיקות שרת שעברו</td><td style="padding:4px 10px;border-bottom:1px solid #D9D6CF">1 מתוך 1');
+    expect(htmlBody).toMatch(/הודעת מחיר ברורה.*form-error-price.*9<\/td><td[^>]*>4<\/td>/);
+    expect(htmlBody).toMatch(/לא התעדכנו יותר מ-3 ימים<\/td><td[^>]*>1</);
+    expect(htmlBody).not.toContain('זריחה'); // no artwork name - the Health tab holds the list
+    expect(JSON.parse(g.props.SELF_CHECK_WEEK)).toEqual({ ok: 0, fail: 0 });
+    expect(JSON.parse(g.props.LAST_HEALTH).total).toBe(1);
+  });
+
+  test('TC-GS-106: installTriggers - an hourly check and a Sunday 7:00 report; running it again replaces, never doubles', () => {
+    const g = google();
+    g.run('installTriggers');
+    g.run('installTriggers');
+    expect(g.triggers.map((t) => [t.fn, t.hours, t.day, t.hour])).toEqual([['selfCheck', 1, undefined, undefined], ['weeklyReport', undefined, 'SUNDAY', 7]]);
+    expect(g.sheets.Goals.data[0]).toEqual(['שיפור שאושר', 'מדד', 'מתאריך', 'ערך לפני', 'הערות']);
+  });
 });
+

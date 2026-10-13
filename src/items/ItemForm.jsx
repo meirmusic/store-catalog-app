@@ -12,8 +12,12 @@ import { findSerialOwner } from './duplicateCheck.js';
 import { formatDateTime } from './formatWhen.js';
 import { saveDraft, clearDraft } from './drafts.js';
 import { useServerFeature } from '../sync/serverFeatures.js';
+import { countUsage, startTimer, endTimer, cancelTimer, noteScreen } from '../telemetry/usage.js';
+import { useOpenClose } from '../telemetry/useOpenClose.js';
 
 const DRAFT_DELAY_MS = 500;
+// SPEC.md 29.4: opened and closed this fast, with nothing changed - probably opened by mistake.
+const QUICK_CLOSE_MS = 3000;
 // The form's fields, in the order of `currentValues` below.
 const FIELDS = ['name', 'size', 'sku', 'type', 'location', 'status', 'price', 'serial', 'notes', 'availability', 'imageUrl', 'nameEn'];
 
@@ -148,6 +152,22 @@ export default function ItemForm({ item, template = null, restore = null, onClos
     ref.current?.scrollIntoView({ block: 'center' });
     ref.current?.focus({ preventScroll: true });
   }
+  // SPEC.md 29: counted - opening, how long it took to show, a new item's start.
+  const openedAt = useRef(0);
+  useOpenClose(() => {
+    openedAt.current = performance.now();
+    countUsage('form-open');
+    noteScreen(isNew ? 'form-new' : 'form-edit');
+    if (isNew) {
+      countUsage('new-open');
+      startTimer('new-time');
+    }
+  });
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => endTimer('form')); // it's on screen
+    return () => cancelAnimationFrame(frame);
+  }, []);
+
   // A new item: the cursor starts in the name. Not when editing - the
   // phone's keyboard shouldn't jump up for someone just looking.
   useEffect(() => {
@@ -214,6 +234,8 @@ export default function ItemForm({ item, template = null, restore = null, onClos
       return false;
     }
     if (!saving) dropDraft();
+    if (!saving && performance.now() - openedAt.current < QUICK_CLOSE_MS) countUsage('form-quick-close');
+    if (isNew) cancelTimer('new-time');
     onClose();
     return true;
   }
@@ -229,10 +251,12 @@ export default function ItemForm({ item, template = null, restore = null, onClos
     setError('');
     setFieldErrors({});
     if (!name.trim()) {
+      countUsage('form-error-name');
       fieldError('name', t('errors.nameRequired'), nameRef);
       return;
     }
     if (price !== '' && !(Number(price) >= 0)) {
+      countUsage('form-error-price');
       fieldError('price', t('errors.priceInvalid'), priceRef);
       return;
     }
@@ -242,6 +266,7 @@ export default function ItemForm({ item, template = null, restore = null, onClos
     if (String(serial) !== initialValuesRef.current[7]) {
       const owner = findSerialOwner(items, { rowId: item?.row_id, serial });
       if (owner) {
+        countUsage('form-error-serial');
         fieldError('serial', t('errors.serialTaken').replace('{value}', serial.trim()).replace('{name}', owner.name ?? ''), serialRef);
         return;
       }
@@ -303,6 +328,10 @@ export default function ItemForm({ item, template = null, restore = null, onClos
       // just actually happened - "נשמר מקומית" is accurate whether or
       // not the background sync to the server has finished yet.
       dropDraft();
+      if (isNew) {
+        countUsage('new-saved');
+        endTimer('new-time');
+      }
       // SPEC.md 26.5: say so when the current search / filters hide it.
       showToast(t(isHiddenByFilters?.({ ...saved, row_id }) ? 'sync.savedLocalHidden' : 'sync.savedLocal'));
       if (mountedRef.current) onSaved(row_id);
@@ -321,7 +350,7 @@ export default function ItemForm({ item, template = null, restore = null, onClos
     <>
       <div className="overlay" id="item-overlay" onMouseDown={(e) => e.target === e.currentTarget && requestClose()}>
         <div className="modal">
-          <h2 className="serif">
+          <h2 className="serif" data-dead="form-title">
             {!isNew ? item.name : template ? t('item.duplicateOf').replace('{name}', template.sourceName ?? '') : t('actions.newItem').replace('+ ', '')}
           </h2>
           {!isNew && (
@@ -456,7 +485,7 @@ export default function ItemForm({ item, template = null, restore = null, onClos
                 {/* Cancel stays available during a save (SPEC.md section 9) -
                     it's the way out if a save is stuck. */}
                 <button type="button" className="btn" onClick={requestClose}>{t('actions.cancel')}</button>
-                <button type="submit" className="btn primary" disabled={saving || imageBusy}>
+                <button type="submit" className="btn primary" data-usage="save" disabled={saving || imageBusy}>
                   {saving ? t('actions.saving') : t('actions.save')}
                 </button>
               </div>
@@ -477,7 +506,7 @@ export default function ItemForm({ item, template = null, restore = null, onClos
       {confirmingDiscard && (
         <DiscardConfirm
           onSave={saveFromDiscardConfirm}
-          onDiscard={() => { dropDraft(); onClose(); }}
+          onDiscard={() => { dropDraft(); countUsage('leave-unsaved'); if (isNew) cancelTimer('new-time'); onClose(); }}
           onKeepEditing={() => setConfirmingDiscard(false)}
         />
       )}

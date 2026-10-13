@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useI18n } from '../i18n/I18nContext.jsx';
 import { useToast } from '../toast/ToastContext.jsx';
 import { useDevicePreference } from '../hooks/useDevicePreference.js';
@@ -8,6 +8,8 @@ import { prepareShareImage, isServerNotUpdated } from './shareImage.js';
 import { buildShareCard } from './shareCard.js';
 import { currentDevice } from '../settings/deviceInfo.js';
 import { useBackToClose } from '../hooks/useBackToClose.js';
+import { countUsage, startTimer, endTimer, cancelTimer, noteScreen } from '../telemetry/usage.js';
+import { useOpenClose } from '../telemetry/useOpenClose.js';
 
 // SPEC.md 28.1: one way to share - the designed card as a picture, with the
 // link to Yossi Bitton's Instagram. The only choice: include the price.
@@ -32,6 +34,28 @@ export default function ShareDialog({ item, onClose }) {
   const device = useMemo(() => currentDevice(), []);
   const isApple = device.device === 'iPhone' || device.device === 'iPad';
 
+  // SPEC.md 29.5: opened -> card ready -> sent / cancelled / failed, each
+  // counted once per window. Closed without sending or failing = cancelled.
+  const funnel = useRef({ ready: false, sent: false, failed: false });
+  function failed() {
+    if (funnel.current.failed || funnel.current.sent) return;
+    funnel.current.failed = true;
+    countUsage('share-failed');
+  }
+  function sent() {
+    if (funnel.current.sent) return;
+    funnel.current.sent = true;
+    countUsage('share-sent');
+  }
+  useOpenClose(() => {
+    countUsage('share-open');
+    noteScreen('share');
+    startTimer('card');
+  }, () => {
+    cancelTimer('card');
+    if (!funnel.current.sent && !funnel.current.failed) countUsage('share-cancel');
+  });
+
   // The artwork's photo: from the device, or the server (SPEC.md 23.3).
   useEffect(() => {
     if (!hasPhoto) return undefined;
@@ -43,6 +67,7 @@ export default function ShareDialog({ item, onClose }) {
         if (cancelled) return;
         const notUpdated = isServerNotUpdated(error);
         showErrorToast(t(notUpdated ? 'errors.shareServerNotUpdated' : 'errors.sharePhotoFailed'), 'sharePhoto', error, { log: navigator.onLine });
+        failed();
         setPhoto({ state: 'failed', file: null, notUpdated });
       });
     return () => { cancelled = true; };
@@ -58,10 +83,19 @@ export default function ShareDialog({ item, onClose }) {
     let cancelled = false;
     setCard({ state: 'loading', file: null });
     buildShareCard(photo.file, item, { includePrice })
-      .then((file) => !cancelled && setCard({ state: 'ready', file }))
+      .then((file) => {
+        if (cancelled) return;
+        setCard({ state: 'ready', file });
+        if (!funnel.current.ready) {
+          funnel.current.ready = true;
+          countUsage('share-ready');
+          endTimer('card');
+        }
+      })
       .catch((error) => {
         if (cancelled) return;
         showErrorToast(t('errors.cardFailed'), 'shareCard', error);
+        failed();
         setCard({ state: 'failed', file: null });
       });
     return () => { cancelled = true; };
@@ -93,16 +127,19 @@ export default function ShareDialog({ item, onClose }) {
     navigator.clipboard?.writeText(INSTAGRAM_URL).catch(() => {});
     navigator.share({ files: [card.file], text: INSTAGRAM_URL })
       .then(() => {
+        sent();
         onClose();
         if (isApple) showToast(t('share.iosHint'));
       })
       .catch((err) => {
         if (err?.name === 'AbortError') return; // closed the share sheet - not a failure
         showErrorToast(t('errors.shareFailed'), 'share', err);
+        failed();
       });
   }
 
   function download() {
+    sent();
     const url = URL.createObjectURL(card.file);
     const a = document.createElement('a');
     a.href = url;
@@ -143,7 +180,7 @@ export default function ShareDialog({ item, onClose }) {
         <h2 className="serif" id="share-title">{t('share.title')}</h2>
 
         {hasPhoto && (
-          <div className="share-preview-card">
+          <div className="share-preview-card" data-dead="share-preview">
             {previewSrc ? (
               <img src={previewSrc} alt="" className="share-preview-img share-card-img" />
             ) : (
@@ -164,11 +201,11 @@ export default function ShareDialog({ item, onClose }) {
         <div className="confirm-actions">
           <button type="button" onClick={onClose}>{t('actions.cancel')}</button>
           {canShareSheet && (!ready || canShareFile) ? (
-            <button type="button" className="primary" onClick={share} disabled={!canShareFile} autoFocus>
+            <button type="button" className="primary" data-usage="send" onClick={share} disabled={!canShareFile} autoFocus>
               {t('actions.share')}
             </button>
           ) : (
-            <button type="button" className="primary" onClick={download} disabled={!ready}>{t('share.downloadCard')}</button>
+            <button type="button" className="primary" data-usage="send" onClick={download} disabled={!ready}>{t('share.downloadCard')}</button>
           )}
         </div>
         {ready && !canShareFile && (

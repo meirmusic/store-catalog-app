@@ -25,6 +25,11 @@
  * the shared password themselves from there without anyone running
  * promptSetLoginPassword by hand.
  *
+ * Continuous-improvement loop (SPEC.md 29): set REPORT_EMAIL below, then
+ * run installTriggers() once from this editor - an hourly self-check and a
+ * weekly report by email every Sunday morning. Run weeklyReport() by hand
+ * to get a report right away.
+ *
  * Whenever you edit this file afterwards, you must create a new
  * deployment VERSION of the *same* deployment (Deploy > Manage
  * deployments > edit > new version) - not a brand new deployment,
@@ -180,6 +185,10 @@ function handleRequest(e) {
         return handleGetImage(body.payload);
       case 'logErrors':
         return handleLogErrors(body.payload);
+      case 'logUsage':
+        return handleLogUsage(body.payload);
+      case 'sendFeedback':
+        return handleSendFeedback(body.payload);
       default:
         return { error: 'unknown action: ' + body.action };
     }
@@ -377,18 +386,24 @@ var ERROR_LOG_HEADER = ['זמן (שרת)', 'קוד', 'פעולה', 'הודעה',
 var ERROR_LOG_MAX_ENTRIES = 30;
 
 function getOrCreateErrorLogSheet() {
+  return getOrCreateSheet(ERROR_LOG_SHEET_NAME, ERROR_LOG_HEADER);
+}
+
+// A tab the server keeps for itself (ErrorLog, Usage, Feedback, Health,
+// Goals - SPEC.md 17 / 29.10): created with its header on first use.
+function getOrCreateSheet(name, header) {
   var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
-  var sheet = spreadsheet.getSheetByName(ERROR_LOG_SHEET_NAME);
+  var sheet = spreadsheet.getSheetByName(name);
   if (sheet) return sheet;
   // First use only: two devices reporting at the same moment must not both
   // try to create the tab (SPEC.md 18.6).
   var lock = LockService.getScriptLock();
   if (!lock.tryLock(10000)) throw new Error('server busy - another save is in progress');
   try {
-    sheet = spreadsheet.getSheetByName(ERROR_LOG_SHEET_NAME);
+    sheet = spreadsheet.getSheetByName(name);
     if (!sheet) {
-      sheet = spreadsheet.insertSheet(ERROR_LOG_SHEET_NAME);
-      sheet.appendRow(ERROR_LOG_HEADER);
+      sheet = spreadsheet.insertSheet(name);
+      sheet.appendRow(header);
       sheet.setFrozenRows(1);
     }
     return sheet;
@@ -746,4 +761,620 @@ function fixMigratedFields() {
     }
   }
   return 'cleared ' + clearedImages + ' image(s), ' + clearedSerials + ' serial number(s)';
+}
+
+
+// =====================================================================
+// SPEC.md 29 - the continuous-improvement loop: usage counts from the app,
+// suggestions from the team, a weekly catalog health scan, an hourly
+// self-check and a weekly report by email. Privacy (29.2): counts and
+// times only - never an artwork's name, price, SKU, serial number, notes,
+// photo or anything typed; no person is identified (a random device code).
+// Tested end to end in tests/unit/code-gs-sim.spec.js (TC-GS-1xx), which
+// runs this file itself - so these functions are not mirrored in logic.js.
+// =====================================================================
+
+// ⚠️ Who gets the weekly report and the alerts. Put the address in quotes,
+// e.g. var REPORT_EMAIL = 'name@example.com'; - by default the office email.
+var REPORT_EMAIL = LOGIN_EMAIL;
+
+var USAGE_SHEET_NAME = 'Usage';
+var USAGE_HEADER = ['יום', 'מכשיר (קוד אקראי)', 'סוג מכשיר', 'מותקן', 'גרסה', 'נתונים', 'התקבל'];
+var FEEDBACK_SHEET_NAME = 'Feedback';
+var FEEDBACK_HEADER = ['זמן', 'הצעה / בעיה', 'מסכים אחרונים', 'גרסה', 'סוג מכשיר', 'שולח', 'טופל', 'מזהה'];
+var HEALTH_SHEET_NAME = 'Health';
+var HEALTH_HEADER = ['בעיה', 'מספר סידורי', 'שם', 'row_id', 'נבדק'];
+var GOALS_SHEET_NAME = 'Goals';
+var GOALS_HEADER = ['שיפור שאושר', 'מדד', 'מתאריך', 'ערך לפני', 'הערות'];
+
+// The only names the app may count (keep in step with src/telemetry/usage.js -
+// TC-USE-010 compares the two). Anything else is dropped here as well.
+var USAGE_COUNTS = [
+  'form-open', 'form-quick-close', 'form-error-name', 'form-error-price', 'form-error-serial',
+  'draft-restored', 'draft-discarded', 'leave-unsaved', 'undo-delete',
+  'new-open', 'new-saved',
+  'share-open', 'share-ready', 'share-sent', 'share-cancel', 'share-failed',
+  'search', 'search-empty', 'search-open',
+  'offline', 'sync-ok', 'sync-fail',
+];
+var USAGE_TIMES = ['open', 'sync', 'upload', 'card', 'form', 'new-time', 'pending'];
+var USAGE_TAP_NAME = /^(rage|dead):[a-z0-9-]{1,30}$/;
+var DEVICE_KINDS = ['iphone', 'ipad', 'android', 'computer', 'other'];
+var MAX_TIME_MS = 30 * 60 * 1000;
+// A change can wait for days on a device that was offline - kept, not dropped.
+var MAX_WAIT_MS = 14 * 24 * 60 * 60 * 1000;
+
+// One row per device per day. Everything is checked against the lists
+// above, so nothing else can reach the Sheet even from a modified app.
+function cleanUsageDay(day) {
+  var d = day || {};
+  if (!/^\d{4}-\d\d-\d\d$/.test(String(d.day))) return null;
+  if (!/^[a-z0-9]{6,16}$/.test(String(d.device_id))) return null;
+  var counts = {};
+  Object.keys(d.counts || {}).forEach(function (name) {
+    var n = Math.floor(Number(d.counts[name]));
+    if ((USAGE_COUNTS.indexOf(name) !== -1 || USAGE_TAP_NAME.test(name)) && n > 0) counts[name] = Math.min(n, 100000);
+  });
+  var times = {};
+  Object.keys(d.times || {}).forEach(function (name) {
+    if (USAGE_TIMES.indexOf(name) === -1 || !Array.isArray(d.times[name])) return;
+    var max = name === 'pending' || name === 'upload' ? MAX_WAIT_MS : MAX_TIME_MS;
+    var list = d.times[name].slice(0, 100).map(Number).filter(function (ms) { return ms >= 0 && ms <= max; })
+      .map(function (ms) { return Math.round(ms / 100) * 100; });
+    if (list.length) times[name] = list;
+  });
+  return [
+    String(d.day),
+    String(d.device_id),
+    DEVICE_KINDS.indexOf(d.kind) !== -1 ? d.kind : 'other',
+    d.installed ? 'כן' : 'לא',
+    /^[\w.-]{1,40}$/.test(String(d.version)) ? String(d.version) : '?',
+    JSON.stringify({ c: counts, t: times }),
+  ];
+}
+
+function handleLogUsage(payload) {
+  var days = ((payload && payload.days) || []).slice(0, 14);
+  var now = new Date().toISOString();
+  var rows = [];
+  days.forEach(function (day) {
+    var row = cleanUsageDay(day);
+    if (row) rows.push(row.concat([now]));
+  });
+  if (!rows.length) return { ok: true, logged: 0 };
+  var sheet = getOrCreateSheet(USAGE_SHEET_NAME, USAGE_HEADER);
+  sheet.getRange(sheet.getLastRow() + 1, 1, rows.length, rows[0].length).setValues(rows);
+  return { ok: true, logged: rows.length };
+}
+
+// SPEC.md 29.8: a suggestion or problem, sent by a team member under their
+// own name (the one place in section 29 a name is kept - they chose to send it).
+// The same entry sent twice (an answer lost on the way) is kept once.
+function handleSendFeedback(payload) {
+  function text(value, max) {
+    var s = value == null ? '' : String(value).slice(0, max);
+    return /^[=+\-@\t\r]/.test(s) ? "'" + s : s;
+  }
+  var entries = ((payload && payload.entries) || []).slice(0, 20).filter(function (e) {
+    return e && e.id && e.text && String(e.text).trim();
+  });
+  if (!entries.length) return { ok: true, saved: 0 };
+  var sheet = getOrCreateSheet(FEEDBACK_SHEET_NAME, FEEDBACK_HEADER);
+  var idCol = FEEDBACK_HEADER.length;
+  var last = sheet.getLastRow();
+  var known = last < 2 ? [] : sheet.getRange(2, idCol, last - 1, 1).getValues().map(function (r) { return String(r[0]); });
+  var now = new Date().toISOString();
+  var rows = [];
+  entries.forEach(function (e) {
+    var id = text(e.id, 40);
+    if (known.indexOf(id) !== -1) return;
+    known.push(id);
+    rows.push([
+      now,
+      text(String(e.text).trim(), 2000),
+      text((Array.isArray(e.screens) ? e.screens : []).join(' ← '), 200),
+      text(e.version, 40),
+      DEVICE_KINDS.indexOf(e.kind) !== -1 ? e.kind : 'other',
+      text(e.member, 60),
+      '',
+      id,
+    ]);
+  });
+  if (rows.length) sheet.getRange(last + 1, 1, rows.length, rows[0].length).setValues(rows);
+  return { ok: true, saved: rows.length };
+}
+
+// ---- 29.6 Catalog health (weekly, from the Sheet - not about people) ----
+
+var DAY_MS = 24 * 60 * 60 * 1000;
+var UNTOUCHED_DAYS = 182; // about 6 months
+
+function isBlank(value) {
+  return value === '' || value === null || value === undefined || String(value).trim() === '';
+}
+
+// Pure: what's missing, from the items themselves. `knownIds` - the ids seen
+// at the previous scan (null on the first one: "new this week" is unknown).
+function scanCatalogHealth(items, knownIds, nowMs) {
+  var problems = [];
+  var counts = {
+    total: 0, no_photo: 0, no_price: 0, no_serial: 0, no_location: 0, no_name_en: 0,
+    new_week: knownIds ? 0 : null, new_incomplete: knownIds ? 0 : null,
+    untouched: 0, dup_names: 0, dup_serials: 0,
+  };
+  var known = {};
+  (knownIds || []).forEach(function (id) { known[id] = true; });
+  var byName = {};
+  var bySerial = {};
+  items.forEach(function (it) {
+    counts.total++;
+    var add = function (key, label) {
+      counts[key]++;
+      problems.push([label, it]);
+    };
+    if (isBlank(it.image_url)) add('no_photo', 'בלי תמונה');
+    if (isBlank(it.price)) add('no_price', 'בלי מחיר');
+    if (isBlank(it.serial_number)) add('no_serial', 'בלי מספר סידורי');
+    if (isBlank(it.location)) add('no_location', 'בלי מיקום');
+    if (isBlank(it.name_en)) counts.no_name_en++; // a count only - most artworks don't have one yet
+    if (knownIds && !known[it.row_id]) {
+      counts.new_week++;
+      if (isBlank(it.image_url) || isBlank(it.price)) add('new_incomplete', 'חדשה השבוע - נשמרה חסרה');
+    }
+    var at = Date.parse(it.last_modified_at);
+    if (!isNaN(at) && nowMs - at > UNTOUCHED_DAYS * DAY_MS) add('untouched', 'לא עודכנה יותר מ-6 חודשים');
+    if (!isBlank(it.name)) {
+      var n = String(it.name).trim().toLowerCase();
+      (byName[n] = byName[n] || []).push(it);
+    }
+    if (!isBlank(it.serial_number)) {
+      var s = String(it.serial_number).trim().toLowerCase();
+      (bySerial[s] = bySerial[s] || []).push(it);
+    }
+  });
+  [[byName, 'dup_names', 'שם כפול'], [bySerial, 'dup_serials', 'מספר סידורי כפול']].forEach(function (group) {
+    Object.keys(group[0]).forEach(function (key) {
+      var list = group[0][key];
+      if (list.length < 2) return;
+      list.forEach(function (it) {
+        counts[group[1]]++;
+        problems.push([group[2], it]);
+      });
+    });
+  });
+  return { counts: counts, problems: problems };
+}
+
+function readLiveItems() {
+  var sheet = getItemsSheet();
+  var values = sheet.getDataRange().getValues();
+  var header = values[0];
+  var items = [];
+  for (var r = 1; r < values.length; r++) {
+    if (!values[r][0]) continue;
+    var item = rowToItem(header, values[r]);
+    if (!item.is_deleted) items.push(item);
+  }
+  return items;
+}
+
+// Script Properties hold up to 9KB per value - a long list is kept in parts.
+function setLongProperty(props, key, value) {
+  var size = 8000;
+  var parts = Math.max(1, Math.ceil(value.length / size));
+  for (var i = 0; i < parts; i++) props.setProperty(key + '_' + i, value.slice(i * size, (i + 1) * size));
+  props.setProperty(key + '_parts', String(parts));
+}
+
+function getLongProperty(props, key) {
+  var parts = Number(props.getProperty(key + '_parts') || 0);
+  if (!parts) return null;
+  var out = '';
+  for (var i = 0; i < parts; i++) out += props.getProperty(key + '_' + i) || '';
+  return out;
+}
+
+// Scans the catalog, rewrites the Health tab (the list of artworks to look
+// at) and returns the numbers for the report.
+function catalogHealth() {
+  var props = PropertiesService.getScriptProperties();
+  var items = readLiveItems();
+  var knownRaw = getLongProperty(props, 'HEALTH_KNOWN_IDS');
+  var result = scanCatalogHealth(items, knownRaw === null ? null : knownRaw.split(',').filter(String), Date.now());
+  var sheet = getOrCreateSheet(HEALTH_SHEET_NAME, HEALTH_HEADER);
+  sheet.clearContents();
+  var checked = new Date().toISOString();
+  var rows = [HEALTH_HEADER].concat(result.problems.map(function (p) {
+    function text(v) {
+      var s = v == null ? '' : String(v);
+      return /^[=+\-@]/.test(s) ? "'" + s : s;
+    }
+    return [p[0], text(p[1].serial_number), text(p[1].name), text(p[1].row_id), checked];
+  }));
+  sheet.getRange(1, 1, rows.length, HEALTH_HEADER.length).setValues(rows);
+  setLongProperty(props, 'HEALTH_KNOWN_IDS', items.map(function (it) { return String(it.row_id); }).join(','));
+  return result.counts;
+}
+
+// ---- 29.7 Hourly self-check ----
+
+var ALERT_REPEAT_MS = 6 * 60 * 60 * 1000;
+
+// Runs every hour (installTriggers). Reads the Sheet and Drive like a real
+// request would; a failure - an email right away (not again for the same
+// failure within 6 hours). Also: app errors jumping to 3 times the usual.
+function selfCheck() {
+  var props = PropertiesService.getScriptProperties();
+  var problems = [];
+  try {
+    var items = getItemsSheet();
+    if (!items) throw new Error('the Items tab was not found');
+    items.getRange(1, 1, 1, 1).getValues();
+  } catch (err) {
+    problems.push('גיליון: ' + err);
+  }
+  try {
+    getOrCreateImageFolder().getName();
+  } catch (err) {
+    problems.push('דרייב: ' + err);
+  }
+  var tally = JSON.parse(props.getProperty('SELF_CHECK_WEEK') || '{"ok":0,"fail":0}');
+  tally[problems.length ? 'fail' : 'ok']++;
+  props.setProperty('SELF_CHECK_WEEK', JSON.stringify(tally));
+  var now = Date.now();
+  if (problems.length) {
+    var text = problems.join('\n');
+    var lastText = props.getProperty('SELF_CHECK_ALERT_TEXT');
+    var lastAt = Number(props.getProperty('SELF_CHECK_ALERT_AT') || 0);
+    if (text !== lastText || now - lastAt > ALERT_REPEAT_MS) {
+      sendMail('⚠️ קטלוג הגלריה: השרת לא עובד כרגע',
+        '<p>הבדיקה העצמית של השרת נכשלה:</p><pre dir="ltr">' + escapeHtml(text) + '</pre>' +
+        '<p>האפליקציה ממשיכה לעבוד על המכשירים, והשינויים נשמרים בהם עד שהשרת חוזר.</p>');
+      props.setProperty('SELF_CHECK_ALERT_TEXT', text);
+      props.setProperty('SELF_CHECK_ALERT_AT', String(now));
+    }
+  } else {
+    props.deleteProperty('SELF_CHECK_ALERT_TEXT');
+  }
+  var spike = errorSpike(readErrorLogTimes(), now);
+  var lastSpike = Number(props.getProperty('SPIKE_ALERT_AT') || 0);
+  if (spike.spike && now - lastSpike > DAY_MS) {
+    sendMail('⚠️ קטלוג הגלריה: קפיצה בתקלות',
+      '<p>ב-24 השעות האחרונות היו <b>' + spike.last24 + '</b> תקלות, לעומת ממוצע של ' + spike.average +
+      ' ביום בשבוע שלפני. הפירוט בלשונית ErrorLog בגיליון.</p>');
+    props.setProperty('SPIKE_ALERT_AT', String(now));
+  }
+  return problems.length ? 'failed: ' + problems.join('; ') : 'ok';
+}
+
+// [{ at: ms, count }] from the ErrorLog tab.
+function readErrorLogTimes() {
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(ERROR_LOG_SHEET_NAME);
+  if (!sheet || sheet.getLastRow() < 2) return [];
+  return sheet.getRange(2, 1, sheet.getLastRow() - 1, ERROR_LOG_HEADER.length).getValues().map(function (r) {
+    return { at: Date.parse(r[0]), count: Number(r[9]) || 1, action: String(r[2]), message: String(r[3]) };
+  });
+}
+
+// Pure: the last 24 hours against the daily average of the 7 days before.
+function errorSpike(entries, nowMs) {
+  var last24 = 0;
+  var before = 0;
+  entries.forEach(function (e) {
+    var age = nowMs - e.at;
+    if (age >= 0 && age < DAY_MS) last24 += e.count;
+    else if (age >= DAY_MS && age < 8 * DAY_MS) before += e.count;
+  });
+  var average = Math.round((before / 7) * 10) / 10;
+  return { last24: last24, average: average, spike: last24 >= 5 && last24 >= 3 * Math.max(average, 1) };
+}
+
+// ---- 29.9 The weekly report ----
+
+function percentile(list, p) {
+  if (!list.length) return null;
+  var sorted = list.slice().sort(function (a, b) { return a - b; });
+  return sorted[Math.min(sorted.length - 1, Math.ceil((p / 100) * sorted.length) - 1)];
+}
+
+function dayString(ms) {
+  return Utilities.formatDate(new Date(ms), Session.getScriptTimeZone(), 'yyyy-MM-dd');
+}
+
+// Pure: one week of Usage rows ([day, device, kind, installed, version,
+// json]) added up. The same device and day sent twice counts once (the last).
+function summarizeUsage(rows, days) {
+  var latest = {};
+  rows.forEach(function (r) {
+    if (days.indexOf(String(r[0])) !== -1) latest[r[0] + '|' + r[1]] = r;
+  });
+  var counts = {};
+  var times = {};
+  var devices = {};
+  Object.keys(latest).forEach(function (key) {
+    var r = latest[key];
+    var data;
+    try {
+      data = JSON.parse(r[5]);
+    } catch (err) {
+      return;
+    }
+    Object.keys(data.c || {}).forEach(function (k) { counts[k] = (counts[k] || 0) + Number(data.c[k]); });
+    Object.keys(data.t || {}).forEach(function (k) { times[k] = (times[k] || []).concat(data.t[k]); });
+    var dev = devices[r[1]];
+    if (!dev || String(r[0]) >= dev.day) devices[r[1]] = { day: String(r[0]), kind: r[2], installed: r[3] === 'כן', version: String(r[4]) };
+  });
+  return { counts: counts, times: times, devices: devices };
+}
+
+// Pure: devices whose version is older than the newest one, when the newest
+// has been out for more than 3 days by their last day of use.
+function devicesBehind(devices, versionFirstSeen) {
+  var versions = Object.keys(versionFirstSeen).sort();
+  var newest = versions[versions.length - 1];
+  var behind = 0;
+  Object.keys(devices).forEach(function (id) {
+    var d = devices[id];
+    if (d.version !== newest && (Date.parse(d.day) - Date.parse(versionFirstSeen[newest])) / DAY_MS > 3) behind++;
+  });
+  return { newest: newest || '', behind: behind };
+}
+
+function readSheetRows(name, width) {
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(name);
+  if (!sheet || sheet.getLastRow() < 2) return [];
+  return sheet.getRange(2, 1, sheet.getLastRow() - 1, width).getValues();
+}
+
+// Everything the report shows, for this week and the one before.
+function collectReport(nowMs, health, lastHealth) {
+  var thisDays = [];
+  var prevDays = [];
+  for (var i = 1; i <= 7; i++) {
+    thisDays.push(dayString(nowMs - i * DAY_MS));
+    prevDays.push(dayString(nowMs - (i + 7) * DAY_MS));
+  }
+  var usageRows = readSheetRows(USAGE_SHEET_NAME, USAGE_HEADER.length);
+  var firstSeen = {};
+  usageRows.forEach(function (r) {
+    var v = String(r[4]);
+    if (v !== '?' && (!firstSeen[v] || String(r[0]) < firstSeen[v])) firstSeen[v] = String(r[0]);
+  });
+  var inWeek = function (at, weeksBack) {
+    var age = nowMs - at;
+    return age >= weeksBack * 7 * DAY_MS && age < (weeksBack + 1) * 7 * DAY_MS;
+  };
+  var errors = readErrorLogTimes();
+  var weekErrors = errors.filter(function (e) { return inWeek(e.at, 0); });
+  var top = {};
+  weekErrors.forEach(function (e) {
+    var key = e.action + ' · ' + e.message.slice(0, 120);
+    top[key] = (top[key] || 0) + e.count;
+  });
+  var feedback = readSheetRows(FEEDBACK_SHEET_NAME, FEEDBACK_HEADER.length);
+  var usage = summarizeUsage(usageRows, thisDays);
+  var tally = JSON.parse(PropertiesService.getScriptProperties().getProperty('SELF_CHECK_WEEK') || '{"ok":0,"fail":0}');
+  return {
+    from: thisDays[6],
+    to: thisDays[0],
+    usage: usage,
+    prevUsage: summarizeUsage(usageRows, prevDays),
+    behind: devicesBehind(usage.devices, firstSeen),
+    errors: weekErrors.reduce(function (n, e) { return n + e.count; }, 0),
+    prevErrors: errors.filter(function (e) { return inWeek(e.at, 1); }).reduce(function (n, e) { return n + e.count; }, 0),
+    topErrors: Object.keys(top).sort(function (a, b) { return top[b] - top[a]; }).slice(0, 5).map(function (k) { return [k, top[k]]; }),
+    feedback: feedback.filter(function (r) { return inWeek(Date.parse(r[0]), 0); }),
+    prevFeedback: feedback.filter(function (r) { return inWeek(Date.parse(r[0]), 1); }).length,
+    health: health,
+    lastHealth: lastHealth,
+    selfCheck: tally,
+    goals: readSheetRows(GOALS_SHEET_NAME, GOALS_HEADER.length).filter(function (r) { return r[0] && r[1]; }),
+  };
+}
+
+// Plain-language names for what the app counts (unknown names show as they are).
+var USAGE_LABELS = {
+  'form-quick-close': 'טופס שנפתח ונסגר תוך 3 שניות בלי שינוי',
+  'form-error-name': 'שגיאה בטופס: שם חסר',
+  'form-error-price': 'שגיאה בטופס: מחיר לא תקין',
+  'form-error-serial': 'שגיאה בטופס: מספר סידורי כפול',
+  'draft-restored': 'טיוטות ששוחזרו',
+  'draft-discarded': 'טיוטות שנמחקו',
+  'leave-unsaved': 'יציאה מטופס בלי שמירה',
+  'undo-delete': '"ביטול" אחרי מחיקה',
+  'share-cancel': 'חלון שיתוף שנסגר בלי שליחה',
+  open: 'פתיחת האפליקציה',
+  sync: 'סנכרון',
+  upload: 'העלאת תמונה',
+  card: 'הכנת כרטיס שיתוף',
+  form: 'פתיחת טופס יצירה',
+  'new-time': 'יצירה חדשה: מפתיחה עד שמירה',
+  pending: 'שינוי שחיכה לשליחה',
+  'rage:share': 'כפתור שיתוף', 'rage:zoom': 'זכוכית מגדלת', 'rage:save': 'כפתור שמירה',
+  'rage:sync': 'כפתור סנכרון', 'rage:menu': 'תפריט ⚙', 'rage:filters': 'כפתור סינון',
+  'rage:new-item': 'כפתור יצירה חדשה', 'rage:view': 'החלפת תצוגה', 'rage:send': 'שליחת שיתוף',
+  'rage:card': 'כרטיס יצירה', 'rage:row': 'שורת יצירה', 'rage:other': 'כפתור אחר',
+  'dead:header': 'הלוגו בפס העליון', 'dead:results': 'שורת התוצאות', 'dead:form-title': 'כותרת הטופס',
+  'dead:share-preview': 'תצוגת הכרטיס בשיתוף', 'dead:other': 'אזור אחר',
+};
+var HEALTH_LABELS = [
+  ['no_photo', 'בלי תמונה'], ['no_price', 'בלי מחיר'], ['no_serial', 'בלי מספר סידורי'],
+  ['no_location', 'בלי מיקום'], ['no_name_en', 'בלי שם באנגלית'], ['new_week', 'יצירות חדשות השבוע'],
+  ['new_incomplete', 'מתוכן נשמרו חסרות (תמונה / מחיר)'], ['untouched', 'לא עודכנו יותר מ-6 חודשים'],
+  ['dup_names', 'יצירות עם שם כפול'], ['dup_serials', 'יצירות עם מספר סידורי כפול (מהעבר)'],
+];
+var SCREEN_LABELS = { catalog: 'קטלוג', 'form-new': 'יצירה חדשה', 'form-edit': 'עריכת יצירה', share: 'שיתוף' };
+function screensLabel(text) {
+  return String(text || '').split(' ← ').map(function (n) { return SCREEN_LABELS[n] || n; }).join(' ← ');
+}
+var KIND_LABELS = { iphone: 'אייפון', ipad: 'אייפד', android: 'אנדרואיד', computer: 'מחשב', other: 'אחר' };
+
+function escapeHtml(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function label(name) {
+  return USAGE_LABELS[name] || name;
+}
+
+function seconds(ms) {
+  if (ms == null) return '-';
+  if (ms >= 60 * 60 * 1000) return (Math.round(ms / 360000) / 10) + ' שעות';
+  if (ms >= 60 * 1000) return (Math.round(ms / 6000) / 10) + ' דק\'';
+  return (Math.round(ms / 100) / 10) + ' שנ\'';
+}
+
+// "12 (שבוע קודם: 8 ▲)"
+function compare(now, before) {
+  if (now == null) return '-';
+  if (before == null) return String(now);
+  var arrow = now > before ? ' ▲' : now < before ? ' ▼' : '';
+  return now + ' <span style="color:#6E6C64">(שבוע קודם: ' + before + arrow + ')</span>';
+}
+
+// A goal's measure (Goals tab, column B): a count name ("form-error-price"),
+// "p50:open" / "p90:open" for a time, "health:no_photo", or "errors".
+function goalValue(metric, r, usage, health) {
+  var m = String(metric).trim();
+  if (m === 'errors') return r.errors;
+  if (/^health:/.test(m)) return health ? health[m.slice(7)] : null;
+  var t = /^p(50|90):(.+)$/.exec(m);
+  if (t) {
+    var v = percentile(usage.times[t[2]] || [], Number(t[1]));
+    return v == null ? null : Math.round(v / 100) / 10;
+  }
+  return usage.counts[m] || 0;
+}
+
+function buildReportHtml(r) {
+  var u = r.usage;
+  var p = r.prevUsage;
+  var c = function (k) { return u.counts[k] || 0; };
+  var pc = function (k) { return p.counts[k] || 0; };
+  var row = function (cells) { return '<tr>' + cells.map(function (x) { return '<td style="padding:4px 10px;border-bottom:1px solid #D9D6CF">' + x + '</td>'; }).join('') + '</tr>'; };
+  var table = function (rows) { return '<table style="border-collapse:collapse;margin:6px 0 14px">' + rows.join('') + '</table>'; };
+  var h = function (text) { return '<h3 style="margin:18px 0 4px;font-size:17px">' + text + '</h3>'; };
+  var deviceIds = Object.keys(u.devices);
+  var out = [];
+  out.push('<div dir="rtl" style="font-family:Arial,sans-serif;font-size:15px;color:#1C1B18;max-width:680px">');
+  out.push('<h2 style="margin:0 0 4px">דוח שבועי - קטלוג הגלריה</h2>');
+  out.push('<div style="color:#6E6C64">' + r.from + ' עד ' + r.to + ' · בהשוואה לשבוע הקודם</div>');
+
+  out.push(h('בקצרה'));
+  out.push(table([
+    row(['מכשירים פעילים', compare(deviceIds.length, Object.keys(p.devices).length)]),
+    row(['תקלות', compare(r.errors, r.prevErrors)]),
+    row(['הצעות מהצוות', compare(r.feedback.length, r.prevFeedback)]),
+    row(['בדיקות שרת שעברו', r.selfCheck.ok + ' מתוך ' + (r.selfCheck.ok + r.selfCheck.fail)]),
+  ]));
+
+  out.push(h('הצעות ובעיות מהצוות'));
+  out.push(r.feedback.length ? '<ul>' + r.feedback.map(function (f) {
+    return '<li>' + escapeHtml(f[1]) + ' <span style="color:#6E6C64">- ' + escapeHtml(f[5] || '?') + ', ' + escapeHtml(screensLabel(f[2])) + '</span></li>';
+  }).join('') + '</ul>' : '<p>אין השבוע.</p>');
+
+  out.push(h('תקלות'));
+  out.push(r.topErrors.length ? table(r.topErrors.map(function (e) {
+    return row(['<span dir="ltr">' + escapeHtml(e[0]) + '</span>', e[1]]);
+  })) : '<p>אין תקלות השבוע.</p>');
+
+  out.push(h('איפה נתקעו'));
+  var frustration = Object.keys(USAGE_LABELS).filter(function (k) {
+    return /^(form-quick-close|form-error|draft|leave|undo|share-cancel)/.test(k);
+  }).map(function (k) { return row([label(k), compare(c(k), pc(k))]); });
+  var taps = Object.keys(u.counts).filter(function (k) { return USAGE_TAP_NAME.test(k); })
+    .sort(function (a, b) { return u.counts[b] - u.counts[a]; }).slice(0, 8)
+    .map(function (k) { return row([(k.indexOf('rage') === 0 ? 'הקשות חוזרות: ' : 'הקשה על משהו שלא לחיץ: ') + label(k), compare(c(k), pc(k))]); });
+  out.push(table(frustration.concat(taps)));
+
+  out.push(h('משפכים'));
+  out.push(table([
+    row(['יצירה חדשה', 'נפתחה ' + c('new-open') + ' ← נשמרה ' + c('new-saved') + ' · זמן (חציון) ' + seconds(percentile(u.times['new-time'] || [], 50))]),
+    row(['שיתוף', 'נפתח ' + c('share-open') + ' ← כרטיס מוכן ' + c('share-ready') + ' ← נשלח ' + c('share-sent') + ' · בוטל ' + c('share-cancel') + ' · נכשל ' + c('share-failed')]),
+    row(['חיפוש', 'בוצע ' + c('search') + ' ← בלי תוצאות ' + c('search-empty') + ' · נפתחה יצירה מהתוצאות ' + c('search-open')]),
+  ]));
+
+  out.push(h('מהירות (חציון / האיטי מתוך 10)'));
+  out.push(table(USAGE_TIMES.filter(function (k) { return k !== 'new-time' && k !== 'pending'; }).map(function (k) {
+    var list = u.times[k] || [];
+    var prev = p.times[k] || [];
+    return row([label(k), seconds(percentile(list, 50)) + ' / ' + seconds(percentile(list, 90)) +
+      ' <span style="color:#6E6C64">(שבוע קודם: ' + seconds(percentile(prev, 50)) + ' / ' + seconds(percentile(prev, 90)) + ')</span>']);
+  })));
+
+  out.push(h('בריאות הקטלוג'));
+  if (r.health) {
+    out.push(table(HEALTH_LABELS.map(function (pair) {
+      var now = r.health[pair[0]];
+      return row([pair[1], now == null ? 'יימדד מהשבוע הבא' : compare(now, r.lastHealth ? r.lastHealth[pair[0]] : null)]);
+    })));
+    out.push('<p style="color:#6E6C64">רשימת היצירות עצמן - בלשונית Health בגיליון.</p>');
+  } else {
+    out.push('<p>הסריקה נכשלה השבוע.</p>');
+  }
+
+  out.push(h('טכני'));
+  var kinds = {};
+  deviceIds.forEach(function (id) {
+    var d = u.devices[id];
+    var key = (KIND_LABELS[d.kind] || d.kind) + (d.installed ? ' (מותקן)' : ' (דפדפן)');
+    kinds[key] = (kinds[key] || 0) + 1;
+  });
+  var versions = {};
+  deviceIds.forEach(function (id) { versions[u.devices[id].version] = (versions[u.devices[id].version] || 0) + 1; });
+  var pending = u.times.pending || [];
+  out.push(table([
+    row(['מכשירים', Object.keys(kinds).map(function (k) { return k + ': ' + kinds[k]; }).join(' · ') || '-']),
+    row(['גרסאות', Object.keys(versions).sort().reverse().map(function (v) { return '<span dir="ltr">' + escapeHtml(v) + '</span>: ' + versions[v]; }).join(' · ') || '-']),
+    row(['לא התעדכנו יותר מ-3 ימים', String(r.behind.behind)]),
+    row(['שינויים שחיכו לשליחה (חציון / הכי ארוך)', seconds(percentile(pending, 50)) + ' / ' + seconds(pending.length ? Math.max.apply(null, pending) : null)]),
+    row(['פעמים שמכשיר היה מנותק', compare(c('offline'), pc('offline'))]),
+    row(['סנכרונים שנכשלו', compare(c('sync-fail'), pc('sync-fail'))]),
+  ]));
+
+  if (r.goals.length) {
+    out.push(h('מה השתנה אחרי שיפורים שאושרו'));
+    out.push(table([row(['<b>שיפור</b>', '<b>מדד</b>', '<b>לפני</b>', '<b>השבוע</b>'])].concat(r.goals.map(function (g) {
+      var value = goalValue(g[1], r, u, r.health);
+      return row([escapeHtml(g[0]), '<span dir="ltr">' + escapeHtml(g[1]) + '</span>', escapeHtml(g[3]), value == null ? '-' : String(value)]);
+    }))));
+  }
+
+  out.push('<p style="margin-top:22px;color:#6E6C64">לניתוח ולהצעות שיפור: להעביר את המייל לשיחה ולבקש "תנתח את הדוח של השבוע".' +
+    ' שום שינוי לא נכנס בלי אישור.</p></div>');
+  return out.join('\n');
+}
+
+function sendMail(subject, html) {
+  MailApp.sendEmail({ to: REPORT_EMAIL, subject: subject, htmlBody: html, body: html.replace(/<[^>]+>/g, ' ') });
+}
+
+// Every Sunday morning (installTriggers), or by hand from this editor.
+function weeklyReport() {
+  var props = PropertiesService.getScriptProperties();
+  var lastHealth = JSON.parse(props.getProperty('LAST_HEALTH') || 'null');
+  var health = null;
+  try {
+    health = catalogHealth();
+  } catch (err) {
+    // the rest of the report still goes out
+  }
+  var r = collectReport(Date.now(), health, lastHealth);
+  sendMail('דוח שבועי - קטלוג הגלריה (' + r.from + ' עד ' + r.to + ')', buildReportHtml(r));
+  if (health) props.setProperty('LAST_HEALTH', JSON.stringify(health));
+  props.setProperty('SELF_CHECK_WEEK', '{"ok":0,"fail":0}');
+  return 'sent to ' + REPORT_EMAIL;
+}
+
+// One-off: run once from this editor (select it next to Run). Sets up the
+// hourly self-check and the Sunday-morning report; running it again
+// replaces them, never doubles them.
+function installTriggers() {
+  ScriptApp.getProjectTriggers().forEach(function (t) {
+    if (['selfCheck', 'weeklyReport'].indexOf(t.getHandlerFunction()) !== -1) ScriptApp.deleteTrigger(t);
+  });
+  ScriptApp.newTrigger('selfCheck').timeBased().everyHours(1).create();
+  ScriptApp.newTrigger('weeklyReport').timeBased().onWeekDay(ScriptApp.WeekDay.SUNDAY).atHour(7).create();
+  getOrCreateSheet(GOALS_SHEET_NAME, GOALS_HEADER);
+  return 'installed: hourly self-check, weekly report on Sunday at 7:00 to ' + REPORT_EMAIL;
 }

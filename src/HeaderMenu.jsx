@@ -5,7 +5,7 @@ import { BackStep } from './hooks/useBackToClose.js';
 
 // SPEC.md 19.10 / 21: ⚙ holds what's done rarely, in three groups -
 // work, account, support. Closes on a click outside or Esc.
-export default function HeaderMenu({ onManageLists, onSwitchUser, onChangePassword, onSignOut, onSupportInfo, onReloadData }) {
+export default function HeaderMenu({ onManageLists, onSwitchUser, onChangePassword, onSignOut, onSupportInfo, onReloadData, onFeedback }) {
   const { t, language, setLanguage } = useI18n();
   const [open, setOpen] = useState(false);
   const [languagesOpen, setLanguagesOpen] = useState(false);
@@ -43,6 +43,7 @@ export default function HeaderMenu({ onManageLists, onSwitchUser, onChangePasswo
       <button
         type="button"
         className="icon-btn"
+        data-usage="menu"
         onClick={toggle}
         title={t('menu.title')}
         aria-label={t('menu.title')}
@@ -84,6 +85,8 @@ export default function HeaderMenu({ onManageLists, onSwitchUser, onChangePasswo
           <button type="button" role="menuitem" onClick={() => choose(onChangePassword)}>{t('menu.changePassword')}</button>
           <button type="button" role="menuitem" onClick={() => choose(onSignOut)}>{t('identity.signOutConfirm')}</button>
           <hr />
+          {/* SPEC.md 29.8 */}
+          <button type="button" role="menuitem" onClick={() => choose(onFeedback)}>{t('feedback.menu')}</button>
           <button type="button" role="menuitem" onClick={() => choose(onSupportInfo)}>{t('support.title')}</button>
           <button type="button" role="menuitem" onClick={() => choose(onReloadData)}>{t('reload.menu')}</button>
         </div>

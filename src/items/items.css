@@ -136,6 +136,7 @@ select:hover, .btn:hover { border-color: var(--accent); }
 .stats-toggle {
   display: flex; align-items: center; gap: 6px; background: none; border: none;
   cursor: pointer; padding: 4px 2px; color: var(--ink-dim); font-size: .78rem; font-weight: 600;
+  min-height: 32px; /* REG-052: big enough for a finger */
 }
 .stats-toggle .chevron { font-size: .7rem; transition: transform .15s; }
 .stats-toggle.expanded .chevron { transform: rotate(180deg); }
@@ -191,7 +192,8 @@ select:hover, .btn:hover { border-color: var(--accent); }
 .thumb-zoom:hover { background: rgba(20, 20, 18, .75); }
 .ribbon {
   position: absolute; top: 10px; inset-inline-start: -30px; transform: rotate(-40deg);
-  background: var(--sold); color: #fff; font-size: .7rem; font-weight: 700; padding: 3px 40px;
+  /* var(--danger): white on the dark-mode --sold was too faint (2.9:1, REG-051) */
+  background: var(--danger); color: #fff; font-size: .7rem; font-weight: 700; padding: 3px 40px;
 }
 .card .body { padding: 12px 14px 14px; display: flex; flex-direction: column; gap: 6px; flex: 1; }
 .card .name { font-weight: 700; font-size: 1rem; }
@@ -425,7 +427,7 @@ button.row-thumb:focus-visible { outline: 2px solid var(--accent); outline-offse
 
 .modal-actions .right-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
 .share-preview { white-space: pre-wrap; text-align: start; font-family: inherit; font-size: .92rem; background: var(--wall-2); border-radius: 10px; padding: 10px 12px; margin: 12px 0; }
-.share-price { display: inline-flex; gap: 8px; align-items: center; font-size: .9rem; cursor: pointer; }
+.share-price { display: inline-flex; gap: 8px; align-items: center; font-size: .9rem; cursor: pointer; min-height: 32px; }
 .share-dialog .confirm-actions button.primary { background: var(--accent); border-color: var(--accent); color: var(--wall); }
 
 @media (max-width: 640px) {
@@ -462,6 +464,13 @@ button.row-thumb:focus-visible { outline: 2px solid var(--accent); outline-offse
 .support-info .confirm-actions button.primary,
 .reload-data .confirm-actions button.primary { background: var(--accent); border-color: var(--accent); color: var(--wall); }
 .reload-data .confirm-actions button:disabled { opacity: .5; cursor: default; }
+/* SPEC.md 29.8 */
+.feedback-dialog { text-align: start; }
+.feedback-label { display: block; font-size: .9rem; margin: 6px 0; }
+.feedback-text { width: 100%; box-sizing: border-box; min-height: 110px; padding: 10px 12px; font: inherit; font-size: 16px; border: 1px solid var(--line); border-radius: 9px; background: var(--stone); color: var(--ink); resize: vertical; }
+.feedback-name { margin: 8px 0 0; }
+.feedback-dialog .confirm-actions button.primary { background: var(--accent); border-color: var(--accent); color: var(--wall); }
+.feedback-dialog .confirm-actions button:disabled { opacity: .5; cursor: default; }
 .reload-blocker { font-size: .86rem; color: var(--sold); background: var(--sold-bg); border-radius: 10px; padding: 8px 10px; }
 .change-password { text-align: start; }
 .header-menu-list { max-width: calc(100vw - 32px); }
@@ -498,7 +507,7 @@ button.row-thumb:focus-visible { outline: 2px solid var(--accent); outline-offse
 .share-card-placeholder { height: 340px; max-width: 272px; margin: 0 auto; background: #F3F2F0; }
 .share-with-link { text-align: center; }
 .share-dialog .share-price { margin: 4px 0 2px; }
-.share-copy { display: block; margin: 12px auto 0; font-size: .86rem; color: var(--ink-dim); }
+.share-copy { display: block; margin: 6px auto 0; padding: 8px 6px; font-size: .86rem; color: var(--ink-dim); }
 .share-dialog .confirm-actions button:disabled { opacity: .6; cursor: default; }
 
 /* ---- SPEC.md section 26 ---- */
