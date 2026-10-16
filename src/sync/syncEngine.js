@@ -1,4 +1,4 @@
-import { db } from '../db/db.js';
+import { db, isConnectionLost, reconnect } from '../db/db.js';
 import { getAll, upsertItem, softDeleteItem, addConfigOption, uploadImage, logErrors, logUsage, sendFeedback, AuthError, TimeoutError } from '../api/client.js';
 import { countUsage, timeUsage, flushUsage } from '../telemetry/usage.js';
 import { flushFeedback } from '../telemetry/feedback.js';
@@ -32,6 +32,7 @@ async function withQuickRetry(fn) {
     if (err instanceof AuthError) throw err; // retrying can't fix a rejected sign-in
     // Another full wait right away rarely helps (REG-030) - the next cycle retries.
     if (err instanceof TimeoutError) throw err;
+    if (isConnectionLost(err)) reconnect(); // REG-053: iPhone cut the device's storage
     await new Promise((resolve) => setTimeout(resolve, QUICK_RETRY_DELAY_MS));
     return fn();
   }
@@ -216,6 +217,7 @@ export async function syncNow({ shouldStop = () => false, onProgress = () => {},
     // No backend configured yet - nothing to do but leave the queue as-is.
     return { ok: false, reason: 'not-configured', pushed: 0 };
   }
+  if (db.hasFailed()) reconnect(); // REG-053
   const startedAt = performance.now();
   let pushed;
   try {

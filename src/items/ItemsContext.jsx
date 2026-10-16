@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useMemo } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { db, addConfigValue as dbAddConfigValue } from '../db/db.js';
+import { db, addConfigValue as dbAddConfigValue, withReconnect } from '../db/db.js';
 import { requestSync } from '../sync/syncEngine.js';
 import { CONFIG_SEED, TEAM_NAMES } from '../config/seed.js';
 import { useTeamMember } from '../identity/TeamMemberContext.jsx';
@@ -32,7 +32,7 @@ export function ItemsProvider({ children }) {
   const { member } = useTeamMember();
 
   useEffect(() => {
-    ensureConfigSeeded();
+    withReconnect(ensureConfigSeeded).catch(() => {});
   }, []);
 
   // null until the first read from the device finishes - so the list can
@@ -156,9 +156,9 @@ export function ItemsProvider({ children }) {
 
   // Returns { value, added } or null for empty input - see db.addConfigValue.
   async function addConfigValueAndQueue(listName, rawValue) {
-    const result = await dbAddConfigValue(listName, rawValue);
+    const result = await withReconnect(() => dbAddConfigValue(listName, rawValue));
     if (result?.added) {
-      await enqueue(null, 'addConfigOption', { list_name: listName, value: result.value });
+      await withReconnect(() => enqueue(null, 'addConfigOption', { list_name: listName, value: result.value }));
       requestSync();
     }
     return result;
@@ -169,12 +169,13 @@ export function ItemsProvider({ children }) {
       items: items || [],
       config,
       pendingCount: pendingCount || 0,
-      saveItem,
+      // REG-053: each one reconnects to the device's storage if iPhone cut it.
+      saveItem: (...args) => withReconnect(() => saveItem(...args)),
       itemsLoaded,
-      softDeleteItem,
-      restoreItem,
+      softDeleteItem: (...args) => withReconnect(() => softDeleteItem(...args)),
+      restoreItem: (...args) => withReconnect(() => restoreItem(...args)),
       addConfigValue: addConfigValueAndQueue,
-      queueImageUpload,
+      queueImageUpload: (...args) => withReconnect(() => queueImageUpload(...args)),
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [items, itemsLoaded, config, pendingCount, member],

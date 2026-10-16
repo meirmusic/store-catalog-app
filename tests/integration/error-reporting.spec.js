@@ -15,6 +15,11 @@ import {
 const MOCK_URL = 'https://mock-apps-script.test/exec';
 const CODE = /E-[A-Z2-9]{4}/;
 
+// A server that answers - for tests that read the error log: otherwise a
+// failed background sync is a second, unrelated entry (seen 16/10, once the
+// test machine stopped waiting long on the unreachable test address).
+const answeringServer = (page) => page.route(MOCK_URL, (route) => route.fulfill({ json: { items: [], config: {} } }));
+
 async function errorQueue(page) {
   return page.evaluate(() => JSON.parse(localStorage.getItem('gallery_error_log_queue') || '[]'));
 }
@@ -93,6 +98,7 @@ test('TC-ERR-002: queued errors go to the ErrorLog with the next sync, and leave
 });
 
 test('TC-ERR-003: the same failure repeating is one entry with a count, and keeps its code', async ({ page }) => {
+  await answeringServer(page);
   await reloadAndWait(page);
   await page.evaluate(() => { window.__testForceSaveError = true; });
   await openNewItemForm(page);
@@ -128,6 +134,7 @@ test('TC-ERR-005: if the whole app crashes, the crash screen shows the code and 
 });
 
 test('TC-ERR-006: a failed delete says so with code and details, and the item and its form stay', async ({ page }) => {
+  await answeringServer(page);
   await seedItems(page, [{ row_id: 'D1', name: 'לא יימחק' }]);
   await reloadAndWait(page);
   await page.click('.card');

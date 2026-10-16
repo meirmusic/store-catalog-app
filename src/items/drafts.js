@@ -1,4 +1,4 @@
-import { db } from '../db/db.js';
+import { db, withReconnect } from '../db/db.js';
 
 // SPEC.md 26.2: an unsaved form is kept as a draft on this device, so an
 // interruption (the app closed, the phone off, a crash) loses nothing.
@@ -7,14 +7,15 @@ import { db } from '../db/db.js';
 // another field.
 const ID = 'current';
 
+// withReconnect: REG-053 - iPhone may have cut the storage connection.
 export async function saveDraft(draft) {
-  await db.drafts.put({ ...draft, id: ID, saved_at: new Date().toISOString() });
+  await withReconnect(() => db.drafts.put({ ...draft, id: ID, saved_at: new Date().toISOString() }));
 }
 
 export async function getDraft() {
-  return (await db.drafts.get(ID)) || null;
+  return (await withReconnect(() => db.drafts.get(ID))) || null;
 }
 
 export async function clearDraft() {
-  await db.drafts.delete(ID);
+  await withReconnect(() => db.drafts.delete(ID));
 }

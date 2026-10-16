@@ -27,6 +27,46 @@ db.version(2).stores({
   drafts: 'id',
 });
 
+// REG-053 (iPhone, E-NFVL): iPhone cuts the app's connection to this
+// storage while the app sits in the background ("Connection to Indexed
+// Database server lost"), and the first attempt to reconnect can fail too.
+// The library then refuses every later read and write until the page is
+// refreshed - so "save" kept failing with the edits on screen. A lost
+// connection is now reopened: when the app comes back to the screen, and
+// once more around any action that hits it (a transaction that failed this
+// way wrote nothing, so doing it again is safe).
+export function isConnectionLost(error) {
+  const names = [error?.name, error?.inner?.name];
+  const text = `${error?.message || ''} ${error?.inner?.message || ''}`;
+  return names.some((n) => ['DatabaseClosedError', 'UnknownError', 'InvalidStateError'].includes(n))
+    || /Connection to Indexed Database server lost|connection is closing|database has been closed/i.test(text);
+}
+
+// Forgets the failed connection; the next use opens a new one.
+export function reconnect() {
+  db.close({ disableAutoOpen: false });
+}
+
+export async function withReconnect(action) {
+  try {
+    return await action();
+  } catch (error) {
+    if (!isConnectionLost(error)) throw error;
+    console.warn('storage connection lost - reconnecting', error);
+    reconnect();
+    return action();
+  }
+}
+
+if (typeof document !== 'undefined') {
+  const reconnectIfLost = () => {
+    if (document.visibilityState !== 'hidden' && db.hasFailed()) reconnect();
+  };
+  document.addEventListener('visibilitychange', reconnectIfLost);
+  window.addEventListener('pageshow', reconnectIfLost);
+  window.addEventListener('focus', reconnectIfLost);
+}
+
 // SPEC.md section 9: ask the browser not to evict this database on its own
 // when the device runs low on space - the catalog copy would just
 // re-download, but queued changes not yet sent would be lost.
