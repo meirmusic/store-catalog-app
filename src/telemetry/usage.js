@@ -226,10 +226,24 @@ function onTap(e) {
   }
 }
 
+// SPEC.md 30: time in the background isn't waiting - whatever was being
+// timed when the app went away is dropped, not counted as slow.
+let lastHiddenAt = -1;
+export function wasHiddenSince(time) {
+  return lastHiddenAt >= time;
+}
+function onVisibility() {
+  if (document.visibilityState !== 'hidden') return;
+  lastHiddenAt = performance.now();
+  started.clear();
+  openMeasured = true; // opening the app didn't finish while it was in view
+}
+
 let installed = false;
 export function installUsageTracking() {
   if (installed || typeof document === 'undefined') return;
   installed = true;
   document.addEventListener('pointerup', onTap, true);
+  document.addEventListener('visibilitychange', onVisibility);
   window.addEventListener('offline', () => countUsage('offline'));
 }

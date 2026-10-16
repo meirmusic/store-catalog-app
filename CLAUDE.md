@@ -38,6 +38,11 @@ These rules exist so nothing depends on what one session remembers.
 - [ ] **Every screen state** (loading, empty, failed, offline, slow): no flash of a wrong state.
       The observer tests (`tests/integration/screen-observer.spec.js`) and truth tables
       (`status-truth.spec.js`) are the pattern.
+- [ ] **Back from the background:** what happens if the app goes to the background (another app,
+      a locked screen, the camera) in the middle of this, and comes back minutes or hours later?
+      Anything it holds (a server request, the device's storage, a download, a timer, typed text)
+      must recover by itself, with no false error. Write a test that hides and shows the page
+      (`tests/integration/background-return.spec.js` is the pattern). SPEC.md 30.
 - [ ] **Phone first:** check at 390px width, in Hebrew and in English (the layout stays
       right-to-left in every language, by design - TEST_PLAN I18N-03).
 - [ ] **End of feature:** an end-to-end "observer" walk-through of the real flow before pushing.
@@ -58,6 +63,10 @@ These rules exist so nothing depends on what one session remembers.
   ("ניהול פריסות ← עריכה ← גרסה חדשה", not "פריסה חדשה"). Keep `apps-script/logic.js` in step
   and list the redeploy in `OPEN_ITEMS.md`.
 - **iPhone opens the share sheet only straight from the tap** - prepare files before the tap.
+- **iPhone cuts everything the app holds while it's in the background** - server requests
+  (REG-030), the device's storage (REG-053), a download in progress (REG-054). Fixing one is not
+  enough: every new thing that holds a connection must reconnect by itself. Tests run on a
+  computer, where this never happens - so it has to be simulated on purpose.
 - **Hebrew text with numbers** (e.g. 91×132) needs direction marks, or it shows reversed.
 - **Downloaded file names in English** - some browsers save a Hebrew name as "download".
 - Every artwork photo: 400 on cards, 1600 when enlarged and shared.

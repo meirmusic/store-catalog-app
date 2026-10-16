@@ -6,6 +6,7 @@ import { sendFeedback } from '../api/client.js';
 import { submitFeedback, FEEDBACK_MAX_LENGTH } from '../telemetry/feedback.js';
 import { isNetworkError, describeError } from '../errors/errorReporting.js';
 import Dialog from './Dialog.jsx';
+import { useBlocksAutoUpdate } from '../pwa/typingGuard.js';
 
 // SPEC.md 29.8: "💡 a suggestion or problem" - one free-text box. It goes
 // to the Feedback tab under the sender's name (said here, before sending),
@@ -13,6 +14,7 @@ import Dialog from './Dialog.jsx';
 // Without internet it's kept and sent later - never lost. dir="auto": an
 // English sentence keeps its "?" at its end inside the right-to-left layout.
 export default function FeedbackDialog({ onClose }) {
+  useBlocksAutoUpdate(); // SPEC.md 30: no automatic update (a reload) under what's being typed
   const { t } = useI18n();
   const { showToast, showErrorToast } = useToast();
   const { member } = useTeamMember();

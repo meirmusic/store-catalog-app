@@ -10,6 +10,7 @@ import { currentDevice } from '../settings/deviceInfo.js';
 import { useBackToClose } from '../hooks/useBackToClose.js';
 import { countUsage, startTimer, endTimer, cancelTimer, noteScreen } from '../telemetry/usage.js';
 import { useOpenClose } from '../telemetry/useOpenClose.js';
+import { useBlocksAutoUpdate } from '../pwa/typingGuard.js';
 
 // SPEC.md 28.1: one way to share - the designed card as a picture, with the
 // link to Yossi Bitton's Instagram. The only choice: include the price.
@@ -19,6 +20,7 @@ import { useOpenClose } from '../telemetry/useOpenClose.js';
 // Nothing is ever sent in the card's place (no caption, no photo link).
 export default function ShareDialog({ item, onClose }) {
   useBackToClose(onClose); // SPEC.md 26.1
+  useBlocksAutoUpdate(); // SPEC.md 30: no automatic update (a reload) while sharing
   const { t } = useI18n();
   const { showToast, showErrorToast } = useToast();
   const [priceChoice, setPriceChoice] = useDevicePreference('gallery_share_price', '1', ['1', '0']);
@@ -33,6 +35,32 @@ export default function ShareDialog({ item, onClose }) {
   const canShareSheet = typeof navigator !== 'undefined' && typeof navigator.share === 'function';
   const device = useMemo(() => currentDevice(), []);
   const isApple = device.device === 'iPhone' || device.device === 'iPad';
+
+  // SPEC.md 30: iPhone pauses the app in the background and cuts what it was
+  // doing - a photo download or card that failed meanwhile isn't a real
+  // failure. It's tried again (once) when the app is back, with no error.
+  const wentHidden = useRef(false);
+  const retryOnReturn = useRef(null);
+  useEffect(() => {
+    function onVisibility() {
+      if (document.visibilityState === 'hidden') {
+        wentHidden.current = true;
+      } else if (retryOnReturn.current) {
+        const retry = retryOnReturn.current;
+        retryOnReturn.current = null;
+        retry();
+      }
+    }
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => document.removeEventListener('visibilitychange', onVisibility);
+  }, []);
+  function retriedAfterBackground(retry) {
+    if (!wentHidden.current) return false;
+    wentHidden.current = false;
+    if (document.visibilityState === 'hidden') retryOnReturn.current = retry;
+    else retry();
+    return true;
+  }
 
   // SPEC.md 29.5: opened -> card ready -> sent / cancelled / failed, each
   // counted once per window. Closed without sending or failing = cancelled.
@@ -65,6 +93,7 @@ export default function ShareDialog({ item, onClose }) {
       .then((file) => !cancelled && setPhoto(file ? { state: 'ready', file } : { state: 'none', file: null }))
       .catch((error) => {
         if (cancelled) return;
+        if (retriedAfterBackground(() => setPhotoAttempt((a) => a + 1))) return;
         const notUpdated = isServerNotUpdated(error);
         showErrorToast(t(notUpdated ? 'errors.shareServerNotUpdated' : 'errors.sharePhotoFailed'), 'sharePhoto', error, { log: navigator.onLine });
         failed();
@@ -94,6 +123,7 @@ export default function ShareDialog({ item, onClose }) {
       })
       .catch((error) => {
         if (cancelled) return;
+        if (retriedAfterBackground(() => setCardAttempt((a) => a + 1))) return;
         showErrorToast(t('errors.cardFailed'), 'shareCard', error);
         failed();
         setCard({ state: 'failed', file: null });

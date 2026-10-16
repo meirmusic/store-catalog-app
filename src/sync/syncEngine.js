@@ -1,6 +1,6 @@
 import { db, isConnectionLost, reconnect } from '../db/db.js';
 import { getAll, upsertItem, softDeleteItem, addConfigOption, uploadImage, logErrors, logUsage, sendFeedback, AuthError, TimeoutError } from '../api/client.js';
-import { countUsage, timeUsage, flushUsage } from '../telemetry/usage.js';
+import { countUsage, timeUsage, flushUsage, wasHiddenSince } from '../telemetry/usage.js';
 import { flushFeedback } from '../telemetry/feedback.js';
 import { reportError, flushErrorLog } from '../errors/errorReporting.js';
 import { APPS_SCRIPT_URL } from '../api/config.js';
@@ -244,7 +244,7 @@ export async function syncNow({ shouldStop = () => false, onProgress = () => {},
   }
   recordPullOk(); // SPEC.md 22.6: kept on the device, survives closing the app
   countUsage('sync-ok');
-  timeUsage('sync', performance.now() - startedAt);
+  if (!wasHiddenSince(startedAt)) timeUsage('sync', performance.now() - startedAt); // SPEC.md 30
   // After the pull, never awaited: the error log must never hold up fresh
   // data (SPEC.md 18.6). None of these ever rejects. Usage goes out once a
   // day (finished days only), suggestions whenever they're waiting (29.8).
