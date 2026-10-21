@@ -11,10 +11,18 @@ These rules exist so nothing depends on what one session remembers.
 
 ## The process - every change
 
-1. **Spec first.** Write or update the section in `SPEC.md` (what the user sees, every state,
-   decisions marked ✅). Show Meir, and for anything visual send a mock.
-2. **Wait for approval.** Build only after Meir explicitly approves ("מאשר", "תכניס לאפיון ותממש").
-   Something he hasn't decided is a question, not an assumption.
+1. **Decisions first - Decision Driven Design** (the standard since 21/10/2026, SPEC.md 31,
+   `docs/ddd/README.md`). Sized to the change: a bug fix - one "החלטנו X, כי Y" line and a failing
+   test; a small change - a quick check against the personas and one illustrated decision; a
+   feature, design or architecture change - the full method: personas → debate → decision tree →
+   simulation **measured on the real app** → numbered decisions "החלטנו X, כי Y" → a 1200×600
+   rejected-vs-chosen illustration for every visible decision. Saved as `docs/ddd/NNN-name.md`.
+   A number that wasn't measured is labelled an estimate. Then the section in `SPEC.md` (what the
+   user sees, every state, decisions marked ✅).
+2. **Wait for approval.** Build only after Meir explicitly approves ("מאשר", "תכניס לאפיון ותממש"),
+   usually by decision numbers ("מאשר 1-5, בלי 6"). Something he hasn't decided is a question, not
+   an assumption. Add a row to `docs/ddd/LOG.md` (findings before build, decisions he changed, and
+   14 days later - bugs after release): that is how we judge whether the method works.
 3. **Build with tests** (checklist below).
 4. **Update `TEST_PLAN.md`** - the new TC-* rows, and a REG-* row for every bug found.
 5. **Run everything** - `npx playwright test` (all) and `npm run test:built` (the built app with
@@ -76,6 +84,7 @@ These rules exist so nothing depends on what one session remembers.
 | File | What |
 |---|---|
 | `SPEC.md` | The approved spec - the source of truth |
+| `docs/ddd/` | Decision documents (DDD), the personas, and the log that tests the method |
 | `TEST_PLAN.md` | Every test case (TC-*) and every bug found (REG-*) |
 | `OPEN_ITEMS.md` | What only Meir can do (Google, real phones, the team) |
 | `USABILITY_BENCHMARK.md` | Comparison with leading apps |
