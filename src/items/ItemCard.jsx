@@ -3,6 +3,7 @@ import { useI18n } from '../i18n/I18nContext.jsx';
 import ImageLightbox from './ImageLightbox.jsx';
 import { displayImage, sizedImageUrl, THUMB_IMAGE_WIDTH, FULL_IMAGE_WIDTH } from './imageUrl.js';
 import { formatWhen } from './formatWhen.js';
+import Icon from '../ui/Icon.jsx';
 
 export default function ItemCard({ item, onClick, onShare, showModified = false, highlight = false }) {
   const { t } = useI18n();
@@ -36,11 +37,11 @@ export default function ItemCard({ item, onClick, onShare, showModified = false,
               aria-label={t('actions.zoomImage')}
               title={t('actions.zoomImage')}
             >
-              🔍
+              <Icon name="zoom" size={18} />
             </button>
           </>
         ) : (
-          <span style={{ fontSize: '1.6rem' }}>🖼️</span>
+          <span className="no-photo"><Icon name="image" size={34} strokeWidth={1.2} /></span>
         )}
         {sold && <div className="ribbon">{t('filters.sold')}</div>}
       </div>
@@ -84,7 +85,7 @@ export default function ItemCard({ item, onClick, onShare, showModified = false,
                 aria-label={t('share.shareArtwork')}
                 title={t('share.shareArtwork')}
               >
-                ⤴
+                <Icon name="share" size={17} />
               </button>
             )}
           </span>

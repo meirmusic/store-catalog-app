@@ -2,10 +2,11 @@ import { useEffect, useRef, useState } from 'react';
 import { useI18n } from './i18n/I18nContext.jsx';
 import { LANGUAGES } from './i18n/translations';
 import { BackStep } from './hooks/useBackToClose.js';
+import Icon from './ui/Icon.jsx';
 
-// SPEC.md 19.10 / 21: ⚙ holds what's done rarely, in three groups -
+// SPEC.md 19.10 / 21 / 32.7: ⚙ holds what's done rarely, in three groups -
 // work, account, support. Closes on a click outside or Esc.
-export default function HeaderMenu({ onManageLists, onSwitchUser, onChangePassword, onSignOut, onSupportInfo, onReloadData, onFeedback }) {
+export default function HeaderMenu({ onManageLists, onExport, exportCount, onSwitchUser, onChangePassword, onSignOut, onSupportInfo, onReloadData, onFeedback }) {
   const { t, language, setLanguage } = useI18n();
   const [open, setOpen] = useState(false);
   const [languagesOpen, setLanguagesOpen] = useState(false);
@@ -50,12 +51,16 @@ export default function HeaderMenu({ onManageLists, onSwitchUser, onChangePasswo
         aria-haspopup="menu"
         aria-expanded={open}
       >
-        ⚙
+        <Icon name="gear" />
       </button>
       {open && <BackStep onClose={() => setOpen(false)} />}
       {open && (
         <div className="header-menu-list" role="menu">
           <button type="button" role="menuitem" onClick={() => choose(onManageLists)}>{t('config.manageLists')}</button>
+          {/* SPEC.md 32.7: rarely used, so in the menu - and it says it exports what's shown. */}
+          <button type="button" role="menuitem" className="menu-export" onClick={() => choose(onExport)} disabled={!exportCount}>
+            {t('menu.exportExcel').replace('{n}', exportCount ?? 0)}
+          </button>
           <button
             type="button"
             role="menuitem"
@@ -86,7 +91,7 @@ export default function HeaderMenu({ onManageLists, onSwitchUser, onChangePasswo
           <button type="button" role="menuitem" onClick={() => choose(onSignOut)}>{t('identity.signOutConfirm')}</button>
           <hr />
           {/* SPEC.md 29.8 */}
-          <button type="button" role="menuitem" onClick={() => choose(onFeedback)}>{t('feedback.menu')}</button>
+          <button type="button" role="menuitem" className="menu-with-icon" onClick={() => choose(onFeedback)}><Icon name="bulb" size={18} /> {t('feedback.menu')}</button>
           <button type="button" role="menuitem" onClick={() => choose(onSupportInfo)}>{t('support.title')}</button>
           <button type="button" role="menuitem" onClick={() => choose(onReloadData)}>{t('reload.menu')}</button>
         </div>

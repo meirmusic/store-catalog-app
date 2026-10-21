@@ -21,6 +21,9 @@ import ReloadDataDialog from './settings/ReloadDataDialog.jsx'
 import FeedbackDialog from './settings/FeedbackDialog.jsx'
 import GlobalErrorCatcher from './errors/GlobalErrorCatcher.jsx'
 import { markSignInShown } from './telemetry/usage.js'
+import Icon from './ui/Icon.jsx'
+import { useVisibleItems } from './items/visibleItems.js'
+import { downloadItemsCsv } from './items/exportCsv.js'
 import './items/items.css'
 
 function Header() {
@@ -32,6 +35,15 @@ function Header() {
   const [confirmingSignOut, setConfirmingSignOut] = useState(false)
   const [dialog, setDialog] = useState(null) // SPEC.md 21 / 29.8: 'password' | 'support' | 'reload' | 'feedback'
   const { showToast, showErrorToast } = useToast()
+  const visibleItems = useVisibleItems() // SPEC.md 32.7: what the catalog shows now
+
+  function exportVisible() {
+    try {
+      downloadItemsCsv(visibleItems || [], t)
+    } catch (err) {
+      showErrorToast(t('errors.exportFailed'), 'export', err)
+    }
+  }
 
   async function explainSyncProblem() {
     try {
@@ -90,16 +102,18 @@ function Header() {
             title={t('sync.problemDetails')}
             aria-label={t('sync.problemDetails')}
           >
-            ⏳ {pendingCount} {t('sync.pending')}
+            <Icon name="clock" size={16} /> {pendingCount} {t('sync.pending')}
           </button>
         ) : (
           <span className="chip">
-            ⏳ {pendingCount} {t('sync.pending')}
+            <Icon name="clock" size={16} /> {pendingCount} {t('sync.pending')}
           </span>
         ))}
-        <button className={`icon-btn${syncing ? ' spin' : ''}`} data-usage="sync" onClick={refresh} title={t('actions.refresh')}>⟳</button>
+        <button className={`icon-btn${syncing ? ' spin' : ''}`} data-usage="sync" onClick={refresh} title={t('actions.refresh')} aria-label={t('actions.refresh')}><Icon name="sync" /></button>
         <HeaderMenu
           onManageLists={() => setManagingLists(true)}
+          onExport={exportVisible}
+          exportCount={visibleItems ? visibleItems.length : 0}
           onSwitchUser={clearMember}
           onChangePassword={() => setDialog('password')}
           onSignOut={() => setConfirmingSignOut(true)}
@@ -109,7 +123,7 @@ function Header() {
         />
         {member && (
           <span className="chip user" onClick={clearMember} title={t('actions.switchUser')}>
-            👤 {member}
+            <Icon name="user" size={17} /> {member}
           </span>
         )}
       </div>

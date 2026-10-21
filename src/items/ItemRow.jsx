@@ -3,6 +3,7 @@ import { useI18n } from '../i18n/I18nContext.jsx';
 import ImageLightbox from './ImageLightbox.jsx';
 import { displayImage, sizedImageUrl, FULL_IMAGE_WIDTH } from './imageUrl.js';
 import { formatWhen } from './formatWhen.js';
+import Icon from '../ui/Icon.jsx';
 
 // SPEC.md 19.6: the list view - one compact row per artwork, for scanning
 // many quickly. Tapping it opens the form, like a card; tapping the photo
@@ -32,10 +33,10 @@ export default function ItemRow({ item, onClick, onShare, showModified = false, 
           title={t('actions.zoomImage')}
         >
           <img src={isPending ? photo : sizedImageUrl(photo, ROW_IMAGE_WIDTH)} alt="" loading="lazy" referrerPolicy="no-referrer" />
-          <span className="row-zoom-mark" aria-hidden="true">🔍</span>
+          <span className="row-zoom-mark" aria-hidden="true"><Icon name="zoom" size={12} strokeWidth={2} /></span>
         </button>
       ) : (
-        <div className="row-thumb"><span>🖼️</span></div>
+        <div className="row-thumb"><span className="no-photo"><Icon name="image" size={24} strokeWidth={1.2} /></span></div>
       )}
       {zoomed && (
         <ImageLightbox
@@ -72,7 +73,7 @@ export default function ItemRow({ item, onClick, onShare, showModified = false, 
             aria-label={t('share.shareArtwork')}
             title={t('share.shareArtwork')}
           >
-            ⤴
+            <Icon name="share" size={17} />
           </button>
         )}
       </div>

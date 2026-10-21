@@ -17,6 +17,9 @@
     "test:built": "playwright test -c playwright.built.config.js"
   },
   "dependencies": {
+    "@fontsource/assistant": "^5.2.8",
+    "@fontsource/cormorant-garamond": "^5.2.11",
+    "@fontsource/frank-ruhl-libre": "^5.2.8",
     "dexie": "^4.4.5",
     "dexie-react-hooks": "^4.4.0",
     "react": "^19.2.8",

@@ -520,3 +520,54 @@ button.row-thumb:focus-visible { outline: 2px solid var(--accent); outline-offse
 .card.just-saved, .item-row.just-saved { outline: 2px solid var(--ink); outline-offset: 2px; animation: just-saved 2.6s ease-out forwards; }
 @keyframes just-saved { 0%, 55% { outline-color: var(--ink); } 100% { outline-color: transparent; } }
 @media (prefers-reduced-motion: reduce) { .card.just-saved, .item-row.just-saved { animation: none; } }
+
+/* =====================================================================
+   SPEC.md 32 - design package B (approved 21/10/2026, decisions 1-10,
+   docs/ddd/001-design-package-b.md). Kept together here, last, so it's
+   clear what the package changed.
+   ===================================================================== */
+
+/* 32.1 line icons: centered in their buttons, in the button's own color. */
+.icon-btn, .share-icon-btn, .thumb-zoom, .view-toggle button { display: inline-flex; align-items: center; justify-content: center; }
+.icon { flex: 0 0 auto; display: block; }
+.chip { display: inline-flex; align-items: center; gap: 6px; }
+.no-photo { color: var(--ink-dim); opacity: .6; display: inline-flex; }
+.row-zoom-mark { display: inline-flex; filter: none; color: #fff; }
+.menu-with-icon { display: flex; align-items: center; gap: 8px; }
+.title-with-icon { display: inline-flex; align-items: center; gap: 8px; }
+
+/* 32.3 corners: surfaces almost square, like the catalog; controls slightly
+   rounded so a finger still sees a button; round only on the photo (zoom)
+   and the small share button. */
+.card, .item-row, .thumb, .row-thumb, .stat, .value-group, .filters-panel, .modal, .header-menu-list,
+.draft-banner, .share-preview-card, .share-preview, .lightbox-img, .toast, .reload-blocker { border-radius: 2px; }
+.btn, .chip, .toggle-pill, .badge, .view-toggle, .search-box input, .sort-select select,
+.field input[type=text], .field input[type=number], .field textarea, .field select, .select-with-add .add-btn,
+.inline-add input, .avail-toggle button, .confirm-modal .confirm-actions button, .row-sold, .icon-btn,
+header.top .icon-btn, .header-menu-list button, .toast-action, .error-copy, .feedback-text, .danger-btn,
+.share-lang button, .share-format button { border-radius: 4px; }
+.thumb-zoom, .share-icon-btn, .row-zoom-mark, .fab-new { border-radius: 50%; }
+
+/* 32.4-32.5 type: the artwork's name in the catalog's serif; the price in
+   Cormorant, larger, with even-height figures. */
+.card .name, .item-row .name { font-family: "Frank Ruhl Libre", "Times New Roman", serif; font-weight: 700; }
+.card .price, .item-row .price { font-family: "Cormorant Garamond", "Times New Roman", serif; font-weight: 500; font-size: 1.2rem; font-variant-numeric: lining-nums tabular-nums; }
+
+/* 32.8 "+ new artwork": on a phone a round button fixed in the corner (the
+   toolbar row goes); light in dark mode; the list ends with room for it. */
+.fab-new { display: none; }
+@media (max-width: 600px) {
+  .toolbar .new-item-btn, .toolbar .toolbar-spacer { display: none; }
+  .fab-new {
+    display: flex; align-items: center; justify-content: center;
+    position: fixed; bottom: calc(20px + env(safe-area-inset-bottom)); left: 20px; z-index: 30;
+    width: 56px; height: 56px; border: none; cursor: pointer;
+    background: var(--accent); color: var(--wall); box-shadow: 0 6px 18px rgba(0, 0, 0, .35);
+  }
+  .item-list-end { height: 84px; }
+
+  /* 32.9 type and condition stay off the small card on a phone (on a
+     computer, in the form and in the filters they stay). */
+  .grid .card .badges { display: none; }
+}
+.header-menu-list button:disabled { opacity: .5; cursor: default; }

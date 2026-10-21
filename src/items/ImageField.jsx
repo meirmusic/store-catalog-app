@@ -3,6 +3,7 @@ import { useI18n } from '../i18n/I18nContext.jsx';
 import ImageLightbox from './ImageLightbox.jsx';
 import { sizedImageUrl, THUMB_IMAGE_WIDTH, FULL_IMAGE_WIDTH } from './imageUrl.js';
 import { reportError } from '../errors/errorReporting.js';
+import Icon from '../ui/Icon.jsx';
 import ErrorDetails from '../errors/ErrorDetails.jsx';
 
 // A file input's `capture` attribute is what tells mobile browsers to open
@@ -97,7 +98,7 @@ export default function ImageField({ value, onChange, pending, onBusyChange }) {
         {value ? (
           <img src={isLocal ? value : sizedImageUrl(value, THUMB_IMAGE_WIDTH)} alt="" referrerPolicy="no-referrer" />
         ) : (
-          <span style={{ fontSize: '1.4rem' }}>🖼️</span>
+          <span className="no-photo"><Icon name="image" size={28} strokeWidth={1.2} /></span>
         )}
         {processing && <div className="image-processing" role="status">{t('image.processing')}</div>}
         {pending && !processing && <span className="pending-badge">{t('image.pendingUpload')}</span>}

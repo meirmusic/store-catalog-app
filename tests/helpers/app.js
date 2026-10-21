@@ -108,8 +108,9 @@ export async function clearAllData(page) {
 
 // Fills and submits the real add/edit item form - exercises the actual
 // user-facing save path (unlike seedItems).
+// SPEC.md 32.8: in the toolbar on a computer, a round button in the corner on a phone.
 export async function openNewItemForm(page) {
-  await page.click('button:has-text("פריט חדש")');
+  await page.locator('button[data-usage="new-item"]:visible').click();
   await page.waitForSelector('#item-overlay');
 }
 
@@ -167,6 +168,12 @@ export async function switchLanguage(page, targetLabel) {
 export async function cancelItemForm(page) {
   await page.click('#item-overlay button:has-text("ביטול")');
   await page.waitForSelector('#item-overlay', { state: 'detached' });
+}
+
+// SPEC.md 32.7: "export to Excel" is in the ⚙ menu and exports what's shown.
+export async function exportFromMenu(page) {
+  await page.click('.header-menu > button');
+  await page.click('.header-menu-list .menu-export');
 }
 
 // SPEC.md 19.10: "manage lists" and "sign out" live in the ⚙ menu.

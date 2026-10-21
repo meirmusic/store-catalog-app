@@ -29,14 +29,14 @@ test('TC-HDR-001: refresh, ⚙ and the team member\'s name are at least 44×44 -
 
 test('TC-FORM-001: the name is marked as required before any save attempt', async ({ page }) => {
   await open(page);
-  await page.click('button:has-text("פריט חדש")');
+  await page.locator('button[data-usage="new-item"]:visible').click();
   await expect(page.locator('label[for="item-name"] .required-mark')).toBeVisible();
   await expect(page.locator('#item-name')).toHaveAttribute('aria-required', 'true');
 });
 
 test('TC-FORM-002: a new item starts with the cursor in the name; editing an artwork does not', async ({ page }) => {
   await open(page);
-  await page.click('button:has-text("פריט חדש")');
+  await page.locator('button[data-usage="new-item"]:visible').click();
   await expect(page.locator('#item-name')).toBeFocused();
   await page.click('#item-overlay button:has-text("ביטול")');
   await page.click('.card .name');
@@ -46,7 +46,7 @@ test('TC-FORM-002: a new item starts with the cursor in the name; editing an art
 
 test('TC-FORM-003: no name - the message is right under the name, the field is marked, the cursor is in it; typing clears it', async ({ page }) => {
   await open(page);
-  await page.click('button:has-text("פריט חדש")');
+  await page.locator('button[data-usage="new-item"]:visible').click();
   await page.locator('#item-overlay textarea').focus();
   await page.click('#item-overlay button:has-text("שמירה")');
   const field = page.locator('.field', { has: page.locator('#item-name') });
@@ -83,7 +83,7 @@ test('TC-SAVED-001: after saving, the artwork\'s card is highlighted for a momen
 test('TC-SAVED-002: a new artwork far down a long list - the list scrolls to it and highlights it', async ({ page }) => {
   const many = Array.from({ length: 40 }, (_, i) => ({ row_id: 'M' + i, name: `א${String(i).padStart(2, '0')}`, availability_status: 'available' }));
   await open(page, many);
-  await page.click('button:has-text("פריט חדש")');
+  await page.locator('button[data-usage="new-item"]:visible').click();
   await page.locator('#item-name').fill('תתת אחרונה'); // sorts last
   await page.click('#item-overlay button:has-text("שמירה")');
   const card = page.locator('.card', { hasText: 'תתת אחרונה' });
@@ -94,7 +94,7 @@ test('TC-SAVED-002: a new artwork far down a long list - the list scrolls to it 
 test('TC-SAVED-003: saved but hidden by the current search - the message says so', async ({ page }) => {
   await open(page);
   await page.fill('.toolbar input', 'אלף');
-  await page.click('button:has-text("פריט חדש")');
+  await page.locator('button[data-usage="new-item"]:visible').click();
   await page.locator('#item-name').fill('בית');
   await page.click('#item-overlay button:has-text("שמירה")');
   await expect(page.locator('.toast')).toContainText('לא מוצג בגלל החיפוש או הסינון הנוכחי');

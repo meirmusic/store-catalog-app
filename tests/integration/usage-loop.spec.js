@@ -276,7 +276,8 @@ test('TC-FB-001: "💡 suggestion or problem" - sent under the sender\'s name, w
   await page.click('#item-overlay button:has-text("ביטול")');
   await openMenuItem(page, 'הצעה או בעיה');
   const dialog = page.locator('.feedback-dialog');
-  await expect(dialog.locator('h2')).toHaveText('💡 הצעה או בעיה');
+  await expect(dialog.locator('h2')).toHaveText('הצעה או בעיה'); // the 💡 is a drawn icon now (SPEC.md 32.1)
+  await expect(dialog.locator('h2 svg.icon-bulb')).toHaveCount(1);
   await expect(dialog).toContainText('מה היה קשה / מה חסר?');
   await expect(dialog).toContainText('ההצעה תישלח בשמך (שרה)');
   await expect(dialog.locator('button.primary')).toBeDisabled();

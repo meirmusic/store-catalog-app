@@ -75,7 +75,7 @@ test('TC-SRCH-007 (documents existing UX gap): a new item outside the active fil
   await page.selectOption('.filter-group:has-text("מיקום") select', { label: 'חיים' }); // only A3 visible
   await expect(page.locator('.card')).toHaveCount(1);
 
-  await page.click('button:has-text("פריט חדש")');
+  await page.locator('button[data-usage="new-item"]:visible').click();
   await page.waitForSelector('#item-overlay');
   await page.fill('#item-overlay input[type=text] >> nth=0', 'פריט מחוץ לפילטר');
   const selects = await page.$$('#item-overlay select');

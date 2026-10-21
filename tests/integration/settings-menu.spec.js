@@ -39,7 +39,7 @@ test('TC-SET-001: the menu has three groups in order, and the language flag is g
   await expect(page.locator('header .chip[aria-expanded]')).toHaveCount(0); // the old flag button
   await page.click('.header-menu > button');
   await expect(page.locator('.header-menu-list > button')).toHaveText([
-    'ניהול רשימות', /^שפה: .*עברית/, 'החלפת משתמש/ת', 'שינוי סיסמת המשרד', 'התנתקות', '💡 הצעה או בעיה', 'מידע ותמיכה', 'טעינה מחדש של הנתונים', // SPEC.md 29.8
+    'ניהול רשימות', /^ייצוא לאקסל \(\d+ היצירות שמוצגות\)$/, /^שפה: .*עברית/, 'החלפת משתמש/ת', 'שינוי סיסמת המשרד', 'התנתקות', 'הצעה או בעיה', 'מידע ותמיכה', 'טעינה מחדש של הנתונים', // SPEC.md 29.8, 32.7
   ]);
   await expect(page.locator('.header-menu-list hr')).toHaveCount(2);
 });

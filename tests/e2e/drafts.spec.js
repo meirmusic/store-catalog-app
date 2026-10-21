@@ -74,7 +74,7 @@ test('TC-DRAFT-003: closing the form the normal way leaves no draft - save, "lea
 });
 
 test('TC-DRAFT-004: a new item with a photo - restored with its name and photo', async ({ page }) => {
-  await page.click('button:has-text("פריט חדש")');
+  await page.locator('button[data-usage="new-item"]:visible').click();
   await page.locator('#item-overlay input[type=text]').first().fill('יצירה חדשה');
   await page.locator('#item-overlay input[type=file]').first().setInputFiles(PHOTO);
   await page.waitForSelector('#item-overlay img[src^="data:"]');

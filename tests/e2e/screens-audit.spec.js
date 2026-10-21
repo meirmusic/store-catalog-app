@@ -124,7 +124,7 @@ const SCREENS = [
   ['search with no results', async (page) => page.fill('.search-box input', 'אין כזה'), async (page) => page.fill('.search-box input', '')],
   ['⚙ menu', async (page) => page.click('.header-menu > button'), async (page) => page.keyboard.press('Escape')],
   ['artwork form', async (page) => photoCard(page).locator('.name').click(), async (page) => page.click('#item-overlay .modal-actions .left-actions button:first-child')],
-  ['new artwork - a field error', async (page) => { await page.click('.toolbar .btn.primary'); await page.click('#item-overlay button[type=submit]'); }, async (page) => page.click('#item-overlay .modal-actions .left-actions button:first-child')],
+  ['new artwork - a field error', async (page) => { await page.locator('button[data-usage="new-item"]:visible').click(); await page.click('#item-overlay button[type=submit]'); }, async (page) => page.click('#item-overlay .modal-actions .left-actions button:first-child')],
   ['leave without saving?', async (page) => { await photoCard(page).locator('.name').click(); await page.fill('#item-overlay textarea', 'x'); await page.click('#item-overlay .modal-actions .left-actions button:first-child'); },
     async (page) => { await page.click('.discard-confirm .danger'); }],
   ['delete?', async (page) => { await photoCard(page).locator('.name').click(); await page.click('#item-overlay .danger-btn'); },
@@ -132,10 +132,10 @@ const SCREENS = [
   ['share', async (page) => { await photoCard(page).locator('.share-icon-btn').click(); await page.locator('.share-dialog .share-card-img').waitFor(); },
     async (page) => page.keyboard.press('Escape')],
   ['enlarged photo', async (page) => photoCard(page).locator('.thumb-zoom').click(), async (page) => page.click('.lightbox-close')],
-  ['suggestion or problem', async (page) => { await page.click('.header-menu > button'); await page.locator('.header-menu-list button').nth(5).click(); }, async (page) => page.keyboard.press('Escape')],
-  ['info & support', async (page) => { await page.click('.header-menu > button'); await page.locator('.header-menu-list button').nth(6).click(); }, async (page) => page.keyboard.press('Escape')],
-  ['reload data', async (page) => { await page.click('.header-menu > button'); await page.locator('.header-menu-list button').nth(7).click(); }, async (page) => page.keyboard.press('Escape')],
-  ['change password', async (page) => { await page.click('.header-menu > button'); await page.locator('.header-menu-list button').nth(3).click(); }, async (page) => page.keyboard.press('Escape')],
+  ['suggestion or problem', async (page) => { await page.click('.header-menu > button'); await page.locator('.header-menu-list button').nth(6).click(); }, async (page) => page.keyboard.press('Escape')],
+  ['info & support', async (page) => { await page.click('.header-menu > button'); await page.locator('.header-menu-list button').nth(7).click(); }, async (page) => page.keyboard.press('Escape')],
+  ['reload data', async (page) => { await page.click('.header-menu > button'); await page.locator('.header-menu-list button').nth(8).click(); }, async (page) => page.keyboard.press('Escape')],
+  ['change password', async (page) => { await page.click('.header-menu > button'); await page.locator('.header-menu-list button').nth(4).click(); }, async (page) => page.keyboard.press('Escape')],
   ['manage lists', async (page) => { await page.click('.header-menu > button'); await page.locator('.header-menu-list button').nth(0).click(); }, async (page) => page.keyboard.press('Escape')],
 ];
 

@@ -127,7 +127,7 @@ test('TC-BRAND-007: the dialogs opened from ⚙ have readable text - not the bla
   const labels = await (async () => { await page.click('.header-menu > button'); const l = await page.locator('.header-menu-list > button').allTextContents(); await page.keyboard.press('Escape'); return l; })();
   let opened = 0;
   for (const [i, label] of labels.entries()) {
-    if (/שפה|החלפת/.test(label)) continue;
+    if (/שפה|החלפת|ייצוא/.test(label)) continue; // not windows: a sub-list, a screen, a download (SPEC.md 32.7)
     await page.click('.header-menu > button');
     await page.locator('.header-menu-list > button').nth(i).click();
     const title = page.locator('.overlay h2').first();

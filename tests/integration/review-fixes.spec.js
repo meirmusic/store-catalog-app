@@ -195,7 +195,7 @@ test('REG-035e: the app version is shown at the bottom of the screen and inside 
   await reloadAndWait(page);
   await expect(page.locator('.app-version')).toHaveText('גרסה dev');
   await page.evaluate(() => { window.__testForceSaveError = true; });
-  await page.click('button:has-text("פריט חדש")');
+  await page.locator('button[data-usage="new-item"]:visible').click();
   await page.fill('#item-overlay input[type=text] >> nth=0', 'א');
   await page.click('#item-overlay button[type=submit]');
   await expect(page.locator('.toast .error-version')).toHaveText('גרסה dev');

@@ -8,6 +8,7 @@ import {
   seedItems,
   reloadApp,
   openFilters,
+  exportFromMenu,
 } from '../helpers/app.js';
 
 test.beforeEach(async ({ page }) => {
@@ -29,7 +30,7 @@ test('TC-LST-010: export downloads a CSV of only the currently filtered items', 
 
   const [download] = await Promise.all([
     page.waitForEvent('download'),
-    page.click('button:has-text("ייצוא לאקסל")'),
+    exportFromMenu(page), // SPEC.md 32.7
   ]);
 
   expect(download.suggestedFilename()).toMatch(/\.csv$/);
@@ -43,7 +44,7 @@ test('TC-LST-010: export downloads a CSV of only the currently filtered items', 
 async function exportCsv(page) {
   const [download] = await Promise.all([
     page.waitForEvent('download'),
-    page.click('button:has-text("ייצוא לאקסל")'),
+    exportFromMenu(page), // SPEC.md 32.7
   ]);
   return fs.readFileSync(await download.path(), 'utf-8').replace(/^﻿/, '');
 }

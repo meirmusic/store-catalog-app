@@ -10,9 +10,10 @@ import { inventoryValue, formatMoney } from './inventoryValue.js';
 import ItemForm from './ItemForm.jsx';
 import DeleteConfirm from './DeleteConfirm.jsx';
 import ShareDialog from './ShareDialog.jsx';
-import { downloadItemsCsv } from './exportCsv.js';
+import { setVisibleItems } from './visibleItems.js';
 import { getDraft, clearDraft } from './drafts.js';
 import { formatWhen } from './formatWhen.js';
+import Icon from '../ui/Icon.jsx';
 import { countUsage, startTimer, markCatalogShown, noteScreen } from '../telemetry/usage.js';
 
 const UNDO_WINDOW_MS = 8000;
@@ -39,14 +40,6 @@ export default function ItemList() {
   const { t } = useI18n();
   const { items, itemsLoaded, config, softDeleteItem, restoreItem } = useItems();
   const { showToast, showErrorToast } = useToast();
-
-  function exportList() {
-    try {
-      downloadItemsCsv(filtered, t);
-    } catch (err) {
-      showErrorToast(t('errors.exportFailed'), 'export', err);
-    }
-  }
 
   const [search, setSearch] = useState('');
   const [availability, setAvailability] = useState('all');
@@ -140,6 +133,12 @@ export default function ItemList() {
     return sortItems(list, sortBy); // the export follows the same order
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [items, search, availability, locationFilter, typeFilter, statusFilter, missingSerial, missingSku, missingPrice, sortBy]);
+
+  // SPEC.md 32.7: what "export to Excel" in the ⚙ menu exports.
+  useEffect(() => {
+    setVisibleItems(itemsLoaded ? filtered : null);
+  }, [filtered, itemsLoaded]);
+  useEffect(() => () => setVisibleItems(null), []);
 
   // SPEC.md 29.3: the catalog is on screen - how long opening the app took.
   useEffect(() => {
@@ -295,12 +294,11 @@ export default function ItemList() {
             </select>
           </label>
           <div className="view-toggle" role="group" aria-label={t('view.label')} data-usage="view">
-            <button type="button" className={view === 'cards' ? 'on' : ''} onClick={() => setView('cards')} title={t('view.cards')} aria-label={t('view.cards')} aria-pressed={view === 'cards'}>▦</button>
-            <button type="button" className={view === 'list' ? 'on' : ''} onClick={() => setView('list')} title={t('view.list')} aria-label={t('view.list')} aria-pressed={view === 'list'}>☰</button>
+            <button type="button" className={view === 'cards' ? 'on' : ''} onClick={() => setView('cards')} title={t('view.cards')} aria-label={t('view.cards')} aria-pressed={view === 'cards'}><Icon name="grid" /></button>
+            <button type="button" className={view === 'list' ? 'on' : ''} onClick={() => setView('list')} title={t('view.list')} aria-label={t('view.list')} aria-pressed={view === 'list'}><Icon name="list" /></button>
           </div>
           <span className="toolbar-spacer" />
-          <button className="btn primary" data-usage="new-item" onClick={() => openForm(null)}>{t('actions.newItem')}</button>
-          <button className="btn" onClick={exportList}>{t('actions.exportExcel')}</button>
+          <button className="btn primary new-item-btn" data-usage="new-item" onClick={() => openForm(null)}>{t('actions.newItem')}</button>
         </div>
         {filtersOpen && (
           <div className="filters-panel">
@@ -387,6 +385,19 @@ export default function ItemList() {
           </div>
         )
       )}
+
+      {/* SPEC.md 32.8: on a phone, "+ new artwork" is a round button in the corner. */}
+      <div className="item-list-end" aria-hidden="true" />
+      <button
+        type="button"
+        className="fab-new"
+        data-usage="new-item"
+        onClick={() => openForm(null)}
+        aria-label={t('actions.newItem').replace('+ ', '')}
+        title={t('actions.newItem').replace('+ ', '')}
+      >
+        <Icon name="plus" size={26} strokeWidth={1.8} />
+      </button>
 
       {editingItem !== undefined && (
         <ItemForm

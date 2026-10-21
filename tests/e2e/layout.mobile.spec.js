@@ -27,7 +27,7 @@ test('TC-MOBILE-001 (REG-001 regression): the search box takes its own row, neve
 });
 
 test('TC-MOBILE-003: the add/edit item modal fills the screen (no rounded floating card on narrow viewports)', async ({ page }) => {
-  await page.click('button:has-text("פריט חדש")');
+  await page.locator('button[data-usage="new-item"]:visible').click(); // SPEC.md 32.8: the round + on a phone
   await page.waitForSelector('#item-overlay');
   const modal = await page.locator('#item-overlay .modal').boundingBox();
   const viewport = page.viewportSize();

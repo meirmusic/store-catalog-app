@@ -2,7 +2,7 @@
 // TEST_PLAN.md TC-EN-*.
 import { test, expect } from '@playwright/test';
 import fs from 'node:fs';
-import { pickIdentity, clearAllData, reloadAndWait, getItems } from '../helpers/app.js';
+import { pickIdentity, clearAllData, reloadAndWait, getItems, exportFromMenu } from '../helpers/app.js';
 
 const MOCK_URL = 'https://mock-apps-script.test/exec';
 const ART = { row_id: 'E1', name: 'זריחה בגליל', name_en: null, size: '91X132', type: 'מקורי', price: 2500, availability_status: 'available' };
@@ -84,7 +84,7 @@ test('TC-EN-005: duplicating does not copy the English name; a draft keeps it', 
 test('TC-EN-006: the Excel export has an "English name" column', async ({ page }) => {
   await start(page, { items: [{ ...ART, name_en: 'Sunrise' }] });
   const download = page.waitForEvent('download');
-  await page.click('button:has-text("ייצוא לאקסל")');
+  await exportFromMenu(page); // SPEC.md 32.7
   const csv = fs.readFileSync(await (await download).path(), 'utf8');
   expect(csv).toContain('שם היצירה באנגלית');
   expect(csv).toContain('Sunrise');

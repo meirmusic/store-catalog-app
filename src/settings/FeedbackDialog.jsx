@@ -6,6 +6,7 @@ import { sendFeedback } from '../api/client.js';
 import { submitFeedback, FEEDBACK_MAX_LENGTH } from '../telemetry/feedback.js';
 import { isNetworkError, describeError } from '../errors/errorReporting.js';
 import Dialog from './Dialog.jsx';
+import Icon from '../ui/Icon.jsx';
 import { useBlocksAutoUpdate } from '../pwa/typingGuard.js';
 
 // SPEC.md 29.8: "💡 a suggestion or problem" - one free-text box. It goes
@@ -41,7 +42,7 @@ export default function FeedbackDialog({ onClose }) {
 
   return (
     <Dialog className="feedback-dialog" labelledBy="feedback-title" onClose={onClose}>
-      <h2 className="serif" id="feedback-title">{t('feedback.title')}</h2>
+      <h2 className="serif title-with-icon" id="feedback-title"><Icon name="bulb" size={22} /> {t('feedback.title')}</h2>
       <label className="feedback-label" htmlFor="feedback-text" dir="auto">{t('feedback.question')}</label>
       <textarea
         id="feedback-text"

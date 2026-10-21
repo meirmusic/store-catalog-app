@@ -62,7 +62,7 @@ test('TC-DBLOST-001: the storage connection was lost in the background - "save" 
 
 test('TC-DBLOST-002: after a lost connection - a new artwork, a delete and its undo all work; and sync sends them', async ({ page }) => {
   await loseConnection(page);
-  await page.click('button:has-text("פריט חדש")');
+  await page.locator('button[data-usage="new-item"]:visible').click();
   await page.fill('#item-overlay input[type=text] >> nth=0', 'חדשה אחרי ניתוק');
   await page.click('#item-overlay button[type=submit]');
   await expect(page.locator('.card', { hasText: 'חדשה אחרי ניתוק' })).toBeVisible();
