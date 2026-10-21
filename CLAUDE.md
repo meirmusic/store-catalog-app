@@ -13,8 +13,9 @@ These rules exist so nothing depends on what one session remembers.
 
 1. **Decisions first - Decision Driven Design** (the standard since 21/10/2026, SPEC.md 31,
    `docs/ddd/README.md`). Sized to the change: a bug fix - one "החלטנו X, כי Y" line and a failing
-   test; a small change - a quick check against the personas and one illustrated decision; a
-   feature, design or architecture change - the full method: personas → debate → decision tree →
+   test; a small change - a quick check against the relevant experts and one illustrated decision; a
+   feature, design or architecture change - the full method: the expert panel (docs/ddd/README.md;
+   the real people - Sarah, Dov, Yossi, a client - are simulation scenarios) → debate → decision tree →
    simulation **measured on the real app** → numbered decisions "החלטנו X, כי Y" → a 1200×600
    rejected-vs-chosen illustration for every visible decision. Saved as `docs/ddd/NNN-name.md`.
    A number that wasn't measured is labelled an estimate. Then the section in `SPEC.md` (what the
