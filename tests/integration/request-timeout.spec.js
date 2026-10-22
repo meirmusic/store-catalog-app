@@ -75,7 +75,7 @@ test('REG-030b: if a cycle is stuck anyway (the time limit did not fire), ⟳ st
   const seen = await mockServer(page, (b) => hang && b.action === 'upsert');
   await reloadAndWait(page);
   // Time limit effectively off (as if the browser froze its own clock too);
-  // "stuck" after 1s without progress, instead of 2.5 minutes.
+  // "stuck" after 1s without progress, instead of 5 minutes.
   await page.evaluate(() => { window.__testApiTimeoutMs = 10 * 60 * 1000; window.__testStuckSyncMs = 1000; });
 
   await openNewItemForm(page);
