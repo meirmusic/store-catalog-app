@@ -47,7 +47,7 @@ function makeSheet(rows, maxColumns) {
   return sheet;
 }
 
-function google({ itemsHeader = OLD_HEADER, maxColumns, files = {}, itemRows, driveFails = false } = {}) {
+function google({ itemsHeader = OLD_HEADER, maxColumns, files = {}, fileFolders = {}, itemRows, driveFails = false } = {}) {
   const firstRow = ['R1', '112345', 'SKU-1', 'זריחה', '91X132', 'מקורי', 'גלריה', '', 'available', 2500, '', 'https://drive.google.com/thumbnail?id=FILE1&sz=w1000', false, 'דב', 'then'];
   const items = makeSheet([itemsHeader, ...(itemRows || [firstRow])], maxColumns);
   const config = makeSheet([['list_name', 'value'], ['type', 'מקורי']]);
@@ -56,6 +56,17 @@ function google({ itemsHeader = OLD_HEADER, maxColumns, files = {}, itemRows, dr
   const cache = {};
   const mails = [];
   const triggers = [];
+  const trashed = [];
+  let nextFile = 0;
+  const photoFolder = {
+    getName: () => 'Gallery Catalog Images',
+    getId: () => 'PHOTOS',
+    createFile: (blob) => {
+      const id = `NEWFILE${++nextFile}`;
+      files[id] = blob.bytes;
+      return { getId: () => id, setSharing() {} };
+    },
+  };
   const spreadsheet = {
     getSheetByName: (n) => sheets[n] || null,
     insertSheet: (n) => { sheets[n] = makeSheet([], 30); return sheets[n]; },
@@ -77,13 +88,20 @@ function google({ itemsHeader = OLD_HEADER, maxColumns, files = {}, itemRows, dr
       formatDate: (date, tz) => date.toLocaleDateString('en-CA', { timeZone: tz }),
     },
     DriveApp: {
+      Access: { ANYONE_WITH_LINK: 'anyone' },
+      Permission: { VIEW: 'view' },
       getFileById: (id) => {
         if (!files[id]) throw new Error('No item with the given ID could be found');
-        return { getBlob: () => ({ getBytes: () => files[id], getContentType: () => 'image/jpeg' }), setTrashed() {} };
+        const folderId = fileFolders[id] ?? 'PHOTOS';
+        return {
+          getBlob: () => ({ getBytes: () => files[id], getContentType: () => 'image/jpeg' }),
+          getParents: () => { let done = false; return { hasNext: () => !done, next: () => { done = true; return { getId: () => folderId }; } }; },
+          setTrashed: (v) => { if (v) trashed.push(id); },
+        };
       },
       getFoldersByName: () => {
         if (driveFails) throw new Error('Drive is not available');
-        return { hasNext: () => true, next: () => ({ getName: () => 'Gallery Catalog Images' }) };
+        return { hasNext: () => true, next: () => photoFolder };
       },
     },
     MailApp: { sendEmail(msg) { mails.push(msg); }, getRemainingDailyQuota: () => 100 },
@@ -103,7 +121,7 @@ function google({ itemsHeader = OLD_HEADER, maxColumns, files = {}, itemRows, dr
   props.LOGIN_PASSWORD_HASH = sandbox.hashPassword('secret-pass');
   const call = (action, payload, auth = { email: 'office@yossibittonart.com', password: 'secret-pass' }) =>
     JSON.parse(sandbox.doPost({ postData: { contents: JSON.stringify({ action, auth, payload }) } }).text);
-  return { call, items, sheets, props, mails, triggers, cache, run: (fn) => sandbox[fn](), gs: sandbox };
+  return { call, items, sheets, props, mails, triggers, cache, trashed, run: (fn) => sandbox[fn](), gs: sandbox };
 }
 
 test.describe('Code.gs in a simulated Google', () => {
@@ -390,6 +408,34 @@ test.describe('Code.gs in a simulated Google', () => {
     g.call('logUsage', { days: [{ day, device_id: 'dev123abc', kind: 'iphone', version: 'v', counts: {}, times: {}, server_expected: '2099-01-01' }] });
     g.run('weeklyReport');
     expect(g.mails[0].htmlBody).toMatch(/גרסת השרת \(Apps Script\).*2026-\d\d-\d\d.*מצפה לעדכון מ-<span dir="ltr">2099-01-01/);
+  });
+  // ---- REG-061 / REG-062: two gaps found in the security review (22/10) ----
+  test('TC-GS-208: at most 5 reset codes a day - the 6th is refused (not sent), the next day works again; a wrong email still learns nothing', () => {
+    const g = google();
+    for (let i = 0; i < 5; i++) {
+      g.props.PW_RESET_LAST_SENT = '0'; // past the one-minute wait
+      expect(g.call('requestPasswordReset', { email: PW.email })).toEqual({ ok: true });
+    }
+    expect(g.mails).toHaveLength(5);
+    g.props.PW_RESET_LAST_SENT = '0';
+    expect(g.call('requestPasswordReset', { email: PW.email })).toEqual({ error: 'too many codes today' });
+    expect(g.mails).toHaveLength(5);
+    expect(g.call('requestPasswordReset', { email: 'someone@else' })).toEqual({ ok: true });
+    // so: 5 codes x 5 tries = 25 guesses a day at most
+    g.props.PW_RESET_DAY = '2000-01-01';
+    expect(g.call('requestPasswordReset', { email: PW.email })).toEqual({ ok: true });
+    expect(g.mails).toHaveLength(6);
+  });
+
+  test('TC-GS-209: a new photo sends the old one to the trash only if it is in the catalog\'s photo folder - never another file in the Drive', () => {
+    const IMG = 'data:image/jpeg;base64,' + Buffer.from([1, 2, 3]).toString('base64');
+    const g = google({ files: { FILE1: [1], CONTRACT: [9] }, fileFolders: { CONTRACT: 'MY-DOCUMENTS' } });
+    expect(g.call('uploadImage', { row_id: 'R1', image: IMG }).image_url).toMatch(/NEWFILE1/);
+    expect(g.trashed).toEqual(['FILE1']); // the catalog's own old photo - as before (REG-014)
+    // someone with the password points the photo cell at another file in the Drive
+    g.call('upsert', { row_id: 'R1', image_url: 'https://drive.google.com/thumbnail?id=CONTRACT&sz=w1000', last_modified_by: 'x' });
+    g.call('uploadImage', { row_id: 'R1', image: IMG });
+    expect(g.trashed).toEqual(['FILE1']);
   });
 });
 

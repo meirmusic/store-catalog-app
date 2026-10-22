@@ -56,6 +56,11 @@ export default function ForgotPasswordPanel({ defaultEmail, onDone, onCancel, ca
       await requestPasswordReset(email.trim());
       setCodeRequested(true);
     } catch (err) {
+      // REG-061: at most 5 codes a day - an expected answer, not a malfunction
+      if (err?.message === 'too many codes today') {
+        setError(t('identity.resetTooManyCodes'));
+        return;
+      }
       setError(t('identity.sendCodeFailed'));
       setErrorInfo(reportError('password-reset-send', err, { log: navigator.onLine }));
     } finally {

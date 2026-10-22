@@ -88,3 +88,20 @@ test('TC-PW-004: empty fields get the app\'s own message, not a browser bubble',
   await expect(page.locator('text=יש למלא את כל השדות')).toBeVisible();
   expect(calls.map((c) => c.action)).toEqual(['requestPasswordReset']);
 });
+
+// REG-061: the server sends at most 5 codes a day. That's an expected answer,
+// not a malfunction - say what to do, without an error code or a log entry.
+test('TC-PW-006: a 6th code request in one day - a clear "try tomorrow" message, no error code, no code field', async ({ page }) => {
+  const calls = [];
+  await openForgotPassword(page, (body) => {
+    calls.push(body.action);
+    return body.action === 'requestPasswordReset' ? { error: 'too many codes today' } : { ok: true };
+  });
+  await page.fill('input[type=email]', 'office@example.com');
+  await page.click('button:has-text("שליחת קוד")');
+  await expect(page.locator('text=נשלחו היום כבר 5 קודים - אפשר לנסות שוב מחר')).toBeVisible();
+  await expect(page.locator('text=שליחת הקוד נכשלה')).toHaveCount(0);
+  await expect(page.locator('.error-code')).toHaveCount(0);
+  await expect(page.locator('input[placeholder="קוד מהמייל"]')).toHaveCount(0);
+  expect(calls).not.toContain('logErrors');
+});

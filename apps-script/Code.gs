@@ -303,6 +303,10 @@ function promptSetLoginPassword() {
 // matched, so this can't be used to probe what the configured email is.
 var PW_RESET_CODE_TTL_MS = 15 * 60 * 1000;
 var PW_RESET_MIN_RESEND_MS = 60 * 1000;
+// A new code starts its 5 tries again (33.8), so without a daily limit
+// someone could keep asking for codes and guess ~7,500 times a day. With it:
+// 25 guesses a day at most (REG-061).
+var PW_RESET_MAX_CODES_PER_DAY = 5;
 
 function handleRequestPasswordReset(payload) {
   var email = payload && payload.email;
@@ -315,6 +319,9 @@ function handleRequestPasswordReset(payload) {
   if (now - lastSent < PW_RESET_MIN_RESEND_MS) {
     return { ok: true }; // already sent one very recently - don't spam the inbox
   }
+  var today = dayString(now);
+  var sentToday = props.getProperty('PW_RESET_DAY') === today ? Number(props.getProperty('PW_RESET_SENT_TODAY') || 0) : 0;
+  if (sentToday >= PW_RESET_MAX_CODES_PER_DAY) return { error: 'too many codes today' };
   var code = generateResetCode();
   // Send first, and only then record the code and the "last sent" time -
   // otherwise a failed send (e.g. MailApp not authorized yet) would make
@@ -328,6 +335,8 @@ function handleRequestPasswordReset(payload) {
   props.setProperty('PW_RESET_EXPIRES', String(now + PW_RESET_CODE_TTL_MS));
   props.setProperty('PW_RESET_ATTEMPTS', '0');
   props.setProperty('PW_RESET_LAST_SENT', String(now));
+  props.setProperty('PW_RESET_DAY', today);
+  props.setProperty('PW_RESET_SENT_TODAY', String(sentToday + 1));
   return { ok: true };
 }
 
@@ -690,7 +699,7 @@ function handleUploadImage(payload) {
   var imageUrl = driveThumbnailUrl(file.getId());
 
   sheet.getRange(rowIndex, imageUrlCol).setValue(imageUrl);
-  trashPreviousDriveFile(previousUrl, file.getId());
+  trashPreviousDriveFile(previousUrl, file.getId(), folder);
   return { image_url: imageUrl };
 }
 
@@ -707,11 +716,21 @@ function handleUploadImage(payload) {
 // photo or just an earlier retry of this same one - so retries replace
 // instead of accumulating. Never lets a cleanup failure fail the request
 // itself - the new photo is already saved in the Sheet either way.
-function trashPreviousDriveFile(previousUrl, newFileId) {
+// Only a file inside the catalog's photo folder (REG-062): the image_url
+// cell can be edited by anyone with the password, and pointing it at some
+// other file in the owner's Drive used to send that file to the trash.
+function trashPreviousDriveFile(previousUrl, newFileId, folder) {
   var previousId = extractDriveFileId(previousUrl);
   if (!previousId || previousId === newFileId) return;
   try {
-    DriveApp.getFileById(previousId).setTrashed(true);
+    var previous = DriveApp.getFileById(previousId);
+    var parents = previous.getParents();
+    while (parents.hasNext()) {
+      if (parents.next().getId() === folder.getId()) {
+        previous.setTrashed(true);
+        return;
+      }
+    }
   } catch (err) {
     // Already gone, not one of ours, or some other transient issue - not
     // worth failing the upload itself over.
