@@ -180,7 +180,7 @@ function buildUpsertRow(columns, payload, existingRow, now) {
     if (key === 'row_id') return payload.row_id;
     if (key === 'last_modified_at') return now;
     if (key === 'last_modified_by') return payload.last_modified_by || '';
-    if (key === 'is_deleted') return !!payload.is_deleted;
+    if (key === 'is_deleted') return 'is_deleted' in payload ? !!payload.is_deleted : (existingRow ? existingRow[i] : false); // SPEC.md 33.1
     if (!(key in payload)) return existingRow ? existingRow[i] : '';
     return payload[key] != null ? payload[key] : '';
   });

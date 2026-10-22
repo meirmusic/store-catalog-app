@@ -12,7 +12,13 @@ async function server(page, { features = ['name_en'], items = [ART] } = {}) {
   const sent = [];
   await page.route(MOCK_URL, async (route) => {
     const body = JSON.parse(route.request().postData() || '{}');
-    if (body.action === 'upsert') sent.push(body.payload || body.item || body);
+    if (body.action === 'upsert') {
+      sent.push(body.payload || body.item || body);
+      // like a real server, it keeps what was saved - otherwise the next sync
+      // "un-saves" it (a race seen once in a full run, 22/10)
+      const saved = body.payload || {};
+      items = items.map((it) => (it.row_id === saved.row_id ? { ...it, ...saved } : it));
+    }
     if (body.action === 'getAll') return route.fulfill({ json: { items, config: {}, ...(features ? { features } : {}) } });
     return route.fulfill({ json: { ok: true } });
   });

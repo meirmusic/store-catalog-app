@@ -2,10 +2,11 @@ import { db, isConnectionLost, reconnect } from '../db/db.js';
 import { getAll, upsertItem, softDeleteItem, addConfigOption, uploadImage, logErrors, logUsage, sendFeedback, AuthError, TimeoutError } from '../api/client.js';
 import { countUsage, timeUsage, flushUsage, wasHiddenSince } from '../telemetry/usage.js';
 import { flushFeedback } from '../telemetry/feedback.js';
+import { upgradeToDeviceKey } from '../identity/deviceKey.js';
 import { reportError, flushErrorLog } from '../errors/errorReporting.js';
 import { APPS_SCRIPT_URL } from '../api/config.js';
 import { recordPushOk, recordPullOk } from './syncRecord.js';
-import { setServerFeatures } from './serverFeatures.js';
+import { setServerFeatures, setServerVersion, hasServerFeature } from './serverFeatures.js';
 
 // See SPEC.md "מדיניות כשלים": a change that keeps failing stays queued
 // and retried, but after enough failures the UI should show a visible
@@ -38,14 +39,54 @@ async function withQuickRetry(fn) {
   }
 }
 
+// SPEC.md 33.3 / 33.11: what the server said about a save that the user
+// must hear about - long after they left the form ("saved on this device").
+// The app shows each one with a code and logs it (SPEC.md 17).
+const noticeListeners = new Set();
+export function onSyncNotice(fn) {
+  noticeListeners.add(fn);
+  return () => noticeListeners.delete(fn);
+}
+function notice(n) {
+  noticeListeners.forEach((fn) => fn(n));
+}
+
+// SPEC.md 33.1-33.2: only the fields this save changed - but only to a server
+// that keeps the rest (an older one would erase every field not sent).
+function whatToSend(item, change) {
+  // pending_image is local-only (a photo waiting for its own
+  // 'uploadImage') - never ship it with the row.
+  const { pending_image: _localOnly, ...full } = item;
+  const restore = change.payload?.restore === true;
+  const fields = change.payload?.fields;
+  if (Array.isArray(fields) && hasServerFeature('partial_save')) {
+    const partial = { row_id: item.row_id, last_modified_by: item.last_modified_by };
+    fields.forEach((k) => { if (k in full) partial[k] = full[k]; });
+    return partial;
+  }
+  return restore && hasServerFeature('partial_save') ? { ...full, restore: true } : full;
+}
+
 async function pushOne(change) {
   if (change.op === 'upsert') {
     const item = await db.items.get(change.row_id);
     if (item) {
-      // pending_image is local-only (a photo waiting for its own
-      // 'uploadImage') - never ship it with the row.
-      const { pending_image: _localOnly, ...toSend } = item;
-      const result = await upsertItem(toSend);
+      const result = await upsertItem(whatToSend(item, change));
+      if (result && result.deleted) {
+        // SPEC.md 33.3: deleted on another device meanwhile - it stays deleted
+        // here too, and whoever saved is told their change wasn't kept.
+        await db.transaction('rw', db.items, db.pendingChanges, async () => {
+          await db.pendingChanges.where('row_id').equals(change.row_id).and((c) => c.id !== change.id).delete();
+          await db.items.delete(change.row_id);
+        });
+        notice({ kind: 'deletedMeanwhile', name: result.name || item.name || '', by: result.deleted_by || '' });
+        return;
+      }
+      if (result && result.serial_taken) {
+        // SPEC.md 33.11: saved without the number - this device shows what the server kept.
+        await db.items.update(change.row_id, { serial_number: result.serial_number ? String(result.serial_number) : null });
+        notice({ kind: 'serialTaken', name: item.name || '', value: result.serial_taken.value, owner: result.serial_taken.owner_name || '' });
+      }
       if (result) {
         // The server is authoritative for last_modified_at/last_modified_by
         // (SPEC.md section 6) - adopt exactly those, nothing else: a new
@@ -151,6 +192,7 @@ export async function pullLatest() {
   if (!data) return;
   // SPEC.md 27.3: an older server sends no list - nothing new is shown.
   setServerFeatures(data.features);
+  setServerVersion(data.server_version); // SPEC.md 33.10 ('' - an older server)
   if (Array.isArray(data.items)) {
     data.items = data.items.map(normalizeItem);
     // REG-017: never overwrite an item that still has a queued change -
@@ -251,6 +293,7 @@ export async function syncNow({ shouldStop = () => false, onProgress = () => {},
   flushErrorLog(logErrors);
   flushUsage(logUsage);
   flushFeedback(sendFeedback);
+  upgradeToDeviceKey(); // SPEC.md 33.5 - once, when the server supports keys
   return { ok: true, pushed };
 }
 

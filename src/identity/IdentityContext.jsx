@@ -1,5 +1,5 @@
 import { createContext, useContext, useMemo, useState } from 'react';
-import { setPasswordAuth, clearAuth } from '../api/authToken.js';
+import { setPasswordAuth, setDeviceKeyAuth, clearAuth } from '../api/authToken.js';
 import { getAll, AuthError } from '../api/client.js';
 import {
   savePasswordIdentity,
@@ -25,6 +25,10 @@ export function IdentityProvider({ children }) {
       // storage unavailable - nothing stored to clear
     }
     const pw = loadStoredPasswordIdentity();
+    if (pw && pw.device_key) {
+      setDeviceKeyAuth(pw.email, pw.device_key); // SPEC.md 33.4
+      return { kind: 'key', email: pw.email, name: pw.email };
+    }
     if (pw) {
       setPasswordAuth(pw.email, pw.password);
       return { kind: 'password', email: pw.email, name: pw.email };

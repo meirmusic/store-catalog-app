@@ -109,6 +109,11 @@ export function sendFeedback(entries) {
   return callApi('sendFeedback', { entries });
 }
 
+// SPEC.md 33.4: sent once, with the password; the answer is this phone's key.
+export function issueDeviceKey({ kind, member }) {
+  return callApi('issueDeviceKey', { kind, member });
+}
+
 export function addConfigOption(listName, value) {
   return callApi('addConfigOption', { list_name: listName, value });
 }

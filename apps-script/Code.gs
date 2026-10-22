@@ -57,6 +57,11 @@ var LOGIN_EMAIL = 'office@yossibittonart.com';
 // value in Script Properties isn't a bare, precomputed-lookup-able hash.
 var PASSWORD_SALT = 'gallery-catalog-v1';
 
+// SPEC.md 33.10: which version of this file is deployed - the app shows it in
+// "info & support" next to the newest one it knows, and the weekly report too.
+// Change it whenever this file changes.
+var SERVER_VERSION = '2026-10-22';
+
 var ITEMS_SHEET_NAME = 'Items';
 var CONFIG_SHEET_NAME = 'Config';
 var DRIVE_FOLDER_NAME = 'Gallery Catalog Images';
@@ -104,7 +109,10 @@ function usableItemColumns(headerRow, columns, originalCount) {
 // What this server can store - the app shows a field only once the server
 // behind it keeps it (SPEC.md 27.3).
 function serverFeatures(columns) {
-  return columns.indexOf('name_en') !== -1 ? ['name_en'] : [];
+  // 33.2: partial_save - only the fields sent are written; device_key - a
+  // phone keeps a key, not the password (33.4); serial_check - 33.11.
+  var features = ['partial_save', 'device_key', 'serial_check'];
+  return columns.indexOf('name_en') !== -1 ? ['name_en'].concat(features) : features;
 }
 
 // Mirrors logic.js: header cells (1-based column) that are blank where
@@ -125,7 +133,8 @@ function buildUpsertRow(columns, payload, existingRow, now) {
     if (key === 'row_id') return payload.row_id;
     if (key === 'last_modified_at') return now;
     if (key === 'last_modified_by') return payload.last_modified_by || '';
-    if (key === 'is_deleted') return !!payload.is_deleted;
+    // A save that doesn't say (only the changed fields - 33.1) keeps what's there.
+    if (key === 'is_deleted') return 'is_deleted' in payload ? !!payload.is_deleted : (existingRow ? existingRow[i] : false);
     if (!(key in payload)) return existingRow ? existingRow[i] : '';
     return payload[key] != null ? payload[key] : '';
   });
@@ -187,6 +196,8 @@ function handleRequest(e) {
         return handleLogErrors(body.payload);
       case 'logUsage':
         return handleLogUsage(body.payload);
+      case 'issueDeviceKey':
+        return handleIssueDeviceKey(body);
       case 'sendFeedback':
         return handleSendFeedback(body.payload);
       default:
@@ -206,12 +217,14 @@ function jsonResponse(obj) {
 // Returns the authenticated email on success, null otherwise; the caller
 // only cares whether this is truthy.
 function resolveAuthenticatedEmail(body) {
-  if (body.auth) {
-    if (checkLoginCredentials(body.auth, LOGIN_EMAIL, getStoredPasswordHash(), hashPassword)) {
-      return LOGIN_EMAIL;
-    }
-    return null;
+  var auth = body.auth;
+  if (!auth) return null;
+  // SPEC.md 33.4: a phone signed in after 22/10 sends its own key, not the password.
+  if (auth.device_key) return checkDeviceKey(auth) ? LOGIN_EMAIL : null;
+  if (checkLoginCredentials(auth, LOGIN_EMAIL, getStoredPasswordHash(), hashPassword)) {
+    return LOGIN_EMAIL;
   }
+  if (auth.password) noteFailedLogin();
   return null;
 }
 
@@ -279,7 +292,8 @@ function promptSetLoginPassword() {
     return;
   }
   PropertiesService.getScriptProperties().setProperty('LOGIN_PASSWORD_HASH', hashPassword(password));
-  ui.alert('הסיסמה עודכנה בהצלחה.');
+  revokeAllDevices('כן - הוחלפה סיסמה'); // SPEC.md 33.7
+  ui.alert('הסיסמה עודכנה בהצלחה. כל הטלפונים יתבקשו להיכנס מחדש עם הסיסמה החדשה.');
 }
 
 // Self-service "forgot password" (task #28 v4) - staff shouldn't need
@@ -312,6 +326,7 @@ function handleRequestPasswordReset(payload) {
   );
   props.setProperty('PW_RESET_CODE', code);
   props.setProperty('PW_RESET_EXPIRES', String(now + PW_RESET_CODE_TTL_MS));
+  props.setProperty('PW_RESET_ATTEMPTS', '0');
   props.setProperty('PW_RESET_LAST_SENT', String(now));
   return { ok: true };
 }
@@ -328,8 +343,17 @@ function generateResetCode() {
   return String(Math.floor(100000 + Math.random() * 900000)); // 6 digits
 }
 
+// SPEC.md 33.8: a reset code is cancelled after this many wrong tries.
+var PW_RESET_MAX_ATTEMPTS = 5;
+
 function handleResetPassword(payload) {
   var props = PropertiesService.getScriptProperties();
+  var attempts = Number(props.getProperty('PW_RESET_ATTEMPTS') || 0);
+  if (props.getProperty('PW_RESET_CODE') && attempts >= PW_RESET_MAX_ATTEMPTS) {
+    props.deleteProperty('PW_RESET_CODE');
+    props.deleteProperty('PW_RESET_EXPIRES');
+    return { error: 'too many attempts' };
+  }
   var check = validatePasswordReset(
     payload,
     LOGIN_EMAIL,
@@ -337,10 +361,22 @@ function handleResetPassword(payload) {
     props.getProperty('PW_RESET_EXPIRES'),
     Date.now(),
   );
-  if (!check.ok) return { error: check.error };
+  if (!check.ok) {
+    if (check.error === 'invalid code' && props.getProperty('PW_RESET_CODE')) {
+      props.setProperty('PW_RESET_ATTEMPTS', String(attempts + 1));
+      if (attempts + 1 >= PW_RESET_MAX_ATTEMPTS) {
+        props.deleteProperty('PW_RESET_CODE');
+        props.deleteProperty('PW_RESET_EXPIRES');
+        return { error: 'too many attempts' };
+      }
+    }
+    return { error: check.error };
+  }
   props.setProperty('LOGIN_PASSWORD_HASH', hashPassword(payload.newPassword));
   props.deleteProperty('PW_RESET_CODE');
   props.deleteProperty('PW_RESET_EXPIRES');
+  props.deleteProperty('PW_RESET_ATTEMPTS');
+  revokeAllDevices('כן - הוחלפה סיסמה'); // 33.7
   return { ok: true };
 }
 
@@ -485,7 +521,7 @@ function handleGetAll() {
     config[listName].push(value);
   }
 
-  return { items: items, config: config, features: serverFeatures(columns) };
+  return { items: items, config: config, features: serverFeatures(columns), server_version: SERVER_VERSION };
 }
 
 function findRowIndexByRowId(sheet, rowId) {
@@ -498,13 +534,64 @@ function findRowIndexByRowId(sheet, rowId) {
   return -1;
 }
 
+function isDeletedValue(value) {
+  return value === true || value === 'TRUE' || value === 'true';
+}
+
+function normalSerial(value) {
+  return value == null ? '' : String(value).trim().toLowerCase();
+}
+
+// SPEC.md 33.11: another artwork (not deleted) that already has this serial number.
+function findSerialOwner(sheet, columns, serial, rowId) {
+  var values = sheet.getDataRange().getValues();
+  var header = values[0];
+  var idCol = header.indexOf('row_id');
+  var serialCol = header.indexOf('serial_number');
+  var nameCol = header.indexOf('name');
+  var delCol = header.indexOf('is_deleted');
+  for (var r = 1; r < values.length; r++) {
+    var row = values[r];
+    if (!row[idCol] || String(row[idCol]) === String(rowId) || isDeletedValue(row[delCol])) continue;
+    if (normalSerial(row[serialCol]) === serial) return { row_id: String(row[idCol]), name: String(row[nameCol] || '') };
+  }
+  return null;
+}
+
 function handleUpsert(payload) {
   var sheet = getItemsSheet();
   var columns = prepareItemColumns(sheet);
   var now = new Date().toISOString();
   var rowIndex = findRowIndexByRowId(sheet, payload.row_id);
   var existingRow = rowIndex === -1 ? null : sheet.getRange(rowIndex, 1, 1, columns.length).getValues()[0];
-  var rowValues = buildUpsertRow(columns, payload, existingRow, now);
+  // SPEC.md 33.3: an artwork deleted meanwhile isn't brought back by a save
+  // from a form opened before - only by "undo" (restore).
+  if (existingRow && isDeletedValue(existingRow[columns.indexOf('is_deleted')]) && !payload.restore) {
+    return {
+      deleted: true,
+      row_id: String(payload.row_id),
+      name: String(existingRow[columns.indexOf('name')] || ''),
+      deleted_by: String(existingRow[columns.indexOf('last_modified_by')] || ''),
+    };
+  }
+  var toWrite = {};
+  Object.keys(payload).forEach(function (k) { if (k !== 'restore') toWrite[k] = payload[k]; });
+  if (payload.restore) toWrite.is_deleted = false;
+  // SPEC.md 33.11: a serial number that changed and already belongs to
+  // another artwork - everything else is saved, the number is not.
+  var serialTaken = null;
+  if ('serial_number' in toWrite && normalSerial(toWrite.serial_number) !== '') {
+    var wanted = normalSerial(toWrite.serial_number);
+    var current = existingRow ? normalSerial(existingRow[columns.indexOf('serial_number')]) : '';
+    if (wanted !== current) {
+      var owner = findSerialOwner(sheet, columns, wanted, payload.row_id);
+      if (owner) {
+        serialTaken = { value: String(toWrite.serial_number).trim(), owner_name: owner.name, owner_row_id: owner.row_id };
+        delete toWrite.serial_number;
+      }
+    }
+  }
+  var rowValues = buildUpsertRow(columns, toWrite, existingRow, now);
   if (rowIndex === -1) {
     sheet.appendRow(rowValues);
   } else {
@@ -512,6 +599,7 @@ function handleUpsert(payload) {
   }
   var item = {};
   columns.forEach(function (key, i) { item[key] = rowValues[i]; });
+  if (serialTaken) item.serial_taken = serialTaken;
   return item;
 }
 
@@ -829,7 +917,7 @@ function cleanUsageDay(day) {
     DEVICE_KINDS.indexOf(d.kind) !== -1 ? d.kind : 'other',
     d.installed ? 'כן' : 'לא',
     /^[\w.-]{1,40}$/.test(String(d.version)) ? String(d.version) : '?',
-    JSON.stringify({ c: counts, t: times }),
+    JSON.stringify(/^\d{4}-\d\d-\d\d$/.test(String(d.server_expected)) ? { c: counts, t: times, s: String(d.server_expected) } : { c: counts, t: times }),
   ];
 }
 
@@ -1091,6 +1179,7 @@ function summarizeUsage(rows, days) {
   var counts = {};
   var times = {};
   var devices = {};
+  var expectedServer = '';
   Object.keys(latest).forEach(function (key) {
     var r = latest[key];
     var data;
@@ -1101,10 +1190,11 @@ function summarizeUsage(rows, days) {
     }
     Object.keys(data.c || {}).forEach(function (k) { counts[k] = (counts[k] || 0) + Number(data.c[k]); });
     Object.keys(data.t || {}).forEach(function (k) { times[k] = (times[k] || []).concat(data.t[k]); });
+    if (data.s && data.s > expectedServer) expectedServer = data.s;
     var dev = devices[r[1]];
     if (!dev || String(r[0]) >= dev.day) devices[r[1]] = { day: String(r[0]), kind: r[2], installed: r[3] === 'כן', version: String(r[4]) };
   });
-  return { counts: counts, times: times, devices: devices };
+  return { counts: counts, times: times, devices: devices, expectedServer: expectedServer };
 }
 
 // Pure: devices whose version is older than the newest one, when the newest
@@ -1324,6 +1414,9 @@ function buildReportHtml(r) {
   deviceIds.forEach(function (id) { versions[u.devices[id].version] = (versions[u.devices[id].version] || 0) + 1; });
   var pending = u.times.pending || [];
   out.push(table([
+    row(['גרסת השרת (Apps Script)', '<span dir="ltr">' + SERVER_VERSION + '</span>' + (u.expectedServer > SERVER_VERSION
+      ? ' <b style="color:#9A6700">- האפליקציה כבר מצפה לעדכון מ-<span dir="ltr">' + escapeHtml(u.expectedServer) + '</span></b>'
+      : ' (עדכנית)')]),
     row(['מכשירים', Object.keys(kinds).map(function (k) { return k + ': ' + kinds[k]; }).join(' · ') || '-']),
     row(['גרסאות', Object.keys(versions).sort().reverse().map(function (v) { return '<span dir="ltr">' + escapeHtml(v) + '</span>: ' + versions[v]; }).join(' · ') || '-']),
     row(['לא התעדכנו יותר מ-3 ימים', String(r.behind.behind)]),
@@ -1377,4 +1470,87 @@ function installTriggers() {
   ScriptApp.newTrigger('weeklyReport').timeBased().onWeekDay(ScriptApp.WeekDay.SUNDAY).atHour(7).create();
   getOrCreateSheet(GOALS_SHEET_NAME, GOALS_HEADER);
   return 'installed: hourly self-check, weekly report on Sunday at 7:00 to ' + REPORT_EMAIL;
+}
+
+
+// =====================================================================
+// SPEC.md 33.4-33.9 - a key for each phone instead of the office password.
+// The phone sends the password once (when it signs in, or on its first
+// sync with this server), gets a random key back, and from then on keeps
+// and sends only the key. This server keeps only a fingerprint of each key,
+// in a Devices tab Meir can read: "בוטל" = כן cancels that phone alone.
+// Changing the office password cancels every key (everyone signs in again).
+// =====================================================================
+
+var DEVICES_SHEET_NAME = 'Devices';
+var DEVICES_HEADER = ['טביעת המפתח (לא לשנות)', 'מכשיר', 'נוצר', 'נראה לאחרונה', 'איש צוות אחרון', 'בוטל'];
+var DEVICE_SEEN_EVERY_MS = 60 * 60 * 1000; // "last seen" is written at most once an hour
+var DEVICE_CACHE_SECONDS = 300; // a "בוטל" written by hand takes effect within 5 minutes
+var FAILED_LOGIN_ALERT = 20; // wrong passwords in one hour that send an email (33.9)
+
+function deviceKeyFingerprint(key) {
+  return bytesToHex(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, 'device:' + key + PASSWORD_SALT));
+}
+
+function deviceKeyGeneration() {
+  return PropertiesService.getScriptProperties().getProperty('DEVICE_KEY_GEN') || '0';
+}
+
+function handleIssueDeviceKey(body) {
+  if (!body.auth || !body.auth.password) return { error: 'password required' };
+  var payload = body.payload || {};
+  var key = Utilities.getUuid().replace(/-/g, '') + Utilities.getUuid().replace(/-/g, '');
+  var now = new Date().toISOString();
+  var sheet = getOrCreateSheet(DEVICES_SHEET_NAME, DEVICES_HEADER);
+  function text(value, max) {
+    var s = value == null ? '' : String(value).slice(0, max);
+    return /^[=+\-@]/.test(s) ? "'" + s : s;
+  }
+  sheet.appendRow([deviceKeyFingerprint(key), KIND_LABELS[payload.kind] || KIND_LABELS.other, now, now, text(payload.member, 60), '']);
+  return { device_key: key };
+}
+
+function checkDeviceKey(auth) {
+  if (String(auth.email || '').trim().toLowerCase() !== LOGIN_EMAIL.toLowerCase()) return false;
+  var fingerprint = deviceKeyFingerprint(String(auth.device_key));
+  var cache = CacheService.getScriptCache();
+  var cacheKey = 'dk:' + deviceKeyGeneration() + ':' + fingerprint;
+  if (cache.get(cacheKey) === 'ok') return true;
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(DEVICES_SHEET_NAME);
+  if (!sheet || sheet.getLastRow() < 2) return false;
+  var rows = sheet.getRange(2, 1, sheet.getLastRow() - 1, DEVICES_HEADER.length).getValues();
+  for (var i = 0; i < rows.length; i++) {
+    if (rows[i][0] !== fingerprint) continue;
+    if (String(rows[i][5]).trim()) return false; // cancelled
+    var now = Date.now();
+    if (now - Date.parse(rows[i][3]) > DEVICE_SEEN_EVERY_MS || (auth.member && auth.member !== rows[i][4])) {
+      sheet.getRange(i + 2, 4, 1, 2).setValues([[new Date(now).toISOString(), String(auth.member || rows[i][4]).slice(0, 60)]]);
+    }
+    cache.put(cacheKey, 'ok', DEVICE_CACHE_SECONDS);
+    return true;
+  }
+  return false;
+}
+
+function revokeAllDevices(reason) {
+  var props = PropertiesService.getScriptProperties();
+  props.setProperty('DEVICE_KEY_GEN', String(Number(deviceKeyGeneration()) + 1));
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(DEVICES_SHEET_NAME);
+  if (!sheet || sheet.getLastRow() < 2) return;
+  var range = sheet.getRange(2, 6, sheet.getLastRow() - 1, 1);
+  range.setValues(range.getValues().map(function (r) { return [String(r[0]).trim() ? r[0] : reason]; }));
+}
+
+// SPEC.md 33.9: one shared password, so no lock-out (it would lock the whole
+// team out) - an email when there are many wrong tries in an hour.
+function noteFailedLogin() {
+  var cache = CacheService.getScriptCache();
+  var hourKey = 'failed:' + Math.floor(Date.now() / (60 * 60 * 1000));
+  var count = Number(cache.get(hourKey) || 0) + 1;
+  cache.put(hourKey, String(count), 2 * 60 * 60);
+  if (count === FAILED_LOGIN_ALERT) {
+    sendMail('⚠️ קטלוג הגלריה: הרבה ניסיונות כניסה שגויים',
+      '<p>בשעה האחרונה היו ' + count + ' ניסיונות כניסה עם סיסמה שגויה.</p>' +
+      '<p>אם זה לא מישהו מהצוות - כדאי להחליף את סיסמת המשרד (התפריט בגיליון, או "שכחתי סיסמה" באפליקציה).</p>');
+  }
 }

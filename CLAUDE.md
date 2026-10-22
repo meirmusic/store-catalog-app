@@ -71,6 +71,10 @@ These rules exist so nothing depends on what one session remembers.
 - **Apps Script (`apps-script/Code.gs`) changes do nothing until Meir redeploys it by hand**
   ("ניהול פריסות ← עריכה ← גרסה חדשה", not "פריסה חדשה"). Keep `apps-script/logic.js` in step
   and list the redeploy in `OPEN_ITEMS.md`.
+- **The app must work with the server that's deployed now *and* the new one** - Meir may redeploy
+  days later. New server abilities are announced in `features` (getAll) and the app uses them only
+  when present: a partial save sent to the old server would have erased every other field (DDD 002).
+  Bump `SERVER_VERSION` in Code.gs whenever it changes - "info & support" compares it.
 - **iPhone opens the share sheet only straight from the tap** - prepare files before the tap.
 - **iPhone cuts everything the app holds while it's in the background** - server requests
   (REG-030), the device's storage (REG-053), a download in progress (REG-054). Fixing one is not

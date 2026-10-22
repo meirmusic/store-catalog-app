@@ -102,7 +102,8 @@ test('TC-USE-001: privacy - after real use with real artworks, nothing of an art
   }
   // only the fixed names, and numbers
   const [entry] = srv.usageCalls[0];
-  expect(Object.keys(entry).sort()).toEqual(['counts', 'day', 'device_id', 'installed', 'kind', 'times', 'version']);
+  expect(Object.keys(entry).sort()).toEqual(['counts', 'day', 'device_id', 'installed', 'kind', 'server_expected', 'times', 'version']);
+  expect(entry.server_expected).toMatch(/^\d{4}-\d\d-\d\d$/); // a date only (SPEC.md 33.10)
   for (const [k, v] of Object.entries(entry.counts)) expect([k, typeof v]).toEqual([expect.stringMatching(/^([a-z-]+|(rage|dead):[a-z0-9-]+)$/), 'number']);
   for (const list of Object.values(entry.times)) for (const v of list) expect(typeof v).toBe('number');
 });

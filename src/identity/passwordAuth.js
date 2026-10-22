@@ -15,6 +15,16 @@ export function savePasswordIdentity(email, password) {
   }
 }
 
+// SPEC.md 33.4-33.5: the key replaces the stored password - the password
+// is no longer kept on this device.
+export function saveDeviceKeyIdentity(email, deviceKey) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ email, device_key: deviceKey }));
+  } catch {
+    // storage unavailable - the key works for this session only
+  }
+}
+
 export function loadStoredPasswordIdentity() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);

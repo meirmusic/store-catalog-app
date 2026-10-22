@@ -53,6 +53,7 @@ function google({ itemsHeader = OLD_HEADER, maxColumns, files = {}, itemRows, dr
   const config = makeSheet([['list_name', 'value'], ['type', 'מקורי']]);
   const sheets = { Items: items, Config: config };
   const props = {};
+  const cache = {};
   const mails = [];
   const triggers = [];
   const spreadsheet = {
@@ -65,12 +66,14 @@ function google({ itemsHeader = OLD_HEADER, maxColumns, files = {}, itemRows, dr
     LockService: { getScriptLock: () => ({ tryLock: () => true, releaseLock: () => {} }) },
     ContentService: { MimeType: { JSON: 'json' }, createTextOutput: (text) => ({ text, setMimeType() { return this; } }) },
     Session: { getScriptTimeZone: () => 'Asia/Jerusalem' },
+    CacheService: { getScriptCache: () => ({ get: (k) => cache[k] ?? null, put: (k, v) => { cache[k] = String(v); }, remove: (k) => { delete cache[k]; } }) },
     Utilities: {
       DigestAlgorithm: { SHA_256: 'sha256' },
       computeDigest: (alg, s) => [...crypto.createHash('sha256').update(s, 'utf8').digest()].map((b) => (b > 127 ? b - 256 : b)),
       base64Encode: (bytes) => Buffer.from(bytes.map((b) => (b + 256) % 256)).toString('base64'),
       base64Decode: (s) => [...Buffer.from(s, 'base64')],
       newBlob: (bytes, type, name) => ({ bytes, type, name }),
+      getUuid: () => crypto.randomUUID(),
       formatDate: (date, tz) => date.toLocaleDateString('en-CA', { timeZone: tz }),
     },
     DriveApp: {
@@ -100,7 +103,7 @@ function google({ itemsHeader = OLD_HEADER, maxColumns, files = {}, itemRows, dr
   props.LOGIN_PASSWORD_HASH = sandbox.hashPassword('secret-pass');
   const call = (action, payload, auth = { email: 'office@yossibittonart.com', password: 'secret-pass' }) =>
     JSON.parse(sandbox.doPost({ postData: { contents: JSON.stringify({ action, auth, payload }) } }).text);
-  return { call, items, sheets, props, mails, triggers, run: (fn) => sandbox[fn](), gs: sandbox };
+  return { call, items, sheets, props, mails, triggers, cache, run: (fn) => sandbox[fn](), gs: sandbox };
 }
 
 test.describe('Code.gs in a simulated Google', () => {
@@ -110,7 +113,9 @@ test.describe('Code.gs in a simulated Google', () => {
     expect(res.error).toBeUndefined();
     expect(res.items).toHaveLength(1);
     expect(res.items[0].row_id).toBe('R1');
-    expect(res.features).toEqual(['name_en']);
+    expect(res.features).toContain('name_en');
+    expect(res.features).toEqual(expect.arrayContaining(['partial_save', 'device_key', 'serial_check'])); // SPEC.md 33
+    expect(res.server_version).toMatch(/^\d{4}-\d\d-\d\d$/);
     expect(g.items.data[0][15]).toBe('name_en');
   });
 
@@ -136,7 +141,7 @@ test.describe('Code.gs in a simulated Google', () => {
 
   test('TC-GS-004: column P already holds someone else\'s column - not written over, and the app is not offered the field', () => {
     const g = google({ itemsHeader: [...OLD_HEADER, 'הערות שלי'] });
-    expect(g.call('getAll').features).toEqual([]);
+    expect(g.call('getAll').features).not.toContain('name_en');
     g.items.data[1][15] = 'לא לגעת';
     g.call('upsert', { row_id: 'R1', name: 'זריחה', name_en: 'Sunrise' });
     expect(g.items.data[1][15]).toBe('לא לגעת');
@@ -153,7 +158,7 @@ test.describe('Code.gs in a simulated Google', () => {
 
   test('TC-GS-006: every action the app uses is known; no sign-in - forbidden; everything answers JSON', () => {
     const g = google({ files: { FILE1: [1] } });
-    for (const [action, payload] of [['getAll'], ['upsert', { row_id: 'R1', name: 'x' }], ['softDelete', { row_id: 'R1' }], ['addConfigOption', { list_name: 'type', value: 'הדפס' }], ['getImage', { row_id: 'R1' }], ['logErrors', { entries: [] }], ['logUsage', { days: [] }], ['sendFeedback', { entries: [] }]]) {
+    for (const [action, payload] of [['getAll'], ['upsert', { row_id: 'R1', name: 'x' }], ['softDelete', { row_id: 'R1' }], ['addConfigOption', { list_name: 'type', value: 'הדפס' }], ['getImage', { row_id: 'R1' }], ['logErrors', { entries: [] }], ['logUsage', { days: [] }], ['sendFeedback', { entries: [] }], ['issueDeviceKey', { kind: 'iphone', member: 'שרה' }]]) {
       expect(String(g.call(action, payload).error || ''), action).not.toMatch(/unknown action/);
     }
     expect(g.call('requestPasswordReset', { email: 'someone@else' })).toEqual({ ok: true });
@@ -283,6 +288,108 @@ test.describe('Code.gs in a simulated Google', () => {
     g.run('installTriggers');
     expect(g.triggers.map((t) => [t.fn, t.hours, t.day, t.hour])).toEqual([['selfCheck', 1, undefined, undefined], ['weeklyReport', undefined, 'SUNDAY', 7]]);
     expect(g.sheets.Goals.data[0]).toEqual(['שיפור שאושר', 'מדד', 'מתאריך', 'ערך לפני', 'הערות']);
+  });
+
+  // ---- SPEC.md 33: the server package (docs/ddd/002-server-package.md) ----
+  const PW = { email: 'office@yossibittonart.com', password: 'secret-pass' };
+
+  test('TC-GS-201: only the fields sent are written - two people editing different fields both keep their change', () => {
+    const g = google();
+    g.call('upsert', { row_id: 'R1', price: 3600, last_modified_by: 'שרה' });
+    g.call('upsert', { row_id: 'R1', notes: 'נבדק במחסן', last_modified_by: 'דב' });
+    const r = g.call('getAll').items[0];
+    expect([r.name, r.serial_number, r.price, r.notes, r.last_modified_by]).toEqual(['זריחה', '112345', 3600, 'נבדק במחסן', 'דב']);
+  });
+
+  test('TC-GS-202: an artwork deleted meanwhile is not brought back by a save from an old form; "undo" (restore) does bring it back', () => {
+    const g = google();
+    g.call('softDelete', { row_id: 'R1', last_modified_by: 'שרה' });
+    const res = g.call('upsert', { row_id: 'R1', notes: 'מטופס ישן', last_modified_by: 'דב' });
+    expect(res).toEqual({ deleted: true, row_id: 'R1', name: 'זריחה', deleted_by: 'שרה' });
+    expect(g.call('getAll').items).toHaveLength(0);
+    expect(g.items.data[1][10]).toBe(''); // the old form's note was not written
+    g.call('upsert', { row_id: 'R1', restore: true, name: 'זריחה', last_modified_by: 'שרה' });
+    expect(g.call('getAll').items.map((i) => i.row_id)).toEqual(['R1']);
+  });
+
+  test('TC-GS-203: a serial number already taken - everything else is saved, the number is not, and the app is told whose it is', () => {
+    const g = google();
+    const res = g.call('upsert', { row_id: 'N1', name: 'חדשה', serial_number: ' 112345 ', price: 900, last_modified_by: 'דב' });
+    expect(res.serial_taken).toEqual({ value: '112345', owner_name: 'זריחה', owner_row_id: 'R1' });
+    expect(res.serial_number).toBe('');
+    const saved = g.call('getAll').items.find((i) => i.row_id === 'N1');
+    expect([saved.name, saved.price, saved.serial_number]).toEqual(['חדשה', 900, null]);
+    // changing an existing artwork's number to a taken one keeps its own number
+    g.call('upsert', { row_id: 'N1', serial_number: '777', last_modified_by: 'דב' });
+    expect(g.call('upsert', { row_id: 'N1', serial_number: '112345', notes: 'x', last_modified_by: 'דב' }).serial_number).toBe('777');
+    // an unchanged number is not checked (old duplicates from before 27.1 still save)
+    g.items.data.push(['D2', '112345', '', 'כפולה ישנה', '', '', '', '', 'available', '', '', '', false, '', 'then', '']);
+    expect(g.call('upsert', { row_id: 'D2', serial_number: '112345', notes: 'y', last_modified_by: 'דב' }).serial_taken).toBeUndefined();
+    // a deleted artwork's number is free
+    g.call('softDelete', { row_id: 'R1' });
+    g.call('softDelete', { row_id: 'D2' });
+    expect(g.call('upsert', { row_id: 'N2', name: 'עוד', serial_number: '112345' }).serial_taken).toBeUndefined();
+  });
+
+  test('TC-GS-204: a key for each phone - issued only with the password, works instead of it, listed in a Devices tab with the staff member; "בוטל" cancels that phone alone', () => {
+    const g = google();
+    expect(g.call('issueDeviceKey', { kind: 'iphone', member: 'שרה' }, { email: PW.email, device_key: 'x' }).error).toBe('forbidden');
+    const { device_key: k1 } = g.call('issueDeviceKey', { kind: 'iphone', member: 'שרה' });
+    const { device_key: k2 } = g.call('issueDeviceKey', { kind: 'android', member: 'דב' });
+    expect(k1).toMatch(/^[0-9a-f]{64}$/);
+    const byKey = (k, member) => g.call('getAll', null, { email: PW.email, device_key: k, member });
+    expect(byKey(k1, 'שרה').items).toHaveLength(1);
+    expect(byKey('wrong', 'שרה')).toEqual({ error: 'forbidden' });
+    const tab = g.sheets.Devices.data;
+    expect(tab[0]).toEqual(['טביעת המפתח (לא לשנות)', 'מכשיר', 'נוצר', 'נראה לאחרונה', 'איש צוות אחרון', 'בוטל']);
+    expect(tab.slice(1).map((r) => [r[1], r[4], r[5]])).toEqual([['אייפון', 'שרה', ''], ['אנדרואיד', 'דב', '']]);
+    expect(JSON.stringify(tab)).not.toContain(k1); // only a fingerprint is kept
+    // another staff member on the same phone - shown as the last one
+    Object.keys(g.cache).forEach((k) => delete g.cache[k]);
+    byKey(k1, 'פיגי');
+    expect(g.sheets.Devices.data[1][4]).toBe('פיגי');
+    // Meir cancels the iPhone: it alone stops (once the 5-minute memory passes)
+    g.sheets.Devices.data[1][5] = 'כן';
+    Object.keys(g.cache).forEach((k) => delete g.cache[k]);
+    expect(byKey(k1, 'שרה')).toEqual({ error: 'forbidden' });
+    expect(byKey(k2, 'דב').items).toHaveLength(1);
+  });
+
+  test('TC-GS-205: changing the office password cancels every phone key at once; a code is cancelled after 5 wrong tries', () => {
+    const g = google();
+    const { device_key: k } = g.call('issueDeviceKey', { kind: 'iphone', member: 'שרה' });
+    expect(g.call('getAll', null, { email: PW.email, device_key: k }).items).toHaveLength(1);
+    g.call('requestPasswordReset', { email: PW.email });
+    const code = g.props.PW_RESET_CODE;
+    expect(g.call('resetPassword', { email: PW.email, code, newPassword: 'new-password-1' })).toEqual({ ok: true });
+    expect(g.call('getAll', null, { email: PW.email, device_key: k })).toEqual({ error: 'forbidden' }); // at once, despite the memory
+    expect(g.sheets.Devices.data[1][5]).toBe('כן - הוחלפה סיסמה');
+    // 5 wrong codes - the code is gone, even the right one no longer works
+    g.props.PW_RESET_LAST_SENT = '0';
+    g.call('requestPasswordReset', { email: PW.email });
+    const good = g.props.PW_RESET_CODE;
+    for (let i = 0; i < 4; i++) expect(g.call('resetPassword', { email: PW.email, code: '000000', newPassword: 'whatever-123' }).error).toBe('invalid code');
+    expect(g.call('resetPassword', { email: PW.email, code: '000000', newPassword: 'whatever-123' }).error).toBe('too many attempts');
+    expect(g.call('resetPassword', { email: PW.email, code: good, newPassword: 'whatever-123' }).error).toBe('invalid code');
+    // a new code starts the count again
+    g.props.PW_RESET_LAST_SENT = '0';
+    g.call('requestPasswordReset', { email: PW.email });
+    expect(g.call('resetPassword', { email: PW.email, code: g.props.PW_RESET_CODE, newPassword: 'fresh-pass-99' })).toEqual({ ok: true });
+  });
+
+  test('TC-GS-206: many wrong passwords - one email, no lock-out (the team still gets in)', () => {
+    const g = google();
+    for (let i = 0; i < 25; i++) g.call('getAll', null, { email: PW.email, password: `wrong-${i}` });
+    expect(g.mails.map((m) => m.subject)).toEqual(['⚠️ קטלוג הגלריה: הרבה ניסיונות כניסה שגויים']);
+    expect(g.call('getAll').items).toHaveLength(1);
+  });
+
+  test('TC-GS-207: the weekly report says which server version runs, and whether the app already expects a newer one', () => {
+    const g = google();
+    const day = g.gs.dayString(Date.now() - DAY);
+    g.call('logUsage', { days: [{ day, device_id: 'dev123abc', kind: 'iphone', version: 'v', counts: {}, times: {}, server_expected: '2099-01-01' }] });
+    g.run('weeklyReport');
+    expect(g.mails[0].htmlBody).toMatch(/גרסת השרת \(Apps Script\).*2026-\d\d-\d\d.*מצפה לעדכון מ-<span dir="ltr">2099-01-01/);
   });
 });
 

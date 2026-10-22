@@ -1,6 +1,7 @@
 import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
 import { VitePWA } from 'vite-plugin-pwa'
+import fs from 'node:fs'
 
 // https://vite.dev/config/
 // SPEC.md section 17: which build an error came from, in the ErrorLog -
@@ -9,9 +10,13 @@ const APP_VERSION = process.env.GITHUB_SHA
   ? `${new Date().toISOString().slice(0, 10)}-${process.env.GITHUB_SHA.slice(0, 7)}`
   : 'dev';
 
+// SPEC.md 33.10: the newest Apps Script version - what the app compares the
+// server's own version with ("an update from ... exists").
+const SERVER_VERSION = (/var SERVER_VERSION = '([\d-]+)'/.exec(fs.readFileSync('apps-script/Code.gs', 'utf8')) || [])[1] || ''
+
 export default defineConfig({
   base: './',
-  define: { __APP_VERSION__: JSON.stringify(APP_VERSION) },
+  define: { __APP_VERSION__: JSON.stringify(APP_VERSION), __SERVER_VERSION__: JSON.stringify(SERVER_VERSION) },
   plugins: [
     react(),
     VitePWA({

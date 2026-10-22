@@ -85,7 +85,13 @@ export function ItemsProvider({ children }) {
         await db.pendingChanges.where('row_id').equals(row_id).and((c) => c.op === 'uploadImage').delete();
       }
       await db.items.put(next);
-      await enqueue(row_id, 'upsert');
+      // SPEC.md 33.1: which fields this save changed - a server that can
+      // takes only those, so it never overwrites someone else's change to
+      // another field. A new artwork: everything (no list).
+      const changed = existing
+        ? Object.keys(fields).filter((k) => String(existing[k] ?? '') !== String(fields[k] ?? ''))
+        : null;
+      await enqueue(row_id, 'upsert', changed ? { fields: changed } : null);
     });
     requestSync();
     return row_id;
@@ -148,7 +154,8 @@ export function ItemsProvider({ children }) {
         last_modified_by: member,
         last_modified_at: new Date().toISOString(),
       });
-      await enqueue(snapshot.row_id, 'upsert');
+      // SPEC.md 33.3: "undo" is the one save that brings a deleted artwork back.
+      await enqueue(snapshot.row_id, 'upsert', { restore: true });
       if (pendingPhoto) await enqueue(snapshot.row_id, 'uploadImage', { image: pendingPhoto });
     });
     requestSync();

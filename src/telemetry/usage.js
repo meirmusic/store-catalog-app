@@ -6,6 +6,7 @@
 // Plain module, no React: the sync engine uses it too.
 import { APP_VERSION } from '../errors/errorReporting.js';
 import { currentDevice } from '../settings/deviceInfo.js';
+import { LATEST_SERVER_VERSION } from '../sync/serverFeatures.js';
 
 // Keep in step with USAGE_COUNTS / USAGE_TIMES in apps-script/Code.gs
 // (TC-USE-010 compares them) - the server drops anything else too.
@@ -169,6 +170,7 @@ export async function flushUsage(send) {
       kind: deviceKind(device),
       installed: device.installed,
       version: APP_VERSION,
+      server_expected: LATEST_SERVER_VERSION, // SPEC.md 33.10: the weekly report says if the server is behind
       counts: data[day].counts || {},
       times: data[day].times || {},
     })));

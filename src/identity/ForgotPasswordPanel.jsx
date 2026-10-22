@@ -86,8 +86,9 @@ export default function ForgotPasswordPanel({ defaultEmail, onDone, onCancel, ca
     } catch (err) {
       // Only a wrong/expired code is the user's to fix by requesting a new
       // one - anything else (network, server) gets an honest generic message.
-      const codeProblem = err && (err.message === 'invalid code' || err.message === 'code expired');
-      setError(t(codeProblem ? 'identity.resetCodeInvalid' : 'identity.resetFailed'));
+      const codeProblem = err && (err.message === 'invalid code' || err.message === 'code expired' || err.message === 'too many attempts');
+      // SPEC.md 33.8: after 5 wrong codes the code is cancelled - ask for a new one
+      setError(t(err?.message === 'too many attempts' ? 'identity.resetTooManyAttempts' : codeProblem ? 'identity.resetCodeInvalid' : 'identity.resetFailed'));
       if (!codeProblem) setErrorInfo(reportError('password-reset', err, { log: navigator.onLine }));
     } finally {
       setSubmitting(false);

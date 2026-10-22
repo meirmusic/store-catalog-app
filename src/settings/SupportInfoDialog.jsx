@@ -10,6 +10,7 @@ import { APP_VERSION, getRecentErrors, subscribeRecentErrors, getRecentErrorsVer
 import { formatWhen, formatDateTime } from '../items/formatWhen.js';
 import { currentDevice } from './deviceInfo.js';
 import Dialog from './Dialog.jsx';
+import { useServerVersion, LATEST_SERVER_VERSION } from '../sync/serverFeatures.js';
 
 // SPEC.md 21.4 / 22.7: everything support needs, each field saying exactly
 // what it claims. Never a password, a reset code or item data.
@@ -38,12 +39,22 @@ export default function SupportInfoDialog({ isOnline, onClose }) {
   if (pending != null && stuck != null) pendingText = stuck ? `${pending} (${t('support.stuck')}: ${stuck})` : String(pending);
   const deviceText = [device.device, device.os, device.browser, device.installed ? t('support.installed') : t('support.inBrowser')].join(' · ');
 
+  // SPEC.md 33.10: which Apps Script runs, against the newest this app knows.
+  const serverVersion = useServerVersion();
+  const shortDate = (v) => (/^\d{4}-(\d\d)-(\d\d)$/.exec(v || '') || []).slice(1).reverse().join('/');
+  let serverVersionText = t('support.notChecked');
+  if (serverVersion === '') serverVersionText = t('support.serverVersionOld').replaceAll('{date}', shortDate(LATEST_SERVER_VERSION));
+  else if (serverVersion && LATEST_SERVER_VERSION && serverVersion < LATEST_SERVER_VERSION) {
+    serverVersionText = `${shortDate(serverVersion)} - ${t('support.serverUpdateExists').replace('{date}', shortDate(LATEST_SERVER_VERSION))}`;
+  } else if (serverVersion) serverVersionText = `${shortDate(serverVersion)} (${t('support.serverCurrent')})`;
+
   const rows = [
     [t('app.version'), APP_VERSION],
     [t('support.account'), user?.email || '—'],
     [t('support.member'), member || '—'],
     [t('support.internet'), isOnline ? t('sync.online') : t('sync.offline')],
     [t('support.server'), serverText],
+    [t('support.serverVersion'), serverVersionText],
     [t('support.lastPull'), lastPullAt ? when(lastPullAt) : t('support.noPullSince').replace('{date}', sinceDate)],
     [t('support.lastPush'), lastPushAt ? when(lastPushAt) : t('support.noPushSince').replace('{date}', sinceDate)],
     [t('support.pending'), pendingText],

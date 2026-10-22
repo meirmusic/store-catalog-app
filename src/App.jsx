@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useI18n } from './i18n/I18nContext.jsx'
 import { IdentityProvider, useIdentity } from './identity/IdentityContext.jsx'
 import IdentityPicker from './identity/IdentityPicker.jsx'
@@ -7,7 +7,7 @@ import TeamMemberPicker from './identity/TeamMemberPicker.jsx'
 import { ItemsProvider } from './items/ItemsContext.jsx'
 import ItemList from './items/ItemList.jsx'
 import { useSyncStatus } from './sync/useSyncStatus.js'
-import { getStuckChangeLabels, getStuckChangeError } from './sync/syncEngine.js'
+import { getStuckChangeLabels, getStuckChangeError, onSyncNotice } from './sync/syncEngine.js'
 import { isNetworkError, APP_VERSION } from './errors/errorReporting.js'
 import ConfigManager from './config/ConfigManager.jsx'
 import { ToastProvider, useToast } from './toast/ToastContext.jsx'
@@ -36,6 +36,18 @@ function Header() {
   const [dialog, setDialog] = useState(null) // SPEC.md 21 / 29.8: 'password' | 'support' | 'reload' | 'feedback'
   const { showToast, showErrorToast } = useToast()
   const visibleItems = useVisibleItems() // SPEC.md 32.7: what the catalog shows now
+
+  // SPEC.md 33.3 / 33.11: what the server said about a save, after the form
+  // was long closed - shown with a code and logged, like any failure.
+  useEffect(() => onSyncNotice((n) => {
+    if (n.kind === 'deletedMeanwhile') {
+      const text = t('sync.deletedMeanwhile').replace('{name}', n.name).replace('{by}', n.by || '?')
+      showErrorToast(text, 'sync-deleted-meanwhile', new Error(`saved after it was deleted by ${n.by || '?'}`))
+    } else if (n.kind === 'serialTaken') {
+      const text = t('sync.serialTaken').replace('{value}', n.value).replace('{owner}', n.owner).replace('{name}', n.name)
+      showErrorToast(text, 'sync-serial-taken', new Error(`serial number already taken: ${n.value}`))
+    }
+  }), [t, showErrorToast])
 
   function exportVisible() {
     try {
