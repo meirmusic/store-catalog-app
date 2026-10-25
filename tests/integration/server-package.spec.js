@@ -3,23 +3,26 @@
 // a key per phone, and the server's version. Against a server that can act
 // as the new one or the old one. TEST_PLAN.md TC-SRV-*.
 import { test, expect } from '@playwright/test';
+import fs from 'node:fs';
 import { pickIdentity, clearAllData, seedItems, reloadAndWait, clickRefresh, getItems, getPendingChanges, openMenuItem } from '../helpers/app.js';
 
 const MOCK_URL = 'https://mock-apps-script.test/exec';
-const LATEST = '2026-10-22';
+// the version the app was built with - read from Code.gs, as vite does
+const LATEST = fs.readFileSync(new URL('../../apps-script/Code.gs', import.meta.url), 'utf8').match(/var SERVER_VERSION = '([\d-]+)'/)[1];
+const SHORT = `${LATEST.slice(8, 10)}/${LATEST.slice(5, 7)}`;
 const ART = { row_id: 'S1', name: 'נשמת הכותל', size: '120X80', serial_number: '4100', sku: 'YB-1', price: 3200, notes: 'ישנה', availability_status: 'available', last_modified_by: 'דב' };
 const OTHER = { row_id: 'S2', name: 'שבילי תפילה', serial_number: '4101', availability_status: 'available' };
 
 // A fake server: `version: 'new'` says it can take partial saves and keys; 'old' says nothing.
 async function server(page, { version = 'new', upsert = (p) => ({ ...p, last_modified_at: new Date().toISOString() }), keyAccepted = true } = {}) {
-  const state = { calls: [], version, keyAccepted };
+  const state = { calls: [], version, keyAccepted, reports: LATEST };
   await page.route(MOCK_URL, async (route) => {
     const body = JSON.parse(route.request().postData());
     state.calls.push(body);
     if (body.auth?.device_key && !state.keyAccepted) return route.fulfill({ json: { error: 'forbidden' } });
     const isNew = state.version === 'new';
     if (body.action === 'getAll') {
-      return route.fulfill({ json: { items: [], config: {}, ...(isNew ? { features: ['name_en', 'partial_save', 'device_key', 'serial_check'], server_version: LATEST } : {}) } });
+      return route.fulfill({ json: { items: [], config: {}, ...(isNew ? { features: ['name_en', 'partial_save', 'device_key', 'serial_check'], server_version: state.reports } : {}) } });
     }
     if (body.action === 'upsert') return route.fulfill({ json: upsert(body.payload) });
     if (body.action === 'issueDeviceKey') return route.fulfill({ json: isNew ? { device_key: 'k'.repeat(64) } : { error: 'unknown action: issueDeviceKey' } });
@@ -155,8 +158,12 @@ test('TC-SRV-007: "info & support" shows which server runs - old, behind, or up 
     await page.keyboard.press('Escape');
     return text;
   };
-  await expect.poll(row).toContain('ישנה (לפני 22/10) - קיים עדכון מ-22/10');
+  await expect.poll(row).toContain(`ישנה (לפני ${SHORT}) - קיים עדכון מ-${SHORT}`);
   srv.version = 'new';
+  srv.reports = '2026-10-22'; // a server from before the latest update
   await clickRefresh(page);
-  await expect.poll(row).toContain('22/10 (עדכנית)');
+  await expect.poll(row).toContain(`22/10 - קיים עדכון מ-${SHORT}`);
+  srv.reports = LATEST;
+  await clickRefresh(page);
+  await expect.poll(row).toContain(`${SHORT} (עדכנית)`);
 });

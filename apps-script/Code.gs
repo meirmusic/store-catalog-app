@@ -60,7 +60,7 @@ var PASSWORD_SALT = 'gallery-catalog-v1';
 // SPEC.md 33.10: which version of this file is deployed - the app shows it in
 // "info & support" next to the newest one it knows, and the weekly report too.
 // Change it whenever this file changes.
-var SERVER_VERSION = '2026-10-22';
+var SERVER_VERSION = '2026-10-25';
 
 var ITEMS_SHEET_NAME = 'Items';
 var CONFIG_SHEET_NAME = 'Config';
@@ -269,6 +269,7 @@ function onOpen() {
   SpreadsheetApp.getUi()
     .createMenu('קטלוג הגלריה')
     .addItem('הגדרת סיסמת כניסה משותפת', 'promptSetLoginPassword')
+    .addItem('כתובת נוספת להתראות', 'promptSetAlertEmail')
     .addToUi();
 }
 
@@ -605,6 +606,10 @@ function handleUpsert(payload) {
     sheet.appendRow(rowValues);
   } else {
     sheet.getRange(rowIndex, 1, 1, columns.length).setValues([rowValues]);
+    // SPEC.md 34: a new artwork and "undo" are not counted - only changes
+    // to artworks that were already there.
+    if (toWrite.is_deleted === true || toWrite.is_deleted === 'TRUE') noteMassChange('deleted', payload.row_id);
+    else if (!payload.restore) noteMassChange('changed', payload.row_id);
   }
   var item = {};
   columns.forEach(function (key, i) { item[key] = rowValues[i]; });
@@ -619,9 +624,11 @@ function handleSoftDelete(payload) {
   var isDeletedCol = ITEM_COLUMNS.indexOf('is_deleted') + 1;
   var lastModByCol = ITEM_COLUMNS.indexOf('last_modified_by') + 1;
   var lastModAtCol = ITEM_COLUMNS.indexOf('last_modified_at') + 1;
+  var wasDeleted = isDeletedValue(sheet.getRange(rowIndex, isDeletedCol).getValue());
   sheet.getRange(rowIndex, isDeletedCol).setValue(true);
   sheet.getRange(rowIndex, lastModByCol).setValue(payload.last_modified_by || '');
   sheet.getRange(rowIndex, lastModAtCol).setValue(new Date().toISOString());
+  if (!wasDeleted) noteMassChange('deleted', payload.row_id); // SPEC.md 34
   return { ok: true };
 }
 
@@ -700,6 +707,7 @@ function handleUploadImage(payload) {
 
   sheet.getRange(rowIndex, imageUrlCol).setValue(imageUrl);
   trashPreviousDriveFile(previousUrl, file.getId(), folder);
+  if (previousUrl) noteMassChange('changed', payload.row_id); // a photo replaced (SPEC.md 34)
   return { image_url: imageUrl };
 }
 
@@ -1572,4 +1580,88 @@ function noteFailedLogin() {
       '<p>בשעה האחרונה היו ' + count + ' ניסיונות כניסה עם סיסמה שגויה.</p>' +
       '<p>אם זה לא מישהו מהצוות - כדאי להחליף את סיסמת המשרד (התפריט בגיליון, או "שכחתי סיסמה" באפליקציה).</p>');
   }
+}
+
+// SPEC.md 34 (DDD 003, decision 6): many artworks deleted or changed within
+// one hour - an email right away, to the report address and to the extra
+// address Meir sets from the Sheet's menu (never written here: this file is
+// public). Only an email - nobody is blocked. Counts distinct artworks, so a
+// save the app retries isn't counted twice. Never fails the save itself.
+var MASS_DELETE_ALERT = 20;
+var MASS_CHANGE_ALERT = 30;
+var RESTORE_GUIDE_URL = 'https://github.com/meirmusic/store-catalog-app/blob/claude/spec-and-planning-session-gkwqtz/docs/RESTORE.md';
+
+function noteMassChange(kind, rowId) {
+  try {
+    var limit = kind === 'deleted' ? MASS_DELETE_ALERT : MASS_CHANGE_ALERT;
+    var cache = CacheService.getScriptCache();
+    var key = 'mass:' + kind + ':' + Math.floor(Date.now() / (60 * 60 * 1000));
+    var ids = (cache.get(key) || '').split(',').filter(String);
+    var id = String(rowId);
+    if (ids.length >= limit || ids.indexOf(id) !== -1) return; // already told this hour, or already counted
+    ids.push(id);
+    cache.put(key, ids.join(','), 2 * 60 * 60);
+    if (ids.length < limit) return;
+    var what = kind === 'deleted' ? 'נמחקו' : 'שונו';
+    sendAlertMail('⚠️ קטלוג הגלריה: ' + limit + ' יצירות ' + what + ' בשעה האחרונה',
+      '<p>בשעה האחרונה ' + what + ' ' + limit + ' יצירות דרך האפליקציה. ההודעה נשלחת פעם אחת בשעה - ייתכן שיש יותר.</p>' +
+      '<p>אם זה מכוון - אפשר להתעלם.</p>' +
+      '<p><b>אם לא:</b></p><ol>' +
+      '<li>בגיליון: קובץ ← היסטוריית גרסאות ← הגרסה מלפני השינוי ← "שחזור הגרסה הזו".</li>' +
+      '<li>מיד אחרי זה: להחליף את סיסמת המשרד (התפריט "קטלוג הגלריה" בגיליון) - כל הטלפונים מתנתקים, גם של מי שעשה את זה.</li>' +
+      '</ol><p>מי ומתי - בעמודות last_modified_by ו-last_modified_at בגיליון. המדריך המלא: <a href="' + RESTORE_GUIDE_URL + '">מדריך שחזור</a></p>');
+  } catch (err) {
+    logServerError('mass-change-alert', err);
+  }
+}
+
+// To the report address, and to the extra address if one was set.
+function sendAlertMail(subject, html) {
+  var to = REPORT_EMAIL;
+  var extra = PropertiesService.getScriptProperties().getProperty('ALERT_EMAIL');
+  if (extra && extra.toLowerCase() !== REPORT_EMAIL.toLowerCase()) to += ',' + extra;
+  MailApp.sendEmail({ to: to, subject: subject, htmlBody: html, body: html.replace(/<[^>]+>/g, ' ') });
+}
+
+// A failure the server hits on its own (no device to report it) - a row in
+// ErrorLog, so the weekly report counts it. Best effort.
+function logServerError(action, err) {
+  try {
+    var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(ERROR_LOG_SHEET_NAME) || getOrCreateErrorLogSheet();
+    // an address in a mail error never goes into the log
+    var message = String(err && err.message || err).replace(/[^\s<>"',]+@[^\s<>"',]+/g, '<email>');
+    var row = buildErrorLogRow({ code: 'SERVER', action: action, message: message, count: 1 }, new Date().toISOString());
+    sheet.appendRow(row);
+  } catch (ignored) {
+    // nothing more to do - never fail the request over a log line
+  }
+}
+
+// The Sheet's menu "קטלוג הגלריה" > "כתובת נוספת להתראות": an address that
+// gets the security alerts too, typed here (not in this public file). Sends
+// a test email so Meir sees it works. Empty - removes it.
+function promptSetAlertEmail() {
+  var ui = SpreadsheetApp.getUi();
+  var props = PropertiesService.getScriptProperties();
+  var current = props.getProperty('ALERT_EMAIL');
+  var result = ui.prompt('כתובת נוספת להתראות',
+    (current ? 'עכשיו: ' + current + '\n' : '') + 'התראות על מחיקה או שינוי של הרבה יצירות יישלחו גם לכתובת הזו. ריק - מבטל.',
+    ui.ButtonSet.OK_CANCEL);
+  if (result.getSelectedButton() !== ui.Button.OK) return;
+  var message = setAlertEmail(result.getResponseText());
+  ui.alert(message);
+}
+
+function setAlertEmail(text) {
+  var email = String(text || '').trim();
+  var props = PropertiesService.getScriptProperties();
+  if (!email) {
+    props.deleteProperty('ALERT_EMAIL');
+    return 'הכתובת הנוספת בוטלה - ההתראות יגיעו רק ל-' + REPORT_EMAIL + '.';
+  }
+  if (!/^[^\s@,]+@[^\s@,]+\.[^\s@,]+$/.test(email)) return 'זו לא כתובת מייל תקינה - לא בוצע שינוי.';
+  props.setProperty('ALERT_EMAIL', email);
+  MailApp.sendEmail({ to: email, subject: 'קטלוג הגלריה: הכתובת הזו תקבל התראות',
+    body: 'מעכשיו התראות על מחיקה או שינוי של הרבה יצירות יגיעו גם לכאן. אם לא ביקשת את זה - אפשר להתעלם.' });
+  return 'נשמר. נשלח מייל בדיקה ל-' + email + ' - כדאי לוודא שהגיע (גם בספאם).';
 }

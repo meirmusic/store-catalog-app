@@ -92,6 +92,7 @@ These rules exist so nothing depends on what one session remembers.
 | `docs/ddd/` | Decision documents (DDD), the personas, and the log that tests the method |
 | `TEST_PLAN.md` | Every test case (TC-*) and every bug found (REG-*) |
 | `OPEN_ITEMS.md` | What only Meir can do (Google, real phones, the team) |
+| `docs/RESTORE.md` | How to restore (one artwork, a big change, a lost account) - linked from every alert email |
 | `USABILITY_BENCHMARK.md` | Comparison with leading apps |
 | `assets/catalog/` | The 2025 catalog PDF - the brand language |
 | `tests/` | `unit`, `integration`, `e2e`, `built` (Playwright) |

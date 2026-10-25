@@ -47,7 +47,7 @@ function makeSheet(rows, maxColumns) {
   return sheet;
 }
 
-function google({ itemsHeader = OLD_HEADER, maxColumns, files = {}, fileFolders = {}, itemRows, driveFails = false } = {}) {
+function google({ itemsHeader = OLD_HEADER, maxColumns, files = {}, fileFolders = {}, itemRows, driveFails = false, mailFails = false } = {}) {
   const firstRow = ['R1', '112345', 'SKU-1', 'זריחה', '91X132', 'מקורי', 'גלריה', '', 'available', 2500, '', 'https://drive.google.com/thumbnail?id=FILE1&sz=w1000', false, 'דב', 'then'];
   const items = makeSheet([itemsHeader, ...(itemRows || [firstRow])], maxColumns);
   const config = makeSheet([['list_name', 'value'], ['type', 'מקורי']]);
@@ -104,7 +104,7 @@ function google({ itemsHeader = OLD_HEADER, maxColumns, files = {}, fileFolders 
         return { hasNext: () => true, next: () => photoFolder };
       },
     },
-    MailApp: { sendEmail(msg) { mails.push(msg); }, getRemainingDailyQuota: () => 100 },
+    MailApp: { sendEmail(msg) { if (mailFails) throw new Error(`Invalid email: ${msg.to}`); mails.push(msg); }, getRemainingDailyQuota: () => 100 },
     ScriptApp: {
       WeekDay: { SUNDAY: 'SUNDAY' },
       getProjectTriggers: () => [...triggers],
@@ -436,6 +436,83 @@ test.describe('Code.gs in a simulated Google', () => {
     g.call('upsert', { row_id: 'R1', image_url: 'https://drive.google.com/thumbnail?id=CONTRACT&sz=w1000', last_modified_by: 'x' });
     g.call('uploadImage', { row_id: 'R1', image: IMG });
     expect(g.trashed).toEqual(['FILE1']);
+  });
+  // ---- SPEC.md 34: an alert on a big change (DDD 003, decision 6) ----
+  const artworks = (n) => Array.from({ length: n }, (_, i) => [`A${i}`, String(5000 + i), '', `יצירה סודית ${i}`, '', '', 'מחסן', '', 'available', 1000 + i, '', i < 3 ? `https://drive.google.com/thumbnail?id=OLD${i}&sz=w1000` : '', false, 'דב', 'then']);
+  const newHour = (g) => Object.keys(g.cache).filter((k) => k.startsWith('mass:')).forEach((k) => delete g.cache[k]);
+
+  test('TC-GS-210: 20 artworks deleted within an hour - one email, to the office and to the extra address; numbers only, no names; a retried delete counts once', () => {
+    const g = google({ itemRows: artworks(30) });
+    g.gs.setAlertEmail('meir-alerts@example.com');
+    g.mails.length = 0;
+    for (let i = 0; i < 19; i++) expect(g.call('softDelete', { row_id: `A${i}`, last_modified_by: 'דב' })).toEqual({ ok: true });
+    g.call('softDelete', { row_id: 'A5', last_modified_by: 'דב' }); // the app retrying
+    expect(g.mails).toHaveLength(0);
+    g.call('upsert', { row_id: 'A19', is_deleted: true, last_modified_by: 'דב' }); // deleting by a save counts too
+    expect(g.mails).toHaveLength(1);
+    expect(g.mails[0].to).toBe('office@yossibittonart.com,meir-alerts@example.com');
+    expect(g.mails[0].subject).toBe('⚠️ קטלוג הגלריה: 20 יצירות נמחקו בשעה האחרונה');
+    expect(g.mails[0].htmlBody).toContain('היסטוריית גרסאות');
+    expect(g.mails[0].htmlBody).toContain('docs/RESTORE.md');
+    expect(JSON.stringify(g.mails[0])).not.toMatch(/יצירה סודית|דב|מחסן|5000/);
+    for (let i = 20; i < 25; i++) g.call('softDelete', { row_id: `A${i}` });
+    expect(g.mails).toHaveLength(1); // once an hour
+    newHour(g);
+    for (let i = 25; i < 30; i++) g.call('softDelete', { row_id: `A${i}` });
+    expect(g.mails).toHaveLength(1); // a new hour starts from zero
+  });
+
+  test('TC-GS-211: 30 artworks changed within an hour - an email; new artworks and "undo" don\'t count; the same artwork twice counts once; a replaced photo counts', () => {
+    const IMG = 'data:image/jpeg;base64,' + Buffer.from([1]).toString('base64');
+    const g = google({ itemRows: artworks(40), files: { OLD0: [1], OLD1: [1], OLD2: [1] } });
+    for (let i = 0; i < 30; i++) g.call('upsert', { row_id: `NEW${i}`, name: `חדשה ${i}`, last_modified_by: 'שרה' });
+    g.call('softDelete', { row_id: 'A39' });
+    g.call('upsert', { row_id: 'A39', restore: true, last_modified_by: 'שרה' });
+    for (let i = 0; i < 3; i++) g.call('uploadImage', { row_id: `A${i}`, image: IMG }); // replaced photos
+    g.call('uploadImage', { row_id: 'NEW0', image: IMG }); // a first photo - not a change
+    for (let i = 3; i < 29; i++) g.call('upsert', { row_id: `A${i}`, price: 1, last_modified_by: 'דב' });
+    g.call('upsert', { row_id: 'A3', price: 2, last_modified_by: 'דב' }); // same artwork again
+    expect(g.mails).toHaveLength(0); // 29 different artworks so far
+    g.call('upsert', { row_id: 'A29', price: 1, last_modified_by: 'דב' });
+    expect(g.mails.map((m) => m.subject)).toEqual(['⚠️ קטלוג הגלריה: 30 יצירות שונו בשעה האחרונה']);
+    expect(g.mails[0].to).toBe('office@yossibittonart.com'); // no extra address set
+  });
+
+  test('TC-GS-212: the extra address - set from the Sheet\'s menu with a test email, a bad one refused, empty removes it; a failed email never fails the delete, and the log never holds the address', () => {
+    const g = google({ itemRows: artworks(25) });
+    expect(g.gs.setAlertEmail('not an email')).toBe('זו לא כתובת מייל תקינה - לא בוצע שינוי.');
+    expect(g.props.ALERT_EMAIL).toBeUndefined();
+    expect(g.gs.setAlertEmail('  meir-alerts@example.com ')).toContain('נשלח מייל בדיקה ל-meir-alerts@example.com');
+    expect(g.props.ALERT_EMAIL).toBe('meir-alerts@example.com');
+    expect(g.mails.map((m) => m.to)).toEqual(['meir-alerts@example.com']);
+    expect(g.gs.setAlertEmail('')).toContain('בוטלה');
+    expect(g.props.ALERT_EMAIL).toBeUndefined();
+    expect(SOURCE).not.toMatch(/ALERT_EMAIL\s*=\s*'/); // never written in the (public) code
+
+    const broken = google({ itemRows: artworks(25), mailFails: true });
+    broken.props.ALERT_EMAIL = 'meir-alerts@example.com';
+    for (let i = 0; i < 20; i++) expect(broken.call('softDelete', { row_id: `A${i}` })).toEqual({ ok: true });
+    const log = broken.sheets.ErrorLog.data;
+    expect(log).toHaveLength(2);
+    expect(log[1].slice(1, 3)).toEqual(['SERVER', 'mass-change-alert']);
+    expect(log[1][3]).toBe('Invalid email: <email>,<email>');
+    expect(JSON.stringify(log)).not.toContain('@');
+  });
+  test('TC-GS-213: the restore guide - is_deleted set back to FALSE in the Sheet brings the artwork back; after restoring an old version, changing the password cancels every phone again', () => {
+    const g = google();
+    g.call('softDelete', { row_id: 'R1' });
+    expect(g.call('getAll').items).toHaveLength(0);
+    g.items.data[1][12] = false; // Meir unticks is_deleted
+    expect(g.call('getAll').items.map((i) => i.row_id)).toEqual(['R1']);
+    // a key issued, then cancelled; restoring an older version of the Sheet wipes the "בוטל" mark
+    const { device_key: k } = g.call('issueDeviceKey', { kind: 'iphone', member: 'שרה' });
+    g.sheets.Devices.data[1][5] = 'כן';
+    g.sheets.Devices.data[1][5] = ''; // "שחזור הגרסה הזו"
+    Object.keys(g.cache).forEach((key) => delete g.cache[key]);
+    expect(g.call('getAll', null, { email: PW.email, device_key: k }).items).toHaveLength(1); // why the guide says: then change the password
+    g.call('requestPasswordReset', { email: PW.email });
+    g.call('resetPassword', { email: PW.email, code: g.props.PW_RESET_CODE, newPassword: 'after-restore-1' });
+    expect(g.call('getAll', null, { email: PW.email, device_key: k })).toEqual({ error: 'forbidden' });
   });
 });
 
