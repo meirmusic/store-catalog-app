@@ -395,10 +395,12 @@ test.describe('Code.gs in a simulated Google', () => {
     expect(g.call('resetPassword', { email: PW.email, code: g.props.PW_RESET_CODE, newPassword: 'fresh-pass-99' })).toEqual({ ok: true });
   });
 
-  test('TC-GS-206: many wrong passwords - one email, no lock-out (the team still gets in)', () => {
+  test('TC-GS-206: many wrong passwords - one email, to the office and the extra address (34.6); no lock-out (the team still gets in)', () => {
     const g = google();
+    g.props.ALERT_EMAIL = 'meir-alerts@example.com';
     for (let i = 0; i < 25; i++) g.call('getAll', null, { email: PW.email, password: `wrong-${i}` });
     expect(g.mails.map((m) => m.subject)).toEqual(['⚠️ קטלוג הגלריה: הרבה ניסיונות כניסה שגויים']);
+    expect(g.mails[0].to).toBe('office@yossibittonart.com,meir-alerts@example.com');
     expect(g.call('getAll').items).toHaveLength(1);
   });
 
@@ -513,6 +515,38 @@ test.describe('Code.gs in a simulated Google', () => {
     g.call('requestPasswordReset', { email: PW.email });
     g.call('resetPassword', { email: PW.email, code: g.props.PW_RESET_CODE, newPassword: 'after-restore-1' });
     expect(g.call('getAll', null, { email: PW.email, device_key: k })).toEqual({ error: 'forbidden' });
+  });
+  test('TC-GS-214: a cancelled phone stays cancelled after an older version of the Sheet is restored - one phone ("בוטל") or all (password change); a new sign-in works', () => {
+    const g = google();
+    const byKey = (k) => g.call('getAll', null, { email: PW.email, device_key: k, member: 'שרה' });
+    const forget = () => Object.keys(g.cache).forEach((key) => delete g.cache[key]); // the 5-minute memory passes
+    const { device_key: a } = g.call('issueDeviceKey', { kind: 'iphone', member: 'שרה' });
+    const { device_key: b } = g.call('issueDeviceKey', { kind: 'android', member: 'דב' });
+    const { device_key: c } = g.call('issueDeviceKey', { kind: 'computer', member: 'יוסי' });
+    // one phone cancelled, it tries to sync - then an older version is restored (no mark)
+    g.sheets.Devices.data[1][5] = 'כן';
+    forget();
+    expect(byKey(a)).toEqual({ error: 'forbidden' });
+    g.sheets.Devices.data[1][5] = '';
+    forget();
+    expect(byKey(a)).toEqual({ error: 'forbidden' });
+    // another cancelled while that phone is off - the hourly check remembers it
+    g.sheets.Devices.data[2][5] = 'כן';
+    g.run('selfCheck');
+    g.sheets.Devices.data[2][5] = '';
+    forget();
+    expect(byKey(b)).toEqual({ error: 'forbidden' });
+    expect(byKey(c).items).toHaveLength(1); // the others are untouched
+    // the password changed - then a version from before is restored: still all out, no second change needed
+    const before = g.sheets.Devices.data.map((r) => [...r]);
+    g.call('requestPasswordReset', { email: PW.email });
+    g.call('resetPassword', { email: PW.email, code: g.props.PW_RESET_CODE, newPassword: 'new-pass-555' });
+    g.sheets.Devices.data.splice(0, g.sheets.Devices.data.length, ...before);
+    forget();
+    expect(byKey(c)).toEqual({ error: 'forbidden' });
+    // signing in again gives a new key that works
+    const { device_key: c2 } = g.call('issueDeviceKey', { kind: 'computer', member: 'יוסי' }, { email: PW.email, password: 'new-pass-555' });
+    expect(byKey(c2).items).toHaveLength(1);
   });
 });
 

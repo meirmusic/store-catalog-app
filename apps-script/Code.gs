@@ -1133,6 +1133,11 @@ function selfCheck() {
   } catch (err) {
     problems.push('דרייב: ' + err);
   }
+  try {
+    rememberMarkedDevices(); // SPEC.md 34.5
+  } catch (err) {
+    logServerError('remember-cancelled-devices', err);
+  }
   var tally = JSON.parse(props.getProperty('SELF_CHECK_WEEK') || '{"ok":0,"fail":0}');
   tally[problems.length ? 'fail' : 'ok']++;
   props.setProperty('SELF_CHECK_WEEK', JSON.stringify(tally));
@@ -1546,9 +1551,14 @@ function checkDeviceKey(auth) {
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(DEVICES_SHEET_NAME);
   if (!sheet || sheet.getLastRow() < 2) return false;
   var rows = sheet.getRange(2, 1, sheet.getLastRow() - 1, DEVICES_HEADER.length).getValues();
+  var props = PropertiesService.getScriptProperties();
   for (var i = 0; i < rows.length; i++) {
     if (rows[i][0] !== fingerprint) continue;
-    if (String(rows[i][5]).trim()) return false; // cancelled
+    if (String(rows[i][5]).trim()) { // cancelled
+      rememberRevokedDevices([fingerprint]);
+      return false;
+    }
+    if (isRememberedRevoked(props, fingerprint, rows[i][2])) return false;
     var now = Date.now();
     if (now - Date.parse(rows[i][3]) > DEVICE_SEEN_EVERY_MS || (auth.member && auth.member !== rows[i][4])) {
       sheet.getRange(i + 2, 4, 1, 2).setValues([[new Date(now).toISOString(), String(auth.member || rows[i][4]).slice(0, 60)]]);
@@ -1559,9 +1569,40 @@ function checkDeviceKey(auth) {
   return false;
 }
 
+// SPEC.md 34.5 (REG-063): a cancelled key stays cancelled even if an older
+// version of the Sheet is restored (which brings back the Devices tab as it
+// was, without the "בוטל" marks). The server remembers on its own, outside
+// the Sheet: every key created before the last password change, and each
+// key seen marked "בוטל" (on the phone's next sync, or by the hourly
+// selfCheck). To let that phone in again - it signs in with the password
+// and gets a new key.
+var REVOKED_DEVICES_MAX = 120; // 65 characters each - well inside a property's 9KB
+
+function isRememberedRevoked(props, fingerprint, created) {
+  var before = Number(props.getProperty('REVOKED_BEFORE') || 0);
+  if (before && new Date(created).getTime() < before) return true;
+  return (props.getProperty('REVOKED_DEVICES') || '').split(',').indexOf(fingerprint) !== -1;
+}
+
+function rememberRevokedDevices(fingerprints) {
+  var props = PropertiesService.getScriptProperties();
+  var list = (props.getProperty('REVOKED_DEVICES') || '').split(',').filter(String);
+  fingerprints.forEach(function (fp) { if (fp && list.indexOf(fp) === -1) list.push(fp); });
+  props.setProperty('REVOKED_DEVICES', list.slice(-REVOKED_DEVICES_MAX).join(','));
+}
+
+// selfCheck, every hour: whatever is marked "בוטל" now is remembered.
+function rememberMarkedDevices() {
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(DEVICES_SHEET_NAME);
+  if (!sheet || sheet.getLastRow() < 2) return;
+  var rows = sheet.getRange(2, 1, sheet.getLastRow() - 1, DEVICES_HEADER.length).getValues();
+  rememberRevokedDevices(rows.filter(function (r) { return String(r[5]).trim(); }).map(function (r) { return String(r[0]); }));
+}
+
 function revokeAllDevices(reason) {
   var props = PropertiesService.getScriptProperties();
   props.setProperty('DEVICE_KEY_GEN', String(Number(deviceKeyGeneration()) + 1));
+  props.setProperty('REVOKED_BEFORE', String(Date.now())); // 34.5
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(DEVICES_SHEET_NAME);
   if (!sheet || sheet.getLastRow() < 2) return;
   var range = sheet.getRange(2, 6, sheet.getLastRow() - 1, 1);
@@ -1576,9 +1617,13 @@ function noteFailedLogin() {
   var count = Number(cache.get(hourKey) || 0) + 1;
   cache.put(hourKey, String(count), 2 * 60 * 60);
   if (count === FAILED_LOGIN_ALERT) {
-    sendMail('⚠️ קטלוג הגלריה: הרבה ניסיונות כניסה שגויים',
-      '<p>בשעה האחרונה היו ' + count + ' ניסיונות כניסה עם סיסמה שגויה.</p>' +
-      '<p>אם זה לא מישהו מהצוות - כדאי להחליף את סיסמת המשרד (התפריט בגיליון, או "שכחתי סיסמה" באפליקציה).</p>');
+    try {
+      sendAlertMail('⚠️ קטלוג הגלריה: הרבה ניסיונות כניסה שגויים', // also to the extra address (34.6)
+        '<p>בשעה האחרונה היו ' + count + ' ניסיונות כניסה עם סיסמה שגויה.</p>' +
+        '<p>אם זה לא מישהו מהצוות - כדאי להחליף את סיסמת המשרד (התפריט בגיליון, או "שכחתי סיסמה" באפליקציה).</p>');
+    } catch (err) {
+      logServerError('failed-login-alert', err);
+    }
   }
 }
 
@@ -1645,7 +1690,7 @@ function promptSetAlertEmail() {
   var props = PropertiesService.getScriptProperties();
   var current = props.getProperty('ALERT_EMAIL');
   var result = ui.prompt('כתובת נוספת להתראות',
-    (current ? 'עכשיו: ' + current + '\n' : '') + 'התראות על מחיקה או שינוי של הרבה יצירות יישלחו גם לכתובת הזו. ריק - מבטל.',
+    (current ? 'עכשיו: ' + current + '\n' : '') + 'התראות (מחיקה או שינוי של הרבה יצירות, הרבה ניסיונות כניסה שגויים) יישלחו גם לכתובת הזו. ריק - מבטל.',
     ui.ButtonSet.OK_CANCEL);
   if (result.getSelectedButton() !== ui.Button.OK) return;
   var message = setAlertEmail(result.getResponseText());
@@ -1662,6 +1707,6 @@ function setAlertEmail(text) {
   if (!/^[^\s@,]+@[^\s@,]+\.[^\s@,]+$/.test(email)) return 'זו לא כתובת מייל תקינה - לא בוצע שינוי.';
   props.setProperty('ALERT_EMAIL', email);
   MailApp.sendEmail({ to: email, subject: 'קטלוג הגלריה: הכתובת הזו תקבל התראות',
-    body: 'מעכשיו התראות על מחיקה או שינוי של הרבה יצירות יגיעו גם לכאן. אם לא ביקשת את זה - אפשר להתעלם.' });
+    body: 'מעכשיו התראות על מחיקה או שינוי של הרבה יצירות, ועל הרבה ניסיונות כניסה שגויים, יגיעו גם לכאן. אם לא ביקשת את זה - אפשר להתעלם.' });
   return 'נשמר. נשלח מייל בדיקה ל-' + email + ' - כדאי לוודא שהגיע (גם בספאם).';
 }

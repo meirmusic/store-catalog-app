@@ -58,8 +58,12 @@ test('TC-TRUTH-002: online but the server does not answer - "connected" is not c
   await reloadAndWait(page);
   await page.click(REFRESH);
   await expect.poll(() => page.evaluate(() => localStorage.getItem('gallery_last_pull_ok'))).not.toBeNull();
-  const lastOk = await page.evaluate(() => localStorage.getItem('gallery_last_pull_ok'));
   state.pull = 'abort';
+  // The app's own sync on opening and this click can both succeed, a moment
+  // apart - the last good time is read only once neither is still running
+  // (a race seen once in a full run, 25/10: it read the first one's time).
+  await expect(page.locator(REFRESH)).not.toHaveClass(/\bspin\b/);
+  const lastOk = await page.evaluate(() => localStorage.getItem('gallery_last_pull_ok'));
   await page.click(REFRESH);
   await expect(page.locator('.chip-problem')).toContainText(/לא עודכן מאז \d{2}:\d{2}/); // header: since when, 24h
   await openSupport(page);
