@@ -20,7 +20,11 @@ const ITEMS = [
   { row_id: 'U3', name: 'גימל', availability_status: 'available', last_modified_by: 'שפרה', last_modified_at: new Date(Date.now() - 2 * HOUR).toISOString() },
 ];
 
-const names = (page, selector = '.card .name') => page.locator(selector).allTextContents();
+// The artworks' names in the order shown. Checked with an assertion that
+// waits (up to 5s) for exactly this list - a one-time read right after the
+// app opened sometimes came before the artworks were drawn and saw an empty
+// list (2 of 120 runs, 22/11; the weekly check). Same exact list, not looser.
+const cardNames = (page) => page.locator('.card .name');
 
 test.beforeEach(async ({ page }) => {
   await pickIdentity(page);
@@ -30,28 +34,28 @@ test.beforeEach(async ({ page }) => {
 });
 
 test('TC-UX-001: by default "recently updated" (SPEC.md 28.2); by name and by price both ways - items without a price last - and the choice is remembered', async ({ page }) => {
-  expect(await names(page)).toEqual(['בית', 'גימל', 'אלף']); // default: the latest change first
+  await expect(cardNames(page)).toHaveText(['בית', 'גימל', 'אלף']); // default: the latest change first
   await expect(page.locator('.sort-select select')).toHaveValue('recent');
   await page.selectOption('.sort-select select', 'name');
-  expect(await names(page)).toEqual(['אלף', 'בית', 'גימל']);
+  await expect(cardNames(page)).toHaveText(['אלף', 'בית', 'גימל']);
   await page.selectOption('.sort-select select', 'priceHigh');
-  expect(await names(page)).toEqual(['בית', 'אלף', 'גימל']);
+  await expect(cardNames(page)).toHaveText(['בית', 'אלף', 'גימל']);
   await page.selectOption('.sort-select select', 'priceLow');
-  expect(await names(page)).toEqual(['אלף', 'בית', 'גימל']);
+  await expect(cardNames(page)).toHaveText(['אלף', 'בית', 'גימל']);
   await page.selectOption('.sort-select select', 'serial');
-  expect(await names(page)).toEqual(['בית', 'אלף', 'גימל']);
+  await expect(cardNames(page)).toHaveText(['בית', 'אלף', 'גימל']);
   await reloadAndWait(page);
-  expect(await names(page)).toEqual(['בית', 'אלף', 'גימל']);
+  await expect(cardNames(page)).toHaveText(['בית', 'אלף', 'גימל']);
 });
 
 test('TC-UX-001b: a device where someone already chose a sort keeps it - the new default is only for devices that never chose', async ({ page }) => {
   await page.evaluate(() => localStorage.setItem('gallery_sort', 'name'));
   await reloadAndWait(page);
-  expect(await names(page)).toEqual(['אלף', 'בית', 'גימל']);
+  await expect(cardNames(page)).toHaveText(['אלף', 'בית', 'גימל']);
 });
 
 test('TC-UX-002: "recently updated" puts the latest change first and shows who and when; other sorts don\'t show it', async ({ page }) => {
-  expect(await names(page)).toEqual(['בית', 'גימל', 'אלף']);
+  await expect(cardNames(page)).toHaveText(['בית', 'גימל', 'אלף']);
   await expect(page.locator('.card').first().locator('.modified-line')).toContainText('דב · היום');
   await page.selectOption('.sort-select select', 'name');
   await expect(page.locator('.modified-line')).toHaveCount(0); // only in this sort
@@ -95,7 +99,7 @@ test('TC-UX-004: filters sit behind one "סינון" button that shows how many 
   await expect(page.locator('.filters-toggle')).toContainText('סינון · 2');
   await page.click('.filters-toggle'); // close - the filters stay on
   await expect(page.locator('.filter-group')).toHaveCount(0);
-  expect(await names(page)).toEqual(['בית']);
+  await expect(cardNames(page)).toHaveText(['בית']);
   await expect(page.locator('.results-line')).toContainText('מוצגים 1 מתוך 3');
 });
 

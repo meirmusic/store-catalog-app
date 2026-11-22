@@ -81,6 +81,10 @@ These rules exist so nothing depends on what one session remembers.
   enough: every new thing that holds a connection must reconnect by itself. Tests run on a
   computer, where this never happens - so it has to be simulated on purpose.
 - **Hebrew text with numbers** (e.g. 91×132) needs direction marks, or it shows reversed.
+- **The test machine's browser gets updated** - never point the tests at one fixed browser folder;
+  `tests/helpers/chromium.js` finds it (REG-064). And a check right after the app opens must wait
+  for what it checks (`await expect(...).toHaveText(...)`), not read once - the artworks are drawn a
+  moment after the header.
 - **Downloaded file names in English** - some browsers save a Hebrew name as "download".
 - Every artwork photo: 400 on cards, 1600 when enlarged and shared.
 

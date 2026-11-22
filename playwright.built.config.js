@@ -1,4 +1,5 @@
 import { defineConfig, devices } from '@playwright/test';
+import { chromiumLaunchOptions } from './tests/helpers/chromium.js';
 
 // SPEC.md 22.8: tests against the BUILT app, exactly as it goes live -
 // service worker included, which the dev server used by the main suite
@@ -8,8 +9,6 @@ import { defineConfig, devices } from '@playwright/test';
 if (!process.env.VITE_APPS_SCRIPT_URL) {
   process.env.VITE_APPS_SCRIPT_URL = 'https://mock-apps-script.test/exec';
 }
-
-const CHROMIUM_PATH = '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
 
 export default defineConfig({
   testDir: './tests/built',
@@ -22,7 +21,7 @@ export default defineConfig({
   use: {
     ...devices['Desktop Chrome'],
     baseURL: 'http://localhost:4173',
-    launchOptions: { executablePath: CHROMIUM_PATH, args: ['--no-sandbox'] },
+    launchOptions: chromiumLaunchOptions(), // REG-064
     trace: 'retain-on-failure',
   },
   webServer: {

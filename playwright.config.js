@@ -1,4 +1,5 @@
 import { defineConfig, devices } from '@playwright/test';
+import { chromiumLaunchOptions } from './tests/helpers/chromium.js';
 
 // See TEST_PLAN.md section 1 ("סביבת הבדיקה"): tests run against the local
 // dev server (the exact same client code as the deployed app), never
@@ -15,11 +16,9 @@ if (!process.env.VITE_APPS_SCRIPT_URL) {
   process.env.VITE_APPS_SCRIPT_URL = 'https://mock-apps-script.test/exec';
 }
 
-const CHROMIUM_PATH = '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
-// Running as root in this container - Chromium refuses to launch without
-// --no-sandbox regardless of device profile (desktop happened to tolerate
-// its absence; every mobile-device profile did not).
-const LAUNCH_OPTIONS = { executablePath: CHROMIUM_PATH, args: ['--no-sandbox'] };
+// Finds the machine's Chromium by itself, whatever version is installed
+// (REG-064) - and --no-sandbox, see tests/helpers/chromium.js.
+const LAUNCH_OPTIONS = chromiumLaunchOptions();
 
 export default defineConfig({
   testDir: './tests',
